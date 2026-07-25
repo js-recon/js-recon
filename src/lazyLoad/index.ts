@@ -27,6 +27,7 @@ import svelte_getVersionJson from "./svelte/svelte_getVersionJson.js";
 // Angular
 import angular_getFromPageSource from "./angular/angular_getFromPageSource.js";
 import angular_getFromMainJs from "./angular/angular_getFromMainJs.js";
+import angular_recursiveChunkImports from "./angular/angular_recursiveChunkImports.js";
 
 // Vue
 import vue_discoverJsFiles from "./vue/vue_discoverJsFiles.js";
@@ -405,6 +406,17 @@ const lazyLoad = async (
                         if (mainJsUrl) {
                             const jsFilesFromMainJs = await angular_getFromMainJs(mainJsUrl);
                             queue.push(jsFilesFromMainJs);
+
+                            // recursively follow chunk-to-chunk imports beyond the first hop
+                            if (
+                                shouldRunMethod("angular_recursiveChunkImports", includeMethods, excludeMethods)
+                            ) {
+                                const transitiveChunks = await angular_recursiveChunkImports(
+                                    jsFilesFromMainJs,
+                                    threads
+                                );
+                                queue.push(transitiveChunks);
+                            }
                         }
                     }
 

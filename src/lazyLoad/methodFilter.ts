@@ -36,7 +36,7 @@ export const FRAMEWORK_METHODS: Record<string, string[]> = {
         "svelte_recursivePageCrawl",
         "svelte_discoverPagesFromJs",
     ],
-    angular: ["angular_getFromPageSource", "angular_getFromMainJs"],
+    angular: ["angular_getFromPageSource", "angular_getFromMainJs", "angular_recursiveChunkImports"],
     react: ["react_getScriptTags", "react_webpackChunkPaths", "react_sourcemapUrls", "react_followImports"],
 };
 

@@ -1,10 +1,7 @@
 import makeRequest from "../../utility/makeReq.js";
-import _traverse from "@babel/traverse";
-import * as parser from "@babel/parser";
 import chalk from "chalk";
 import resolvePath from "../../utility/resolvePath.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
+import { extractImportPaths } from "./angular_recursiveChunkImports.js";
 
 /**
  * Parses the main.js file of an Angular application to extract lazy-loaded module paths.
@@ -16,40 +13,12 @@ const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 const angular_getFromMainJs = async (mainJsUrl: string): Promise<string[]> => {
     console.log(chalk.cyan("[i] Analyzing main.js from", mainJsUrl));
 
-    let foundUrls: string[] = [];
-
     const mainJsRes = await makeRequest(mainJsUrl, {});
     const mainJsBody = await mainJsRes.text();
 
-    // Parse the main.js file content into an AST
-    const ast = parser.parse(mainJsBody, {
-        sourceType: "unambiguous",
-        plugins: ["jsx", "typescript"],
-        errorRecovery: true,
-    });
+    const importPaths = extractImportPaths(mainJsBody);
 
-    let importDeclarationPaths: string[] = [];
-
-    // Traverse the AST to find dynamic import expressions
-    traverse(ast, {
-        CallExpression(path) {
-            // Check if the callee is an import()
-            if (path.node.callee.type === "Import") {
-                const importArg = path.node.arguments[0];
-                // Ensure the first argument is a string literal and extract its value
-                if (importArg && importArg.type === "StringLiteral") {
-                    importDeclarationPaths.push(importArg.value);
-                }
-            }
-        },
-    });
-
-    // now, resolve the paths
-    for (const importDeclarationPath of importDeclarationPaths) {
-        foundUrls.push(resolvePath(mainJsUrl, importDeclarationPath));
-    }
-
-    return foundUrls;
+    return importPaths.map((importPath) => resolvePath(mainJsUrl, importPath));
 };
 
 export default angular_getFromMainJs;
