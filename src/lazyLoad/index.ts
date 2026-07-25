@@ -408,9 +408,7 @@ const lazyLoad = async (
                             queue.push(jsFilesFromMainJs);
 
                             // recursively follow chunk-to-chunk imports beyond the first hop
-                            if (
-                                shouldRunMethod("angular_recursiveChunkImports", includeMethods, excludeMethods)
-                            ) {
+                            if (shouldRunMethod("angular_recursiveChunkImports", includeMethods, excludeMethods)) {
                                 const transitiveChunks = await angular_recursiveChunkImports(
                                     jsFilesFromMainJs,
                                     threads
