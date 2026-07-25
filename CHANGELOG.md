@@ -6,6 +6,7 @@
 
 - `-t/--threads` was ignored by most of the per-file discovery loops in `lazyLoad` (sourcemap URL discovery, import-following, webpack chunk-path brute forcing, string-reference scanning, layout.js parsing, and several Next.js/Vue/Svelte helpers), which fetched one file at a time regardless of the configured thread count. These loops now use a shared bounded-concurrency helper (`utility/concurrency.ts`) and respect `-t`. (`lazyload`, `run`)
 - Angular: the `lazyload` crawler only followed the import graph one hop deep from `main.js`, so chunk-to-chunk imports (a downloaded chunk importing further chunks, and so on) were never resolved and those files never reached `map`/`analyze`. A new recursive chunk-import follower (`angular_recursiveChunkImports`) re-scans each newly-discovered chunk for further dynamic and static imports until no new chunks are found. (`lazyload`)
+- Resolved npm-audit advisories: a path-traversal advisory in `postcss`, and a DoS advisory in `brace-expansion` (pulled in transitively via `puppeteer-extra-plugin-stealth`'s `rimraf`/`glob`/`minimatch` chain) by overriding `rimraf` to `^6.0.1`. (`deps`)
 
 ## 1.4.1-beta.2 - 2026-07-22
 
