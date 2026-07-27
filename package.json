@@ -1,6 +1,6 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "1.4.1-beta.2",
+    "version": "1.4.1",
     "description": "JS Recon Tool",
     "main": "build/index.js",
     "type": "module",
@@ -14,6 +14,7 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:build": "node build/index.js -h",
+        "postinstall": "patch-package",
         "cleanup": "rm -rf build output output_refactored .resp_cache.json endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* && tsc"
     },
     "keywords": [],
@@ -40,6 +41,7 @@
         "datatables.net": "^2.3.6",
         "datatables.net-dt": "^2.3.6",
         "esquery": "^1.6.0",
+        "extract-zip": "^2.0.1",
         "fs": "^0.0.2",
         "graphql": "^16.14.1",
         "highlight.js": "^11.11.1",
@@ -48,9 +50,9 @@
         "md5": "^2.3.0",
         "ollama": "^0.6.3",
         "openai": "^5.8.2",
+        "patch-package": "^8.0.1",
         "path": "^0.12.7",
         "prettier": "^3.7.4",
-        "extract-zip": "^2.0.1",
         "puppeteer": "^25.0.2",
         "puppeteer-extra": "^3.3.6",
         "puppeteer-extra-plugin-stealth": "^2.11.2",
@@ -61,7 +63,8 @@
         "zod": "^3.23.8"
     },
     "overrides": {
-        "@hono/node-server": "^2.0.11"
+        "@hono/node-server": "^2.0.11",
+        "rimraf": "^6.0.1"
     },
     "repository": {
         "type": "git",

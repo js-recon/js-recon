@@ -2,6 +2,7 @@ import makeRequest from "../../utility/makeReq.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import chalk from "chalk";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -45,27 +46,25 @@ const parseJsFile = async (url: string, maxJsSizeMb: number) => {
     return foundUrls;
 };
 
-const vue_jsImports = async (url: string, foundJsFiles: string[], maxJsSizeMb: number = 2) => {
+const vue_jsImports = async (url: string, foundJsFiles: string[], maxJsSizeMb: number = 2, threads: number = 1) => {
     const allDiscoveredUrls = new Set<string>();
     const crawledUrls = new Set<string>(foundJsFiles);
 
-    for (const jsfile of foundJsFiles) {
+    await runWithConcurrency(foundJsFiles, threads, async (jsfile) => {
         const discovered = await parseJsFile(jsfile, maxJsSizeMb);
         for (const u of discovered) allDiscoveredUrls.add(u);
-    }
+    });
 
-    // crawl newly found URLs until no uncrawled ones remain
-    let foundNew = true;
-    while (foundNew) {
-        foundNew = false;
-        for (const u of [...allDiscoveredUrls]) {
-            if (!crawledUrls.has(u)) {
-                foundNew = true;
-                crawledUrls.add(u);
-                const discovered = await parseJsFile(u, maxJsSizeMb);
-                for (const newU of discovered) allDiscoveredUrls.add(newU);
-            }
-        }
+    // crawl newly found URLs until no uncrawled ones remain, one round of
+    // concurrent fetches at a time
+    let toCrawl = [...allDiscoveredUrls].filter((u) => !crawledUrls.has(u));
+    while (toCrawl.length > 0) {
+        for (const u of toCrawl) crawledUrls.add(u);
+        await runWithConcurrency(toCrawl, threads, async (u) => {
+            const discovered = await parseJsFile(u, maxJsSizeMb);
+            for (const newU of discovered) allDiscoveredUrls.add(newU);
+        });
+        toCrawl = [...allDiscoveredUrls].filter((u) => !crawledUrls.has(u));
     }
 
     return [...allDiscoveredUrls];

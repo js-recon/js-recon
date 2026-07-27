@@ -3,6 +3,7 @@ import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import chalk from "chalk";
 import t from "@babel/types";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -65,25 +66,25 @@ export const extractViteMapDepsChunks = (content: string, jsUrl: string): string
  * Scans fetched JS files for Vite's __vite__mapDeps chunk manifest and returns
  * all the discovered chunk URLs resolved against the JS file they were found in.
  */
-const vue_viteMapDeps = async (jsFiles: string[], maxJsSizeMb: number = 2): Promise<string[]> => {
+const vue_viteMapDeps = async (jsFiles: string[], maxJsSizeMb: number = 2, threads: number = 1): Promise<string[]> => {
     const MAX_JS_SIZE_BYTES = maxJsSizeMb * 1024 * 1024;
     const discovered = new Set<string>();
 
     const jsUrls = jsFiles.filter((f) => f.endsWith(".js"));
 
-    for (const jsUrl of jsUrls) {
+    await runWithConcurrency(jsUrls, threads, async (jsUrl) => {
         const req = await makeRequest(jsUrl);
-        if (!req) continue;
+        if (!req) return;
 
         const content = await req.text();
-        if (content.length > MAX_JS_SIZE_BYTES) continue;
+        if (content.length > MAX_JS_SIZE_BYTES) return;
 
         const chunks = extractViteMapDepsChunks(content, jsUrl);
         if (chunks.length > 0) {
             console.log(chalk.green(`[✓] Found ${chunks.length} chunks from __vite__mapDeps in ${jsUrl}`));
             for (const u of chunks) discovered.add(u);
         }
-    }
+    });
 
     return [...discovered];
 };

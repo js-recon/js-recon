@@ -4,6 +4,7 @@ import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import resolvePath from "../../utility/resolvePath.js";
 import { addCrawledUrl } from "../globals.js";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
@@ -66,7 +67,7 @@ const next_promiseResolveWorker = async (url: string, jsDirBase: string): Promis
     return extractPromiseAllChunkPaths(data, jsDirBase);
 };
 
-const next_promiseResolve = async (urls: string[]) => {
+const next_promiseResolve = async (urls: string[], threads: number = 1) => {
     console.log(chalk.cyan("[i] Check for Promise.all pattern"));
 
     let toReturn: string[] = [];
@@ -80,12 +81,12 @@ const next_promiseResolve = async (urls: string[]) => {
         }
     }
 
-    for (const url of urls) {
+    await runWithConcurrency(urls, threads, async (url) => {
         const result = await next_promiseResolveWorker(url, jsDirBase!);
         toReturn.push(...result);
         // add the URL to the crawled URL
         addCrawledUrl(url);
-    }
+    });
 
     return toReturn;
 };

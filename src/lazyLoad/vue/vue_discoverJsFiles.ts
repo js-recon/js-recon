@@ -32,7 +32,8 @@ const vue_discoverJsFiles = async (
     maxJsSizeMb: number = 2,
     onFilesDiscovered?: (files: string[]) => void,
     includeMethods: string[] = [],
-    excludeMethods: string[] = []
+    excludeMethods: string[] = [],
+    threads: number = 1
 ): Promise<VueDiscoveryResult> => {
     let jsFiles: string[] = [];
 
@@ -79,7 +80,7 @@ const vue_discoverJsFiles = async (
     // scan page-loaded JS files for Vite's __vite__mapDeps chunk manifest
     if (shouldRunMethod("vue_viteMapDeps", inc, exc)) {
         const beforeViteMapDeps = new Set(jsFiles.map(normalize));
-        const fromViteMapDeps = await vue_viteMapDeps(jsFiles, maxJsSizeMb);
+        const fromViteMapDeps = await vue_viteMapDeps(jsFiles, maxJsSizeMb, threads);
         emit(fromViteMapDeps);
         const newViteMapDeps = countNew(fromViteMapDeps, beforeViteMapDeps);
         if (newViteMapDeps > 0) {
@@ -90,7 +91,7 @@ const vue_discoverJsFiles = async (
     // walk the import graph of everything found so far
     if (shouldRunMethod("vue_jsImports", inc, exc)) {
         const beforeJsImports = new Set(jsFiles.map(normalize));
-        const fromImports = await vue_jsImports(url, jsFiles, maxJsSizeMb);
+        const fromImports = await vue_jsImports(url, jsFiles, maxJsSizeMb, threads);
         emit(fromImports);
         const newJsImports = countNew(fromImports, beforeJsImports);
         if (newJsImports > 0) {
@@ -101,7 +102,7 @@ const vue_discoverJsFiles = async (
     // scan string literals inside known JS files for .js references
     if (shouldRunMethod("vue_stringJsFiles", inc, exc)) {
         const beforeStringRefs = new Set(jsFiles.map(normalize));
-        const fromStringRefs = await vue_stringJsFiles(jsFiles, maxJsSizeMb);
+        const fromStringRefs = await vue_stringJsFiles(jsFiles, maxJsSizeMb, threads);
         emit(fromStringRefs);
         const newStringRefs = countNew(fromStringRefs, beforeStringRefs);
         if (newStringRefs > 0) {
@@ -112,7 +113,7 @@ const vue_discoverJsFiles = async (
     // reconstruct sourceMappingURL references
     if (shouldRunMethod("vue_reconstructSourceMaps", inc, exc)) {
         const beforeSourceMaps = new Set(jsFiles.map(normalize));
-        const fromSourceMaps = await vue_reconstructSourceMaps(url, jsFiles);
+        const fromSourceMaps = await vue_reconstructSourceMaps(url, jsFiles, threads);
         emit(fromSourceMaps);
         const newSourceMaps = countNew(fromSourceMaps, beforeSourceMaps);
         if (newSourceMaps > 0) {
@@ -125,7 +126,7 @@ const vue_discoverJsFiles = async (
     // surface client-side paths so the caller can recurse into them
     let clientSidePaths: string[] = [];
     if (shouldRunMethod("vue_getClientSidePaths", inc, exc)) {
-        clientSidePaths = await vue_getClientSidePaths(url, jsFiles, maxJsSizeMb);
+        clientSidePaths = await vue_getClientSidePaths(url, jsFiles, maxJsSizeMb, threads);
     }
 
     return { jsFiles, clientSidePaths: [...new Set(clientSidePaths)] };

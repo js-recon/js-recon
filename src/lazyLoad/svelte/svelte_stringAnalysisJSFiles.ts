@@ -7,6 +7,7 @@ import resolvePath from "../../utility/resolvePath.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import { FoundJsFiles } from "../../utility/interfaces.js";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 let analyzedFiles = [];
@@ -56,7 +57,7 @@ export const parseJSFileContent = async (content) => {
  * @param {string} url - The URL of the webpage to fetch and parse.
  * @returns {Promise<string[]>} - A promise that resolves to an array of absolute URLs pointing to JavaScript files found in the page.
  */
-const svelte_stringAnalysisJSFiles = async (url) => {
+const svelte_stringAnalysisJSFiles = async (url, threads: number = 1) => {
     console.log(chalk.cyan("[i] Analyzing strings in the files found"));
 
     while (true) {
@@ -82,12 +83,10 @@ const svelte_stringAnalysisJSFiles = async (url) => {
             break;
         }
 
-        // iterate through the JS URLs
-        for (const js_url of js_urls) {
-            if (analyzedFiles.includes(js_url)) {
-                continue;
-            }
+        // iterate through the JS URLs not yet analyzed, concurrently
+        const toAnalyze = js_urls.filter((js_url) => !analyzedFiles.includes(js_url));
 
+        await runWithConcurrency(toAnalyze, threads, async (js_url) => {
             const response = await makeRequest(js_url, {});
             const respText = await response.text();
             const foundJsFiles: FoundJsFiles = await parseJSFileContent(respText);
@@ -113,7 +112,7 @@ const svelte_stringAnalysisJSFiles = async (url) => {
             }
 
             analyzedFiles.push(js_url);
-        }
+        });
     }
 
     // dedupe the files

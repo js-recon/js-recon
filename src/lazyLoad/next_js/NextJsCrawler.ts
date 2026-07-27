@@ -200,7 +200,7 @@ class NextJsCrawler {
         // and were already resolved in the initial lazyload call; re-running this costs
         // 3-6 minutes per call without discovering new URLs.
         if (!this.subsequentRequestsFlag && shouldRunMethod("next_GetLazyResourcesWebpackJs", inc, exc)) {
-            const jsFromWebpack = await next_GetLazyResourcesWebpackJs(this.url);
+            const jsFromWebpack = await next_GetLazyResourcesWebpackJs(this.url, this.threads);
             this.techniqueEfficiencyMapping["next_GetLazyResourcesWebpackJs"] = jsFromWebpack;
             lazyLoadGlobals.pushToJsUrls(jsFromWebpack);
             this.emitDownloadable(this.registerUrls(jsFromWebpack));
@@ -229,7 +229,11 @@ class NextJsCrawler {
             }
 
             if (shouldRunMethod("next_scriptTagsSubsequentRequests", inc, exc)) {
-                const jsFromScriptTagsSR = await next_scriptTagsSubsequentRequests(this.url, this.urlsFile);
+                const jsFromScriptTagsSR = await next_scriptTagsSubsequentRequests(
+                    this.url,
+                    this.urlsFile,
+                    this.threads
+                );
                 this.techniqueEfficiencyMapping["next_scriptTagsSubsequentRequests"] = jsFromScriptTagsSR;
                 lazyLoadGlobals.pushToJsUrls(jsFromScriptTagsSR);
                 this.emitDownloadable(this.registerUrls(jsFromScriptTagsSR));
@@ -257,7 +261,7 @@ class NextJsCrawler {
 
         // Promise.all pattern analysis on JS file contents
         if (shouldRunMethod("next_promiseResolve", inc, exc)) {
-            const jsFromPromise = await next_promiseResolve(jsUrls);
+            const jsFromPromise = await next_promiseResolve(jsUrls, this.threads);
             this.techniqueEfficiencyMapping["next_promiseResolve"] = [
                 ...(this.techniqueEfficiencyMapping["next_promiseResolve"] || []),
                 ...jsFromPromise,
@@ -269,7 +273,7 @@ class NextJsCrawler {
 
         // Layout.js parsing → discovers new client-side page paths → visits them
         if (shouldRunMethod("next_parseLayoutJs", inc, exc)) {
-            const jsFromLayout = await next_parseLayoutJs(this.url, jsUrls);
+            const jsFromLayout = await next_parseLayoutJs(this.url, jsUrls, this.threads);
             this.techniqueEfficiencyMapping["next_parseLayoutJs"] = [
                 ...(this.techniqueEfficiencyMapping["next_parseLayoutJs"] || []),
                 ...jsFromLayout,
@@ -418,7 +422,7 @@ class NextJsCrawler {
         // Phase 3 – brute-force .map files on the final set (skip if stopped by timeout)
         if (!this.stopped && shouldRunMethod("next_bruteForceJsFiles", this.includeMethods, this.excludeMethods)) {
             const allJsUrls = [...this.discoveredUrls].filter((u) => u.endsWith(".js") || u.endsWith(".js.map"));
-            const jsFromBrute = await next_bruteForceJsFiles(allJsUrls);
+            const jsFromBrute = await next_bruteForceJsFiles(allJsUrls, this.threads);
             this.techniqueEfficiencyMapping["next_bruteForceJsFiles"] = jsFromBrute;
             this.emitDownloadable(this.registerUrls(jsFromBrute));
         }

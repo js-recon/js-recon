@@ -1,14 +1,15 @@
 import makeRequest from "../../utility/makeReq.js";
 import chalk from "chalk";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
-const next_bruteForceJsFiles = async (urls: string[]) => {
+const next_bruteForceJsFiles = async (urls: string[], threads: number = 1) => {
     // just append .map to all of them and bruteforce for 200
     console.log(chalk.cyan("[i] Bruteforcing .map files"));
     const mapFiles = urls.map((url) => url + ".map");
 
     let foundSourceMaps: string[] = [];
 
-    for (const mapFile of mapFiles) {
+    await runWithConcurrency(mapFiles, threads, async (mapFile) => {
         const req = await makeRequest(mapFile);
 
         if (req) {
@@ -20,7 +21,7 @@ const next_bruteForceJsFiles = async (urls: string[]) => {
         } else {
             console.error(chalk.red(`[!] Failed to request ${mapFile}`));
         }
-    }
+    });
 
     if (foundSourceMaps.length === 0) {
         console.error(chalk.red("[!] No source maps found"));

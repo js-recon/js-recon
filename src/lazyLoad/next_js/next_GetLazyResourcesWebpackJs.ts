@@ -12,6 +12,7 @@ import { getJsonUrls, getJsUrls, pushToJsonUrls, pushToJsUrls } from "../globals
 import * as globals from "../../utility/globals.js";
 import { setActiveBarLogger, computeBarSize, watchBarResize } from "../../utility/progressLog.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
 type MatchedFunction = {
     source: string;
@@ -36,7 +37,7 @@ type MatchedFunction = {
  * @param {string} url - The URL of the page to crawl.
  * @returns {Promise<string[]>} Deduplicated absolute URLs of discovered JS chunks.
  */
-const next_GetLazyResourcesWebpackJs = async (url: string): Promise<string[]> => {
+const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1): Promise<string[]> => {
     const chromiumPath = getChromiumPath();
     const sandboxArgs = globals.getDisableSandbox()
         ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
@@ -138,13 +139,13 @@ const next_GetLazyResourcesWebpackJs = async (url: string): Promise<string[]> =>
     const matched: MatchedFunction[] = [];
     let processed = 0;
 
-    for (const jsUrl of jsUrls) {
+    await runWithConcurrency(jsUrls, threads, async (jsUrl) => {
         try {
             const res = await makeRequest(jsUrl, {});
             if (!res || res.status !== 200) {
                 processed++;
                 bar.update(processed);
-                continue;
+                return;
             }
 
             const jsContent = await res.text();
@@ -153,7 +154,7 @@ const next_GetLazyResourcesWebpackJs = async (url: string): Promise<string[]> =>
             if (!jsContent.includes('".js"')) {
                 processed++;
                 bar.update(processed);
-                continue;
+                return;
             }
 
             let ast;
@@ -166,7 +167,7 @@ const next_GetLazyResourcesWebpackJs = async (url: string): Promise<string[]> =>
             } catch {
                 processed++;
                 bar.update(processed);
-                continue;
+                return;
             }
 
             traverse(ast, {
@@ -207,7 +208,7 @@ const next_GetLazyResourcesWebpackJs = async (url: string): Promise<string[]> =>
 
         processed++;
         bar.update(processed);
-    }
+    });
 
     bar.stop();
     setActiveBarLogger(null);

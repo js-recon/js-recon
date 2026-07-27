@@ -54,26 +54,21 @@ import {
 } from "./remote/version-detect.js";
 
 /**
- * Derives the assets directory from the URL embedded in any chunk's code comment.
- * Chunks have a header like `// File Source: http://localhost:3001/assets/foo.js`.
- * Returns null if the assets directory cannot be determined or does not exist.
+ * Locates the assets directory holding vendor chunk files not present in `mapped.json`.
+ * `explicitAssetsDir` (the actual download dir + host, known by the `run` orchestrator)
+ * is used when given — `mapped.json` isn't always co-located with the downloaded assets
+ * (e.g. single-target `run` writes `mapped.json` to cwd but assets to `<-o>/<host>/assets`).
+ * Falls back to `<mapped.json's dir>/assets`, which holds for manual/CLI refactor
+ * invocations where `-m` points at a `mapped.json` living inside the host output dir.
+ * Returns null if the resolved directory does not exist.
  */
-function findAssetsDir(chunks: Chunks, mappedJsonPath: string): string | null {
-    for (const chunk of Object.values(chunks)) {
-        const firstLine = (chunk.code ?? "").split("\n")[0];
-        const urlMatch = firstLine.match(/\/\/ File Source: (https?:\/\/[^\s]+)/);
-        if (!urlMatch) continue;
-        try {
-            const url = new URL(urlMatch[1]);
-            const port = url.port;
-            const hostname = url.hostname + (port ? `_${port}` : "");
-            const assetsDir = path.join(path.dirname(path.resolve(mappedJsonPath)), "output", hostname, "assets");
-            if (fs.existsSync(assetsDir)) return assetsDir;
-        } catch {
-            continue;
-        }
+export function findAssetsDir(mappedJsonPath: string, explicitAssetsDir?: string): string | null {
+    const assetsDir = explicitAssetsDir ?? path.join(path.dirname(path.resolve(mappedJsonPath)), "assets");
+    try {
+        return fs.statSync(assetsDir).isDirectory() ? assetsDir : null;
+    } catch {
+        return null;
     }
-    return null;
 }
 
 /**
@@ -761,6 +756,9 @@ async function resolveVersionDetectionScatDirs(bundler: string, opts: RemoteLibS
  * @param outputDir - Directory where refactored code files will be written
  * @param tech - Technology stack identifier (e.g., 'next' for Next.js)
  * @param list - Whether to list available technologies instead of running refactoring
+ * @param assetsDir - Directory holding downloaded vendor chunk files not present in
+ *   `mapped.json` (react-webpack/react-vite only). Defaults to `<mapped.json's dir>/assets`
+ *   when omitted; pass explicitly when `mapped.json` isn't co-located with the assets dir.
  * @returns Promise that resolves when refactoring is complete
  */
 const refactor = async (
@@ -769,7 +767,8 @@ const refactor = async (
     tech: string,
     list: boolean,
     collisionsFile?: string,
-    remoteOpts?: RemoteLibSigsOptions & { noRemote?: boolean }
+    remoteOpts?: RemoteLibSigsOptions & { noRemote?: boolean },
+    assetsDir?: string
 ): Promise<void> => {
     console.log(chalk.cyan("[i] Loading refactor module..."));
 
@@ -921,9 +920,9 @@ const refactor = async (
         // Pre-scan vendor chunks from the assets directory that are not in mapped.json.
         // These files (e.g. vendor-router.*.js, vendor-react-dom.*.js) contain library
         // modules whose export maps must be classified before processing application chunks.
-        const assetsDir = findAssetsDir(chunks, mappedJson);
-        if (assetsDir) {
-            const vendorFiles = findVendorChunkFiles(chunks, assetsDir);
+        const preScanAssetsDir = findAssetsDir(mappedJson, assetsDir);
+        if (preScanAssetsDir) {
+            const vendorFiles = findVendorChunkFiles(chunks, preScanAssetsDir);
             for (const vendorFile of vendorFiles) {
                 console.log(chalk.cyan(`[i] Pre-scanning vendor chunk: ${path.basename(vendorFile)}`));
                 const vendorCode = fs.readFileSync(vendorFile, "utf8");
@@ -995,7 +994,7 @@ const refactor = async (
                 // signature set contains only app-level code and misses version-specific React
                 // library signatures.
                 const vendorCodes: string[] = [];
-                const vDetectAssetsDir = findAssetsDir(chunks, mappedJson);
+                const vDetectAssetsDir = findAssetsDir(mappedJson, assetsDir);
                 if (vDetectAssetsDir) {
                     for (const vendorFile of findVendorChunkFiles(chunks, vDetectAssetsDir)) {
                         try {
@@ -1033,7 +1032,7 @@ const refactor = async (
         // Vendor chunks (vendor-react-*.js) are referenced by app chunks but are typically
         // absent from mapped.json. Without them, vendorExportMaps is empty and vendor
         // import statements are never rewritten — leaving unresolvable references in output.
-        const vitAssetsDir = findAssetsDir(chunks, mappedJson);
+        const vitAssetsDir = findAssetsDir(mappedJson, assetsDir);
         if (vitAssetsDir) {
             const missingFiles = findVendorChunkFiles(chunks, vitAssetsDir);
             for (const vendorFile of missingFiles) {

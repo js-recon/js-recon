@@ -1,5 +1,6 @@
 import makeRequest from "../../utility/makeReq.js";
 import chalk from "chalk";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
 /**
  * Extracts all JS file references from the content of a JS file:
@@ -77,35 +78,35 @@ const react_followImports = async (
     jsFiles: string[],
     maxJsSizeMb: number,
     baseUrl: string,
-    visited: Set<string>
+    visited: Set<string>,
+    threads: number = 1
 ): Promise<string[]> => {
     const discovered: string[] = [];
+    const toFetch = jsFiles.filter((jsFile) => !visited.has(jsFile));
+    for (const jsFile of toFetch) visited.add(jsFile);
 
-    for (const jsFile of jsFiles) {
-        if (visited.has(jsFile)) continue;
-        visited.add(jsFile);
-
+    await runWithConcurrency(toFetch, threads, async (jsFile) => {
         try {
             const req = await makeRequest(jsFile);
-            if (!req || req.status !== 200) continue;
+            if (!req || req.status !== 200) return;
 
             const contentLength = req.headers.get("content-length");
             if (contentLength && parseInt(contentLength) > maxJsSizeMb * 1024 * 1024) {
                 console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
-                continue;
+                return;
             }
 
             const content = await req.text();
             if (content.length > maxJsSizeMb * 1024 * 1024) {
                 console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
-                continue;
+                return;
             }
 
             discovered.push(...extractImports(content, jsFile, baseUrl));
         } catch (err) {
             console.error(chalk.yellow(`[!] Could not follow imports in ${jsFile}: ${err}`));
         }
-    }
+    });
 
     // Return only URLs not yet in visited (deduplicated)
     return [...new Set(discovered)].filter((u) => !visited.has(u));

@@ -1,7 +1,8 @@
 import makeRequest from "../../utility/makeReq.js";
 import chalk from "chalk";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
-const vue_reconstructSourceMaps = async (url: string, jsFilesToDownload: string[]) => {
+const vue_reconstructSourceMaps = async (url: string, jsFilesToDownload: string[], threads: number = 1) => {
     // get the contents of first file, and check if it has the sourceMappingURL
 
     let sourceMapUrls: string[] = [];
@@ -25,11 +26,11 @@ const vue_reconstructSourceMaps = async (url: string, jsFilesToDownload: string[
     console.log(chalk.green("[✓] Found sourceMappingURL"));
 
     // now that one file has this, iterate through all the files, and reconstruct the source maps
-    for (const jsFile of jsFilesToDownload) {
+    await runWithConcurrency(jsFilesToDownload, threads, async (jsFile) => {
         const req = await makeRequest(jsFile);
         if (req == null) {
             console.error(chalk.red(`Failed to fetch ${jsFile}`));
-            continue;
+            return;
         }
         const content = await req.text();
 
@@ -54,7 +55,7 @@ const vue_reconstructSourceMaps = async (url: string, jsFilesToDownload: string[
             // now that we've got the mapping URL, just push it to the array
             sourceMapUrls.push(reconstructedUrl);
         }
-    }
+    });
 
     return sourceMapUrls;
 };

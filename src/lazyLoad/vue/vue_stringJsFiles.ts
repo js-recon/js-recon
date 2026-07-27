@@ -4,6 +4,7 @@ import makeRequest from "../../utility/makeReq.js";
 import { setActiveBarLogger, computeBarSize, watchBarResize } from "../../utility/progressLog.js";
 import parser from "@babel/parser";
 import { extractStrings } from "../../strings/index.js";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
 /**
  * Resolves a .js string found in a bundle to an absolute URL.
@@ -109,7 +110,11 @@ const fetchAndExtractJsStrings = async (url: string, maxJsSizeMb: number): Promi
  * known JS file for references that end in `.js` and resolving them against
  * the file's own URL.
  */
-const vue_stringJsFiles = async (knownJsFiles: string[], maxJsSizeMb: number = 2): Promise<string[]> => {
+const vue_stringJsFiles = async (
+    knownJsFiles: string[],
+    maxJsSizeMb: number = 2,
+    threads: number = 1
+): Promise<string[]> => {
     const allFound = new Set<string>();
     const crawled = new Set<string>(knownJsFiles);
 
@@ -129,28 +134,34 @@ const vue_stringJsFiles = async (knownJsFiles: string[], maxJsSizeMb: number = 2
     );
 
     let processed = 0;
-    const queue = [...knownJsFiles];
+    let totalKnown = knownJsFiles.length;
 
-    bar.start(queue.length, 0, { refs: 0 });
+    bar.start(totalKnown, 0, { refs: 0 });
     const stopBarWatcher = watchBarResize(bar, 72);
     setActiveBarLogger({ log: (s: string) => process.stdout.write("\r\x1b[K" + s) });
 
-    const processFile = async (url: string) => {
+    const processFile = async (url: string, newFiles: string[]) => {
         const discovered = await fetchAndExtractJsStrings(url, maxJsSizeMb);
         for (const u of discovered) {
             allFound.add(u);
             if (!crawled.has(u)) {
                 crawled.add(u);
-                queue.push(u);
-                bar.setTotal(queue.length);
+                newFiles.push(u);
+                totalKnown++;
+                bar.setTotal(totalKnown);
             }
         }
         processed++;
         bar.update(processed, { refs: allFound.size });
     };
 
-    for (let i = 0; i < queue.length; i++) {
-        await processFile(queue[i]);
+    // Fixpoint discovery, processed in rounds: each round's batch is fetched
+    // concurrently, and any newly-discovered files seed the next round.
+    let currentBatch = [...knownJsFiles];
+    while (currentBatch.length > 0) {
+        const newFiles: string[] = [];
+        await runWithConcurrency(currentBatch, threads, (url) => processFile(url, newFiles));
+        currentBatch = newFiles;
     }
 
     bar.stop();

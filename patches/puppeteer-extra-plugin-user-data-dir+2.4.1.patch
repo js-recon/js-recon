@@ -1,0 +1,31 @@
+diff --git a/node_modules/puppeteer-extra-plugin-user-data-dir/index.js b/node_modules/puppeteer-extra-plugin-user-data-dir/index.js
+index 935505a..86754d3 100644
+--- a/node_modules/puppeteer-extra-plugin-user-data-dir/index.js
++++ b/node_modules/puppeteer-extra-plugin-user-data-dir/index.js
+@@ -5,7 +5,6 @@ const fs = require('fs')
+ const fse = require('fs-extra')
+ const os = require('os')
+ const path = require('path')
+-const rimraf = require('rimraf')
+ const debug = require('debug')('puppeteer-extra-plugin:user-data-dir')
+ const mkdtempAsync = util.promisify(fs.mkdtemp)
+ const { PuppeteerExtraPlugin } = require('puppeteer-extra-plugin')
+@@ -71,12 +70,14 @@ class Plugin extends PuppeteerExtraPlugin {
+       return
+     }
+ 
+-    // We're using rimraf here because it throw errors and don't seem to freeze the process
+-    // If ressources busy or locked by chrome try again 4 times, then give up. overall a timout of 400ms
+-    rimraf(
++    // We're using fs.rm here because it throws errors and doesn't seem to freeze the process
++    // If resources are busy or locked by chrome, retry a few times, then give up.
++    fs.rm(
+       this._userDataDir,
+       {
+-        maxBusyTries: 4
++        recursive: true,
++        force: true,
++        maxRetries: 4
+       },
+       err => {
+         debug(err)

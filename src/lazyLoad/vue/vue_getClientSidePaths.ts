@@ -5,10 +5,16 @@ import cliProgress from "cli-progress";
 import parser from "@babel/parser";
 import t from "@babel/types";
 import { setActiveBarLogger, computeBarSize, watchBarResize } from "../../utility/progressLog.js";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
-const vue_getClientSidePaths = async (url: string, jsFiles: string[], maxJsSizeMb: number = 2): Promise<string[]> => {
+const vue_getClientSidePaths = async (
+    url: string,
+    jsFiles: string[],
+    maxJsSizeMb: number = 2,
+    threads: number = 1
+): Promise<string[]> => {
     const MAX_JS_SIZE_BYTES = maxJsSizeMb * 1024 * 1024;
     let toReturn: string[] = [];
 
@@ -36,12 +42,12 @@ const vue_getClientSidePaths = async (url: string, jsFiles: string[], maxJsSizeM
     setActiveBarLogger({ log: (s: string) => process.stdout.write("\r\x1b[K" + s) });
 
     // iterate through all those
-    for (const jsFile of jsFiles) {
+    await runWithConcurrency(jsFiles, threads, async (jsFile) => {
         if (!jsFile.endsWith(".js")) {
             processed++;
             skipped++;
             bar.update(processed, { paths: toReturn.length, skipped });
-            continue;
+            return;
         }
         const req = await makeRequest(jsFile);
 
@@ -49,7 +55,7 @@ const vue_getClientSidePaths = async (url: string, jsFiles: string[], maxJsSizeM
             processed++;
             skipped++;
             bar.update(processed, { paths: toReturn.length, skipped });
-            continue;
+            return;
         }
 
         const jsContent = await req.text();
@@ -58,7 +64,7 @@ const vue_getClientSidePaths = async (url: string, jsFiles: string[], maxJsSizeM
             processed++;
             skipped++;
             bar.update(processed, { paths: toReturn.length, skipped });
-            continue;
+            return;
         }
 
         // load in ast
@@ -74,7 +80,7 @@ const vue_getClientSidePaths = async (url: string, jsFiles: string[], maxJsSizeM
             processed++;
             skipped++;
             bar.update(processed, { paths: toReturn.length, skipped });
-            continue;
+            return;
         }
 
         const jsFileOrigin = new URL(jsFile).origin;
@@ -163,7 +169,7 @@ const vue_getClientSidePaths = async (url: string, jsFiles: string[], maxJsSizeM
         processed++;
         if (toReturn.length === pathsBefore) skipped++;
         bar.update(processed, { paths: toReturn.length, skipped });
-    }
+    });
 
     bar.stop();
     stopBarWatcher();

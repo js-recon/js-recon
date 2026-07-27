@@ -65,8 +65,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "${FORMULA}"
-          git commit -m "chore: update ${FORMULA} to ${VERSION}"
-          git push
+          # Idempotent: re-promoting an already-promoted version leaves the formula
+          # unchanged, so skip the commit/push instead of failing on "nothing to commit".
+          if git diff --cached --quiet; then
+            echo "${FORMULA} already at ${VERSION}; nothing to commit."
+          else
+            git commit -m "chore: update ${FORMULA} to ${VERSION}"
+            git push
+          fi
         env:
           VERSION: ${{ inputs.version }}
           FORMULA: ${{ steps.formula.outputs.formula }}
@@ -389,6 +395,23 @@ jobs:
             fi
             sleep 2
           done
+
+      - name: Ensure a Chrome is available for Puppeteer
+        run: |
+          # The Homebrew keg ships js-recon but not a Chromium — Puppeteer needs a
+          # browser to run lazyload. Prefer the runner's pre-installed Google Chrome
+          # (present on GitHub macOS images); fall back to a Chrome-for-Testing build.
+          CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+          if [[ ! -x "$CHROME" ]]; then
+            echo "Pre-installed Chrome not found; downloading a Chrome-for-Testing build..."
+            CHROME="$(npx --yes @puppeteer/browsers install chrome@stable --format "{{path}}")"
+          fi
+          if [[ ! -x "$CHROME" ]]; then
+            echo "Resolved Chrome path is not executable: $CHROME"
+            exit 1
+          fi
+          echo "Using Chrome at: $CHROME"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME" >> "$GITHUB_ENV"
 
       - name: Run installed js-recon against the lab app
         run: |

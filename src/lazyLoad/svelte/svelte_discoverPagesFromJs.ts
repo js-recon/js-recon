@@ -4,6 +4,7 @@ import makeRequest from "../../utility/makeReq.js";
 import resolvePath from "../../utility/resolvePath.js";
 import { getJsUrls, pushToJsUrls } from "../globals.js";
 import { URL } from "url";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
 const ASSET_EXTENSIONS = [".js", ".css", ".json", ".png", ".svg", ".woff", ".woff2", ".ico", ".jpg", ".gif"];
 const SKIP_PREFIXES = ["/_astro/", "/_next/", "/__"];
@@ -88,7 +89,7 @@ const MAX_ROUNDS = 5;
  * @param entryUrl - The target's base URL (used to build absolute page URLs)
  * @returns Array of all newly discovered JS file URLs across all rounds
  */
-const svelte_discoverPagesFromJs = async (entryUrl: string): Promise<string[]> => {
+const svelte_discoverPagesFromJs = async (entryUrl: string, threads: number = 1): Promise<string[]> => {
     const origin = new URL(entryUrl).origin;
     const allDiscovered: string[] = [];
     const visitedPaths = new Set<string>();
@@ -100,19 +101,19 @@ const svelte_discoverPagesFromJs = async (entryUrl: string): Promise<string[]> =
 
         // Collect candidate page paths from all unscanned JS URLs
         const candidatePaths = new Set<string>();
-        for (const jsUrl of currentJsUrls) {
+        await runWithConcurrency(currentJsUrls, threads, async (jsUrl) => {
             scannedJsUrls.add(jsUrl);
             try {
                 const res = await makeRequest(jsUrl, {});
-                if (!res) continue;
+                if (!res) return;
                 const content = await res.text();
                 for (const p of extractPagePaths(content)) {
                     candidatePaths.add(p);
                 }
             } catch {
-                continue;
+                return;
             }
-        }
+        });
 
         // Filter to only unvisited paths
         const newPaths = [...candidatePaths].filter((p) => !visitedPaths.has(p));
@@ -123,14 +124,14 @@ const svelte_discoverPagesFromJs = async (entryUrl: string): Promise<string[]> =
         );
 
         let foundThisRound = 0;
-        for (const pagePath of newPaths) {
+        await runWithConcurrency(newPaths, threads, async (pagePath) => {
             visitedPaths.add(pagePath);
             const pageUrl = `${origin}${pagePath}`;
             try {
                 const res = await makeRequest(pageUrl, {});
-                if (!res) continue;
+                if (!res) return;
                 const contentType = res.headers.get("content-type") ?? "";
-                if (!contentType.includes("text/html")) continue;
+                if (!contentType.includes("text/html")) return;
 
                 const html = await res.text();
                 const jsFromPage = await extractJsFromHtml(pageUrl, html);
@@ -149,7 +150,7 @@ const svelte_discoverPagesFromJs = async (entryUrl: string): Promise<string[]> =
             } catch {
                 // page not found or network error — skip
             }
-        }
+        });
 
         if (foundThisRound === 0) break;
     }

@@ -3,6 +3,7 @@ import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import chalk from "chalk";
 import next_getJSScript from "./next_GetJSScript.js";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -66,58 +67,58 @@ export const extractHrefsFromLayoutJs = (jsContent: string): string[] => {
     return hrefs;
 };
 
-const next_parseLayoutJs = async (baseUrl: string, urls: string[]) => {
+const next_parseLayoutJs = async (baseUrl: string, urls: string[], threads: number = 1) => {
     console.log(chalk.cyan("[i] Parsing layout.js files"));
 
     let toReturn: string[] = [];
     const MAX_LAYOUT_JS_BYTES = 1.5 * 1024 * 1024;
 
-    for (const url of urls) {
-        if (url.includes("layout-")) {
-            const req = await makeRequest(url);
-            if (!req) continue;
+    const layoutUrls = urls.filter((url) => url.includes("layout-"));
 
-            const contentLength = req.headers.get("content-length");
-            if (contentLength && parseInt(contentLength, 10) > MAX_LAYOUT_JS_BYTES) {
-                console.log(
-                    chalk.yellow(
-                        `[!] Skipping oversized layout.js (${Math.round(parseInt(contentLength, 10) / 1024)} KB): ${url}`
-                    )
-                );
+    await runWithConcurrency(layoutUrls, threads, async (url) => {
+        const req = await makeRequest(url);
+        if (!req) return;
+
+        const contentLength = req.headers.get("content-length");
+        if (contentLength && parseInt(contentLength, 10) > MAX_LAYOUT_JS_BYTES) {
+            console.log(
+                chalk.yellow(
+                    `[!] Skipping oversized layout.js (${Math.round(parseInt(contentLength, 10) / 1024)} KB): ${url}`
+                )
+            );
+            return;
+        }
+
+        const jsContent = await req.text();
+
+        if (jsContent.length > MAX_LAYOUT_JS_BYTES) {
+            console.log(
+                chalk.yellow(`[!] Skipping oversized layout.js (${Math.round(jsContent.length / 1024)} KB): ${url}`)
+            );
+            return;
+        }
+
+        const hrefFinds = extractHrefsFromLayoutJs(jsContent);
+
+        for (const href of hrefFinds) {
+            const newUrl = new URL(href, new URL(url).origin).href;
+            if (newUrl.startsWith("mailto:")) continue;
+            if (new URL(baseUrl).origin !== new URL(newUrl).origin) continue;
+
+            let hreqResult: Response | null;
+            try {
+                hreqResult = await makeRequest(newUrl);
+            } catch {
                 continue;
             }
 
-            const jsContent = await req.text();
-
-            if (jsContent.length > MAX_LAYOUT_JS_BYTES) {
-                console.log(
-                    chalk.yellow(`[!] Skipping oversized layout.js (${Math.round(jsContent.length / 1024)} KB): ${url}`)
-                );
-                continue;
-            }
-
-            const hrefFinds = extractHrefsFromLayoutJs(jsContent);
-
-            for (const href of hrefFinds) {
-                const newUrl = new URL(href, new URL(url).origin).href;
-                if (newUrl.startsWith("mailto:")) continue;
-                if (new URL(baseUrl).origin !== new URL(newUrl).origin) continue;
-
-                let hreqResult: Response | null;
-                try {
-                    hreqResult = await makeRequest(newUrl);
-                } catch {
-                    continue;
-                }
-
-                if (hreqResult.status === 200) {
-                    console.log(chalk.green("[✓] Found new client side URL: ", newUrl));
-                    const jsFiles = await next_getJSScript(newUrl);
-                    toReturn.push(...jsFiles);
-                }
+            if (hreqResult && hreqResult.status === 200) {
+                console.log(chalk.green("[✓] Found new client side URL: ", newUrl));
+                const jsFiles = await next_getJSScript(newUrl);
+                toReturn.push(...jsFiles);
             }
         }
-    }
+    });
 
     toReturn = [...new Set(toReturn)];
 

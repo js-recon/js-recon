@@ -3,6 +3,7 @@ import chalk from "chalk";
 import _traverse from "@babel/traverse";
 import parser from "@babel/parser";
 import execFunc from "../../utility/runSandboxed.js";
+import { runWithConcurrency } from "../../utility/concurrency.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -121,26 +122,31 @@ export const extractIfChainChunkFilenames = (jsContent: string): string[] => {
 };
 
 // url param kept for API consistency with other react_* functions
-const react_webpackChunkPaths = async (_url: string, maxJsSizeMb: number, jsFiles: string[]): Promise<string[]> => {
+const react_webpackChunkPaths = async (
+    _url: string,
+    maxJsSizeMb: number,
+    jsFiles: string[],
+    threads: number = 1
+): Promise<string[]> => {
     let toReturn: string[] = [];
 
-    for (const jsFile of jsFiles) {
+    await runWithConcurrency(jsFiles, threads, async (jsFile) => {
         try {
             const req = await makeRequest(jsFile);
 
-            if (!req || req.status !== 200) continue;
+            if (!req || req.status !== 200) return;
 
             const contentLength = req.headers.get("content-length");
             if (contentLength && parseInt(contentLength) > maxJsSizeMb * 1024 * 1024) {
                 console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
-                continue;
+                return;
             }
 
             const jsContent = await req.text();
 
             if (jsContent.length > maxJsSizeMb * 1024 * 1024) {
                 console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
-                continue;
+                return;
             }
 
             // pattern 3: FunctionExpression with object map
@@ -224,7 +230,7 @@ const react_webpackChunkPaths = async (_url: string, maxJsSizeMb: number, jsFile
         } catch (err) {
             console.error(chalk.red(`[!] Error processing ${jsFile}:`, err));
         }
-    }
+    });
 
     if (toReturn.length > 0) {
         console.log(chalk.green(`[✓] Found ${toReturn.length} webpack chunk JS files`));
