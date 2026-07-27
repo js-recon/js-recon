@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import makeRequest from "../../utility/makeReq.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
@@ -67,7 +67,7 @@ const next_promiseResolveWorker = async (url: string, jsDirBase: string): Promis
 };
 
 const next_promiseResolve = async (urls: string[]) => {
-    console.log(chalk.cyan("[i] Check for Promise.all pattern"));
+    printMsg(MSG.Header, "[i] Check for Promise.all pattern");
 
     let toReturn: string[] = [];
 

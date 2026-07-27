@@ -5,6 +5,7 @@ import cliProgress from "cli-progress";
 import parser from "@babel/parser";
 import t from "@babel/types";
 import { setActiveBarLogger, computeBarSize, watchBarResize } from "../../utility/progressLog.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -170,7 +171,7 @@ const vue_getClientSidePaths = async (url: string, jsFiles: string[], maxJsSizeM
     setActiveBarLogger(null);
 
     if (toReturn.length > 0) {
-        console.log(chalk.green(`[+] Found ${toReturn.length} client-side paths from JS files!`));
+        printMsg(MSG.Run, `[+] Found ${toReturn.length} client-side paths from JS files!`);
     }
     return toReturn;
 };

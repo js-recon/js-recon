@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import generic_getScriptTags from "./generic_getScriptTags.js";
 import generic_scanAttributesForJs from "./generic_scanAttributesForJs.js";
 import generic_downloadFiles from "./generic_downloadFiles.js";
@@ -10,6 +9,7 @@ import { resolveJsPathCandidate, confirmJsContentType } from "./generic_scanAttr
 import { accumulateTechnique } from "../researchUtils.js";
 import * as lazyLoadGlobals from "../globals.js";
 import { StagnationMonitor } from "../stagnation/stagnationMonitor.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 // internal#74 / internal#75: import-map manifests and webpack chunk hash-maps are
 // finite, already-known structures (unlike open-ended strings discovery) — a handful of
@@ -117,15 +117,14 @@ const generic_crawlPages = async (
 
     while (queue.length > 0) {
         if (maxPageVisits > 0 && visitedPages.size >= maxPageVisits) {
-            console.log(chalk.yellow(`[i] Reached max page visits (${maxPageVisits}); stopping generic crawl`));
+            printMsg(MSG.Warn, `[i] Reached max page visits (${maxPageVisits}); stopping generic crawl`);
             break;
         }
 
         if (stagnationMonitor?.shouldEvaluate() && stagnationMonitor.evaluate()) {
-            console.log(
-                chalk.yellow(
-                    `[i] Detected content stagnation (dominant JS content ≥ ${stagnationPercentage}% with no new content); stopping generic crawl`
-                )
+            printMsg(
+                MSG.Warn,
+                `[i] Detected content stagnation (dominant JS content ≥ ${stagnationPercentage}% with no new content); stopping generic crawl`
             );
             break;
         }
@@ -134,7 +133,7 @@ const generic_crawlPages = async (
         if (visitedPages.has(pageUrl)) continue;
         visitedPages.add(pageUrl);
 
-        console.log(chalk.cyan(`[i] Crawling page (${visitedPages.size}): ${pageUrl}`));
+        printMsg(MSG.Header, `[i] Crawling page (${visitedPages.size}): ${pageUrl}`);
 
         const { urls: scriptUrls, pageSource } = await generic_getScriptTags(pageUrl, maxJsSizeMb, outputDir);
         if (researchMap) accumulateTechnique(researchMap, "generic_getScriptTags", scriptUrls);
@@ -174,30 +173,30 @@ const generic_crawlPages = async (
 
         if (freshUrls.length === 0) {
             if (iteration === 0) {
-                console.log(chalk.yellow("[i] No import-map manifests or webpack chunk hash-maps found"));
+                printMsg(MSG.Warn, "[i] No import-map manifests or webpack chunk hash-maps found");
             }
             break;
         }
 
-        console.log(chalk.green(`[✓] Found ${freshUrls.length} new JS file(s) via structural discovery`));
+        printMsg(MSG.Run, `[✓] Found ${freshUrls.length} new JS file(s) via structural discovery`);
         freshUrls.forEach((u) => downloadedJsUrls.add(u));
         await generic_downloadFiles(freshUrls, outputDir, threads);
     }
 
     if (stringsEnabled) {
         for (let iteration = 0; stringsMaxIterations <= 0 || iteration < stringsMaxIterations; iteration++) {
-            console.log(chalk.cyan(`[i] Running strings-based discovery pass ${iteration + 1}`));
+            printMsg(MSG.Header, `[i] Running strings-based discovery pass ${iteration + 1}`);
             const candidates = await generic_stringsDiscovery(outputDir, downloadedJsUrls);
             const freshUrls = candidates.filter((u) => !downloadedJsUrls.has(u));
 
             if (researchMap) accumulateTechnique(researchMap, "generic_stringsDiscovery", freshUrls);
 
             if (freshUrls.length === 0) {
-                console.log(chalk.yellow("[i] No new JS files found via strings; stopping strings discovery"));
+                printMsg(MSG.Warn, "[i] No new JS files found via strings; stopping strings discovery");
                 break;
             }
 
-            console.log(chalk.green(`[✓] Found ${freshUrls.length} new JS file(s) via strings`));
+            printMsg(MSG.Run, `[✓] Found ${freshUrls.length} new JS file(s) via strings`);
             freshUrls.forEach((u) => downloadedJsUrls.add(u));
             await generic_downloadFiles(freshUrls, outputDir, threads);
         }

@@ -5,6 +5,7 @@ import * as cliProgress from "cli-progress";
 import frameworkDetect from "../lazyLoad/techDetect/index.js";
 import { computeBarSize, watchBarResize, setActiveBarLogger, progressLog } from "../utility/progressLog.js";
 import * as globalsUtil from "../utility/globals.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 type OutputFormat = "text" | "csv" | "json" | "jsonl";
 
@@ -76,7 +77,7 @@ const appendResult = (
 const logOutputFiles = (outputFile: string, formats: OutputFormat[]): void => {
     for (const format of formats) {
         const filePath = deriveOutputPath(outputFile, format);
-        console.log(chalk.green(`[✓] Results written to ${filePath}`));
+        printMsg(MSG.Run, `[✓] Results written to ${filePath}`);
     }
 };
 
@@ -165,7 +166,7 @@ const fingerprint = async (
     stopWatcher();
 
     const detected = results.filter((r) => r.framework !== null).length;
-    console.log(chalk.cyan(`\n[i] ${detected}/${results.length} URLs fingerprinted`));
+    printMsg(MSG.Header, `\n[i] ${detected}/${results.length} URLs fingerprinted`);
 
     if (outputFile) {
         logOutputFiles(outputFile, formats);

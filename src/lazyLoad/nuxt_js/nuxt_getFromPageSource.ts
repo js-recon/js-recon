@@ -1,7 +1,7 @@
-import chalk from "chalk";
 import makeRequest from "../../utility/makeReq.js";
 import { getJsUrls, pushToJsUrls } from "../globals.js";
 import * as cheerio from "cheerio";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Finds all the lazy loaded JavaScript files from a webpage by parsing the page source.
@@ -12,7 +12,7 @@ import * as cheerio from "cheerio";
  * @returns {Promise<string[]>} - A promise that resolves to an array of absolute URLs pointing to JavaScript files found in the page.
  */
 const nuxt_getFromPageSource = async (url) => {
-    console.log(chalk.cyan("[i] Analyzing page source"));
+    printMsg(MSG.Header, "[i] Analyzing page source");
 
     const urlCountBefore = getJsUrls().length;
 
@@ -75,7 +75,7 @@ const nuxt_getFromPageSource = async (url) => {
     }
 
     const newUrlCount = getJsUrls().length - urlCountBefore;
-    console.log(chalk.green(`[✓] Found ${newUrlCount} JS files from the page source`));
+    printMsg(MSG.Run, `[✓] Found ${newUrlCount} JS files from the page source`);
 
     return getJsUrls();
 };

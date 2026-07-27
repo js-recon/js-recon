@@ -3,10 +3,10 @@ import _traverse from "@babel/traverse";
 import * as fs from "fs";
 import parser from "@babel/parser";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
-import chalk from "chalk";
 import * as globals from "../../../utility/globals.js";
 import { getThirdArg } from "../resolveAxios.js";
 import { resolveNodeValue } from "../utils.js";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -47,28 +47,32 @@ export const traceAxiosInstanceExports = (
     const exportName = findAxiosInstanceExport(sourceChunkId, axiosVarName, chunks);
 
     if (!exportName) {
-        console.error(
-            chalk.yellow(`    [!] Axios instance '${axiosVarName}' in chunk ${sourceChunkId} is not exported`)
+        printMsg(
+            MSG.Warn,
+            `    [!] Axios instance '${axiosVarName}' in chunk ${sourceChunkId} is not exported`
         );
         return;
     }
 
-    console.log(
-        chalk.blue(`    [→] Axios instance '${axiosVarName}' exported as '${exportName}' from chunk ${sourceChunkId}`)
+    printMsg(
+        MSG.Info,
+        `    [→] Axios instance '${axiosVarName}' exported as '${exportName}' from chunk ${sourceChunkId}`
     );
 
     // Step 2: Find all chunks that import this chunk
     const importingChunks = findImportingChunks(sourceChunkId, chunks);
 
     if (importingChunks.length === 0) {
-        console.error(
-            chalk.yellow(`    [!] No chunks import the axios instance '${exportName}' from chunk ${sourceChunkId}`)
+        printMsg(
+            MSG.Warn,
+            `    [!] No chunks import the axios instance '${exportName}' from chunk ${sourceChunkId}`
         );
         return;
     }
 
-    console.log(
-        chalk.blue(`    [→] Found ${importingChunks.length} chunk(s) importing axios instance '${exportName}'`)
+    printMsg(
+        MSG.Info,
+        `    [→] Found ${importingChunks.length} chunk(s) importing axios instance '${exportName}'`
     );
 
     // Step 3: Process each importing chunk
@@ -201,38 +205,40 @@ const processImportingChunk = (
     // Get the third argument (import function)
     const thirdArg = getThirdArg(ast);
     if (!thirdArg) {
-        console.error(chalk.yellow(`    [!] Could not find third argument in chunk ${importingChunkId}`));
+        printMsg(MSG.Warn, `    [!] Could not find third argument in chunk ${importingChunkId}`);
         return;
     }
 
     // Find the variable that imports the axios instance
     const importVarName = findImportVariable(ast, thirdArg, sourceChunkId);
     if (!importVarName) {
-        console.error(
-            chalk.yellow(
-                `    [!] Could not find import variable for chunk ${sourceChunkId} in chunk ${importingChunkId}`
-            )
+        printMsg(
+            MSG.Warn,
+            `    [!] Could not find import variable for chunk ${sourceChunkId} in chunk ${importingChunkId}`
         );
         return;
     }
 
-    console.log(
-        chalk.blue(`    [→] In chunk ${importingChunkId}, axios instance imported as '${importVarName}.${exportName}'`)
+    printMsg(
+        MSG.Info,
+        `    [→] In chunk ${importingChunkId}, axios instance imported as '${importVarName}.${exportName}'`
     );
 
     // Check if this chunk uses or re-exports the axios instance
     const isReexported = checkIfReexported(ast, importVarName, exportName, chunks, importingChunkId);
 
     if (isReexported.reexported) {
-        console.log(
-            chalk.magenta(`    [↻] Axios instance re-exported from chunk ${importingChunkId}, tracing further...`)
+        printMsg(
+            MSG.Info,
+            `    [↻] Axios instance re-exported from chunk ${importingChunkId}, tracing further...`
         );
         // Recursively trace the re-export
         traceAxiosInstanceExports(importingChunkId, isReexported.localVarName!, chunks, directory, visited);
     } else {
         // This chunk uses the axios instance, extract API calls
-        console.log(
-            chalk.greenBright(`    [✓] Chunk ${importingChunkId} uses the axios instance, extracting API calls...`)
+        printMsg(
+            MSG.Run,
+            `    [✓] Chunk ${importingChunkId} uses the axios instance, extracting API calls...`
         );
         extractApiCalls(ast, chunkCode, importVarName, exportName, importingChunkId, chunks, directory, thirdArg);
     }
@@ -620,16 +626,15 @@ const extractApiCalls = (
                     }
 
                     // Log the found API call
-                    console.log(
-                        chalk.yellow(
-                            `        [+] Found API call in chunk ${chunkId} ("${functionFile}":${functionFileLine})`
-                        )
+                    printMsg(
+                        MSG.Warn,
+                        `        [+] Found API call in chunk ${chunkId} ("${functionFile}":${functionFileLine})`
                     );
-                    if (url) console.log(chalk.cyan(`            URL: ${url}`));
-                    if (method) console.log(chalk.magenta(`            Method: ${method}`));
-                    if (data) console.log(chalk.blue(`            Data: ${data}`));
-                    if (params) console.log(chalk.blue(`            Params: ${params}`));
-                    if (headers) console.log(chalk.gray(`            Headers: ${headers}`));
+                    if (url) printMsg(MSG.Header, `            URL: ${url}`);
+                    if (method) printMsg(MSG.Info, `            Method: ${method}`);
+                    if (data) printMsg(MSG.Info, `            Data: ${data}`);
+                    if (params) printMsg(MSG.Info, `            Params: ${params}`);
+                    if (headers) printMsg(MSG.Info, `            Headers: ${headers}`);
 
                     // Add to global collection
                     let parsedHeaders = {};

@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import initReportDb from "./utility/initReportDb.js";
 import fs from "fs";
 import { Chunks } from "../utility/interfaces.js";
@@ -11,6 +10,7 @@ import populateMappedOpenapi from "./utility/populateDb/populateMappedOpenapi.js
 import genHtml from "./utility/genHtml.js";
 import path from "path";
 import { runSwaggerJacker } from "./swaggerJacker.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Generates comprehensive HTML reports from analysis results.
@@ -41,12 +41,12 @@ const report = async (
     sjBin: string = "sj",
     sjArgs: string = ""
 ): Promise<void> => {
-    console.log(chalk.cyan("[i] Running 'report' module"));
+    printMsg(MSG.Header, "[i] Running 'report' module");
 
     // check if db exists. if not, init
     if (!fs.existsSync(sqliteDbPath)) {
         await initReportDb(sqliteDbPath);
-        console.log(chalk.green("[✓] Report database initialized successfully"));
+        printMsg(MSG.Run, "[✓] Report database initialized successfully");
     }
 
     const db = new Database(sqliteDbPath);
@@ -90,7 +90,7 @@ const report = async (
                 path.dirname(path.resolve(mappedOpenapiJsonFilePath))
             );
         } else {
-            console.log(chalk.yellow("[!] --sj was set but no mapped OpenAPI JSON file was provided, skipping"));
+            printMsg(MSG.Warn, "[!] --sj was set but no mapped OpenAPI JSON file was provided, skipping");
         }
     }
 };

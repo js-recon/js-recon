@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import makeRequest from "../../utility/makeReq.js";
 import { getJsUrls, pushToJsUrls } from "../globals.js";
 import resolvePath from "../../utility/resolvePath.js";
@@ -7,6 +6,7 @@ import resolvePath from "../../utility/resolvePath.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import { FoundJsFiles } from "../../utility/interfaces.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 let analyzedFiles = [];
@@ -57,14 +57,14 @@ export const parseJSFileContent = async (content) => {
  * @returns {Promise<string[]>} - A promise that resolves to an array of absolute URLs pointing to JavaScript files found in the page.
  */
 const svelte_stringAnalysisJSFiles = async (url) => {
-    console.log(chalk.cyan("[i] Analyzing strings in the files found"));
+    printMsg(MSG.Header, "[i] Analyzing strings in the files found");
 
     while (true) {
         // get all the JS URLs
         const js_urls = getJsUrls();
 
         if (js_urls.length === 0) {
-            console.error(chalk.red("[!] No JS files found for string analysis"));
+            printMsg(MSG.Err, "[!] No JS files found for string analysis");
             break;
         }
 
@@ -120,9 +120,9 @@ const svelte_stringAnalysisJSFiles = async (url) => {
     filesFound = [...new Set(filesFound)];
     mapFilesFound = [...new Set(mapFilesFound)];
 
-    console.log(chalk.green(`[✓] Found ${filesFound.length} JS files from string analysis`));
+    printMsg(MSG.Run, `[✓] Found ${filesFound.length} JS files from string analysis`);
     if (mapFilesFound.length > 0) {
-        console.log(chalk.green(`[✓] Found ${mapFilesFound.length} sourcemap(s) from JS files`));
+        printMsg(MSG.Run, `[✓] Found ${mapFilesFound.length} sourcemap(s) from JS files`);
     }
 
     return { jsFiles: filesFound, mapFiles: mapFilesFound };

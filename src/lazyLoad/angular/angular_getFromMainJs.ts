@@ -1,8 +1,8 @@
 import makeRequest from "../../utility/makeReq.js";
 import _traverse from "@babel/traverse";
 import * as parser from "@babel/parser";
-import chalk from "chalk";
 import resolvePath from "../../utility/resolvePath.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -14,7 +14,7 @@ const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
  * @returns A promise that resolves to an array of strings, where each string is a path to a lazy-loaded chunk.
  */
 const angular_getFromMainJs = async (mainJsUrl: string): Promise<string[]> => {
-    console.log(chalk.cyan("[i] Analyzing main.js from", mainJsUrl));
+    printMsg(MSG.Header, `[i] Analyzing main.js from ${mainJsUrl}`);
 
     let foundUrls: string[] = [];
 

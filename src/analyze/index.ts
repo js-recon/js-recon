@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import validateRules from "./helpers/validate.js";
@@ -10,6 +9,7 @@ import { Chunks } from "../utility/interfaces.js";
 import { OpenAPISpec } from "../utility/openapiGenerator.js";
 import initRules from "./helpers/initRules.js";
 import { EngineOutput, generateEngineOutput } from "./helpers/outputHelper.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 const availableTechs = {
     next: "Next.js",
@@ -72,7 +72,7 @@ const analyze = async (
     determineCompatibleVersion: boolean,
     applyCompatibleVersions: boolean
 ) => {
-    console.log(chalk.cyan(`[i] Loading analyze module...`));
+    printMsg(MSG.Header, `[i] Loading analyze module...`);
 
     await initRules();
 
@@ -83,7 +83,7 @@ const analyze = async (
 
     // check if `rules` exists
     if (!fs.existsSync(rulesPath)) {
-        console.error(chalk.red(`[!] Rules ${rulesPath} does not exist`));
+        printMsg(MSG.Err, `[!] Rules ${rulesPath} does not exist`);
         return;
     }
 
@@ -100,7 +100,7 @@ const analyze = async (
     const { allValid: allValidated, compatibleRuleFiles } = await validateRules(ruleFiles);
 
     if (!allValidated) {
-        console.error(chalk.red("[!] Some rules are invalid"));
+        printMsg(MSG.Err, "[!] Some rules are invalid");
         process.exit(20);
     }
 
@@ -113,39 +113,39 @@ const analyze = async (
     }
 
     if (validate) {
-        console.log(chalk.green("[✓] All rules are valid"));
+        printMsg(MSG.Run, "[✓] All rules are valid");
         return;
     }
 
     // check if the list flag is passed. If so, list the techs and return
     if (list) {
-        console.log(chalk.green("[i] List of available technologies"));
+        printMsg(MSG.Run, "[i] List of available technologies");
         for (const [key, value] of Object.entries(availableTechs)) {
-            console.log(chalk.green(`- ${key}: ${value}`));
+            printMsg(MSG.Run, `- ${key}: ${value}`);
         }
         return;
     }
 
     // check if a valid tech is passed
     if (!availableTechs[tech]) {
-        console.error(chalk.red(`[!] Invalid technology ${tech}.`));
-        console.error(chalk.yellow("[i] Run with -l/--list to see available technologies"));
+        printMsg(MSG.Err, `[!] Invalid technology ${tech}.`);
+        printMsg(MSG.Warn, "[i] Run with -l/--list to see available technologies");
         return;
     }
 
     // check if either mappedJson or either openapi is passed
     if (!mappedJson && !openapi) {
-        console.error(chalk.red("[!] Either mappedJson or openapi must be passed"));
+        printMsg(MSG.Err, "[!] Either mappedJson or openapi must be passed");
         return;
     }
 
     // check if the mappedJson and openapi exists if they are not undefined
     if (mappedJson && !fs.existsSync(mappedJson)) {
-        console.error(chalk.red(`[!] Mapped JSON ${mappedJson} does not exist`));
+        printMsg(MSG.Err, `[!] Mapped JSON ${mappedJson} does not exist`);
         return;
     }
     if (openapi && !fs.existsSync(openapi)) {
-        console.error(chalk.red(`[!] OpenAPI spec ${openapi} does not exist`));
+        printMsg(MSG.Err, `[!] OpenAPI spec ${openapi} does not exist`);
         return;
     }
 
@@ -154,11 +154,11 @@ const analyze = async (
     let openapiData: OpenAPISpec | undefined;
     if (mappedJson) {
         mappedJsonData = JSON.parse(fs.readFileSync(mappedJson, "utf8"));
-        console.log(chalk.green(`[✓] Mapped JSON loaded successfully`));
+        printMsg(MSG.Run, `[✓] Mapped JSON loaded successfully`);
     }
     if (openapi) {
         openapiData = JSON.parse(fs.readFileSync(openapi, "utf8"));
-        console.log(chalk.green(`[✓] OpenAPI spec loaded successfully`));
+        printMsg(MSG.Run, `[✓] OpenAPI spec loaded successfully`);
     }
 
     // iterate over the ruleFiles

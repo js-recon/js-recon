@@ -1,10 +1,10 @@
 import fs from "fs";
 import path from "path";
 import parser from "@babel/parser";
-import chalk from "chalk";
 
 import { Chunks } from "../../utility/interfaces.js";
 import { File } from "@babel/types";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 // Angular CLI (esbuild) emits polyfills as a separate bundle — skip it since
 // it contains only browser/zone polyfills with no app API calls.
@@ -25,7 +25,7 @@ const MAX_MAP_FILE_SIZE_BYTES = 1.5 * 1024 * 1024;
  * IIFE output doesn't use the 2-char root-function convention that Vite uses.
  */
 const getAngularConnections = async (directory: string, output: string, formats: string[]): Promise<Chunks> => {
-    console.log(chalk.cyan("[i] Getting Angular (esbuild) connections"));
+    printMsg(MSG.Header, "[i] Getting Angular (esbuild) connections");
 
     let files = fs.readdirSync(directory, { recursive: true, encoding: "utf8" }) as string[];
     files = files.filter(
@@ -39,7 +39,7 @@ const getAngularConnections = async (directory: string, output: string, formats:
         const filePath = path.join(directory, file);
         const stat = fs.statSync(filePath);
         if (stat.size > MAX_MAP_FILE_SIZE_BYTES) {
-            console.error(chalk.yellow(`[!] Skipping ${file} (too large for map analysis)`));
+            printMsg(MSG.Warn, `[!] Skipping ${file} (too large for map analysis)`);
             continue;
         }
 
@@ -83,11 +83,11 @@ const getAngularConnections = async (directory: string, output: string, formats:
         };
     }
 
-    console.log(chalk.green(`[✓] Found ${Object.keys(chunks).length} Angular chunks`));
+    printMsg(MSG.Run, `[✓] Found ${Object.keys(chunks).length} Angular chunks`);
 
     if (formats.includes("json")) {
         fs.writeFileSync(`${output}.json`, JSON.stringify(chunks, null, 2));
-        console.log(chalk.green(`[✓] Saved Angular connections to ${output}.json`));
+        printMsg(MSG.Run, `[✓] Saved Angular connections to ${output}.json`);
     }
 
     return chunks;

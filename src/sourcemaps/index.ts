@@ -1,7 +1,7 @@
-import chalk from "chalk";
 import fs, { readdirSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { extractSources } from "../lazyLoad/sourcemap.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 export const getMapFilesRecursively = (dir: string): string[] => {
     const entries = readdirSync(dir, { withFileTypes: true });
@@ -40,20 +40,20 @@ export const extractSourceMaps = async (assetsDir: string, outputDir: string): P
     }
 
     if (counter !== 0) {
-        console.log(chalk.green(`[✓] Found ${counter} files from source maps - written to ${outputDir}`));
+        printMsg(MSG.Run, `[✓] Found ${counter} files from source maps - written to ${outputDir}`);
     } else {
-        console.log(chalk.yellow("[!] No source files found in the provided sourcemap(s)"));
+        printMsg(MSG.Warn, "[!] No source files found in the provided sourcemap(s)");
     }
 };
 
 const sourcemaps = async (inputPath: string, outputDir: string): Promise<void> => {
     if (!fs.existsSync(inputPath)) {
-        console.error(chalk.red(`[!] Input does not exist: ${inputPath}`));
+        printMsg(MSG.Err, `[!] Input does not exist: ${inputPath}`);
         process.exit(23);
     }
 
     if (fs.existsSync(outputDir)) {
-        console.error(chalk.red(`[!] Output directory already exists: ${outputDir}`));
+        printMsg(MSG.Err, `[!] Output directory already exists: ${outputDir}`);
         process.exit(24);
     }
 
@@ -77,9 +77,9 @@ const sourcemaps = async (inputPath: string, outputDir: string): Promise<void> =
         }
 
         if (counter !== 0) {
-            console.log(chalk.green(`[✓] Found ${counter} files from source map - written to ${outputDir}`));
+            printMsg(MSG.Run, `[✓] Found ${counter} files from source map - written to ${outputDir}`);
         } else {
-            console.log(chalk.yellow("[!] No source files found in the provided sourcemap"));
+            printMsg(MSG.Warn, "[!] No source files found in the provided sourcemap");
         }
     }
 };

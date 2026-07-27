@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import fs from "fs";
@@ -210,13 +210,13 @@ const resolveFromAssignments = (s: string, scope: any, fileContent: string): str
  * placeholders. This is the same chain `vue_resolveXhr` already uses.
  */
 const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"): Promise<void> => {
-    console.log(chalk.cyan(`[i] Resolving ${frameworkName} HTTP client method calls`));
+    printMsg(MSG.Header, `[i] Resolving ${frameworkName} HTTP client method calls`);
 
     let files: string[];
     try {
         files = fs.readdirSync(directory, { recursive: true, encoding: "utf8" }) as string[];
     } catch {
-        console.error(chalk.red(`[!] Could not read directory: ${directory}`));
+        printMsg(MSG.Err, `[!] Could not read directory: ${directory}`);
         return;
     }
 
@@ -234,10 +234,9 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
         const sz = fs.statSync(fp).size;
         if (sz > MAX_MAP_FILE_SIZE_BYTES) continue;
         if (callerTotalBytes + sz > MAX_TOTAL_CALLER_SIZE_BYTES) {
-            console.error(
-                chalk.yellow(
-                    `[!] HTTP-client caller lookup capped at 50 MB total — ${files.length - allFilePaths.length} file(s) excluded from taint analysis`
-                )
+            printMsg(
+                MSG.Warn,
+                `[!] HTTP-client caller lookup capped at 50 MB total — ${files.length - allFilePaths.length} file(s) excluded from taint analysis`
             );
             break;
         }
@@ -249,7 +248,7 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
     const entries: HttpCallEntry[] = [];
     const verbPrefilter = /\.(?:get|post|put|delete|patch|head|options)\s*\(/;
     const scanStartTs = Date.now();
-    console.log(chalk.cyan(`[i] Scanning ${files.length} ${frameworkName} JS file(s) for HTTP-client callsites`));
+    printMsg(MSG.Header, `[i] Scanning ${files.length} ${frameworkName} JS file(s) for HTTP-client callsites`);
     let lastScanPct = -1;
 
     for (let _i = 0; _i < files.length; _i++) {
@@ -257,10 +256,9 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
         const scanPct = files.length === 0 ? 100 : Math.floor(((_i + 1) * 100) / files.length);
         if (scanPct !== lastScanPct && (scanPct % 10 === 0 || scanPct === 100)) {
             const elapsed = ((Date.now() - scanStartTs) / 1000).toFixed(1);
-            console.log(
-                chalk.gray(
-                    `    [scan] ${scanPct}% (${_i + 1}/${files.length}) entries=${entries.length} elapsed=${elapsed}s`
-                )
+            printMsg(
+                MSG.Info,
+                `    [scan] ${scanPct}% (${_i + 1}/${files.length}) entries=${entries.length} elapsed=${elapsed}s`
             );
             lastScanPct = scanPct;
         }
@@ -269,10 +267,9 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
         const filePath = path.join(directory, file);
 
         if (fs.statSync(filePath).size > MAX_MAP_FILE_SIZE_BYTES) {
-            console.error(
-                chalk.yellow(
-                    `[!] Skipping ${file} (${(fs.statSync(filePath).size / 1024 / 1024).toFixed(1)} MB > 1.5 MB limit) — HTTP client coverage may be incomplete`
-                )
+            printMsg(
+                MSG.Warn,
+                `[!] Skipping ${file} (${(fs.statSync(filePath).size / 1024 / 1024).toFixed(1)} MB > 1.5 MB limit) — HTTP client coverage may be incomplete`
             );
             continue;
         }
@@ -659,13 +656,13 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
     let processedCount = 0;
     let lastProgressPct = -1;
     const progressStartTs = Date.now();
-    console.log(chalk.cyan(`[i] Expanding ${totalEntries} ${frameworkName} HTTP-client callsite(s) across callers`));
+    printMsg(MSG.Header, `[i] Expanding ${totalEntries} ${frameworkName} HTTP-client callsite(s) across callers`);
     for (const entry of entries) {
         processedCount++;
         const pct = totalEntries === 0 ? 100 : Math.floor((processedCount * 100) / totalEntries);
         if (pct !== lastProgressPct && (pct % 10 === 0 || pct === 100)) {
             const elapsed = ((Date.now() - progressStartTs) / 1000).toFixed(1);
-            console.log(chalk.gray(`    [progress] ${pct}% (${processedCount}/${totalEntries}) elapsed=${elapsed}s`));
+            printMsg(MSG.Info, `    [progress] ${pct}% (${processedCount}/${totalEntries}) elapsed=${elapsed}s`);
             lastProgressPct = pct;
         }
         if (
@@ -706,10 +703,9 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
             const headersSub = substituteCallerHeaders(entry.headers, entry.enclosingFn, getCallers);
             const entryElapsed = Date.now() - entryStartTs;
             if (entryElapsed > 200) {
-                console.log(
-                    chalk.gray(
-                        `    [expand] entry ${processedCount}/${totalEntries} took ${entryElapsed}ms (${urls.length} urls)`
-                    )
+                printMsg(
+                    MSG.Info,
+                    `    [expand] entry ${processedCount}/${totalEntries} took ${entryElapsed}ms (${urls.length} urls)`
                 );
             }
 
@@ -753,7 +749,7 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
     // Final pass: cross-file resolution for [member:X.Y] and [call:X.Y.Z()]
     // markers that survived caller-chain substitution. These come from imports
     // of other Vite chunks, which the in-file resolver can't follow.
-    console.log(chalk.cyan(`[i] Cross-file resolution pass for ${entries.length} entries`));
+    printMsg(MSG.Header, `[i] Cross-file resolution pass for ${entries.length} entries`);
     const crossStartTs = Date.now();
     let lastCrossPct = -1;
     for (let i = 0; i < entries.length; i++) {
@@ -761,7 +757,7 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
         const pct = entries.length === 0 ? 100 : Math.floor(((i + 1) * 100) / entries.length);
         if (pct !== lastCrossPct && (pct % 20 === 0 || pct === 100)) {
             const elapsed = ((Date.now() - crossStartTs) / 1000).toFixed(1);
-            console.log(chalk.gray(`    [cross-file] ${pct}% (${i + 1}/${entries.length}) elapsed=${elapsed}s`));
+            printMsg(MSG.Info, `    [cross-file] ${pct}% (${i + 1}/${entries.length}) elapsed=${elapsed}s`);
             lastCrossPct = pct;
         }
         try {
@@ -787,12 +783,12 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
     let emitted = 0;
     for (const entry of entries) {
         if (!looksLikeUrl(entry.url)) continue;
-        console.log(chalk.blue(`[+] Found ${entry.method} client call in "${entry.filePath}":${entry.fileLine}`));
-        console.log(chalk.green(`    URL: ${entry.url}`));
+        printMsg(MSG.Info, `[+] Found ${entry.method} client call in "${entry.filePath}":${entry.fileLine}`);
+        printMsg(MSG.Run, `    URL: ${entry.url}`);
         if (Object.keys(entry.headers).length > 0) {
-            console.log(chalk.green(`    Headers: ${JSON.stringify(entry.headers)}`));
+            printMsg(MSG.Run, `    Headers: ${JSON.stringify(entry.headers)}`);
         }
-        if (entry.body) console.log(chalk.green(`    Body: ${entry.body}`));
+        if (entry.body) printMsg(MSG.Run, `    Body: ${entry.body}`);
 
         globals.addOpenapiOutput({
             url: entry.url,
@@ -807,7 +803,7 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
         emitted++;
     }
 
-    console.log(chalk.green(`[✓] Emitted ${emitted} HTTP client call(s) across ${frameworkName} files`));
+    printMsg(MSG.Run, `[✓] Emitted ${emitted} HTTP client call(s) across ${frameworkName} files`);
 };
 
 export default vue_resolveHttpClient;

@@ -1,9 +1,9 @@
-import chalk from "chalk";
 import fs from "fs";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import { Chunks } from "../../utility/interfaces.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Checks for client-side paths in a mapped JSON file.
@@ -12,7 +12,7 @@ import { Chunks } from "../../utility/interfaces.js";
  * @returns {Promise<string[]>} - A promise that resolves to an array of client-side paths
  */
 const client_mappedJsonFile = async (filePath: string): Promise<string[]> => {
-    console.log(chalk.cyan("[i] Checking for client-side paths from mapped JSON file"));
+    printMsg(MSG.Header, "[i] Checking for client-side paths from mapped JSON file");
 
     // open the file and load the chunks
     const chunks: Chunks = JSON.parse(fs.readFileSync(filePath, "utf-8"));
@@ -33,7 +33,7 @@ const client_mappedJsonFile = async (filePath: string): Promise<string[]> => {
                     errorRecovery: true,
                 });
             } catch (err) {
-                console.error(chalk.red(`[!] Failed to parse chunk ${key}: ${err}`));
+                printMsg(MSG.Err, `[!] Failed to parse chunk ${key}: ${err}`);
                 continue;
             }
 
@@ -85,8 +85,9 @@ const client_mappedJsonFile = async (filePath: string): Promise<string[]> => {
                                             if (firstArg.elements.length > 0) {
                                                 const element = firstArg.elements[0];
                                                 if (element.type === "StringLiteral") {
-                                                    console.log(
-                                                        chalk.green(`[+] Found client-side path: ${element.value}`)
+                                                    printMsg(
+                                                        MSG.Run,
+                                                        `[+] Found client-side path: ${element.value}`
                                                     );
                                                     if (chunksCopy[key].description === "none") {
                                                         chunksCopy[key].description =

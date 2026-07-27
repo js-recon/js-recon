@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 const COMMANDS = [
     "lazyload",
@@ -431,7 +431,7 @@ ${flagCompletions}
 
 export default function completion(shell: string | undefined): void {
     if (!shell) {
-        console.error(chalk.red("[!] Shell type required. Usage: js-recon completion <bash|zsh|fish>"));
+        printMsg(MSG.Err, "[!] Shell type required. Usage: js-recon completion <bash|zsh|fish>");
         process.exit(1);
     }
 
@@ -446,7 +446,7 @@ export default function completion(shell: string | undefined): void {
             process.stdout.write(generateFishCompletion());
             break;
         default:
-            console.error(chalk.red(`[!] Unknown shell: "${shell}". Supported shells: bash, zsh, fish`));
+            printMsg(MSG.Err, `[!] Unknown shell: "${shell}". Supported shells: bash, zsh, fish`);
             process.exit(1);
     }
 }

@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import { NodePath } from "@babel/traverse";
@@ -6,6 +5,7 @@ import * as t from "@babel/types";
 import { Chunk } from "../../utility/interfaces.js";
 import { WebpackModuleEntry, transformWebpackModule } from "../next/transform.js";
 import { validateAndFix } from "../next/validator.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -112,13 +112,13 @@ export const refactorVueWebpack = async (chunk: Chunk): Promise<Record<string, s
             errorRecovery: true,
         });
     } catch {
-        console.log(chalk.yellow(`[!] Failed to parse Vue webpack chunk ${chunk.id} — skipping`));
+        printMsg(MSG.Warn, `[!] Failed to parse Vue webpack chunk ${chunk.id} — skipping`);
         return {};
     }
 
     const modules = extractModulesFromWebpackChunk(ast);
     if (modules.length === 0) {
-        console.log(chalk.yellow(`[~] No webpack module map found in chunk ${chunk.id} — skipping`));
+        printMsg(MSG.Warn, `[~] No webpack module map found in chunk ${chunk.id} — skipping`);
         return {};
     }
 
@@ -147,10 +147,10 @@ export const refactorVueWebpack = async (chunk: Chunk): Promise<Record<string, s
     });
 
     for (const { id, fnNode } of modules) {
-        console.log(chalk.cyan(`[i] Processing Vue (webpack) module: ${id}`));
+        printMsg(MSG.Header, `[i] Processing Vue (webpack) module: ${id}`);
         const fnPath = capturedPaths.get(id);
         if (!fnPath) {
-            console.log(chalk.yellow(`[!] Could not get NodePath for module ${id} — skipping`));
+            printMsg(MSG.Warn, `[!] Could not get NodePath for module ${id} — skipping`);
             continue;
         }
 
@@ -171,7 +171,7 @@ export const refactorVueWebpack = async (chunk: Chunk): Promise<Record<string, s
         const statements = transformWebpackModule(entry);
         const rawCode = validateAndFix(statements, id);
         if (rawCode === null) {
-            console.log(chalk.yellow(`[~] Module ${id} skipped due to unresolvable syntax errors`));
+            printMsg(MSG.Warn, `[~] Module ${id} skipped due to unresolvable syntax errors`);
             continue;
         }
 

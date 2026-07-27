@@ -1,8 +1,8 @@
 import makeRequest from "../../utility/makeReq.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
-import chalk from "chalk";
 import t from "@babel/types";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -80,7 +80,7 @@ const vue_viteMapDeps = async (jsFiles: string[], maxJsSizeMb: number = 2): Prom
 
         const chunks = extractViteMapDepsChunks(content, jsUrl);
         if (chunks.length > 0) {
-            console.log(chalk.green(`[✓] Found ${chunks.length} chunks from __vite__mapDeps in ${jsUrl}`));
+            printMsg(MSG.Run, `[✓] Found ${chunks.length} chunks from __vite__mapDeps in ${jsUrl}`);
             for (const u of chunks) discovered.add(u);
         }
     }

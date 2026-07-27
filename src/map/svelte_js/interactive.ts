@@ -3,6 +3,7 @@ import { handleCommand } from "./interactive_helpers/commandHandler.js";
 import { setupKeybindings } from "../next_js/interactive_helpers/keybindings.js";
 import { enableCursorInput } from "../next_js/interactive_helpers/inputPatch.js";
 import { Chunks } from "../../utility/interfaces.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 export interface State {
     chunks: Chunks;
@@ -57,7 +58,7 @@ const runCommands = async (chunks: Chunks, map_file: string, commands: string[])
 
     const headlessUi: any = {
         screen: { render: () => {} },
-        outputBox: { log: (s: string) => console.log(s), setText: () => {} },
+        outputBox: { log: (s: string) => printMsg(MSG.Plain, s), setText: () => {} },
         inputBox: { clearValue: () => {}, focus: () => {} },
     };
 

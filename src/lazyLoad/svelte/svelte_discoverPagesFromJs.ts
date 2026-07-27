@@ -1,9 +1,9 @@
-import chalk from "chalk";
 import * as cheerio from "cheerio";
 import makeRequest from "../../utility/makeReq.js";
 import resolvePath from "../../utility/resolvePath.js";
 import { getJsUrls, pushToJsUrls } from "../globals.js";
 import { URL } from "url";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const ASSET_EXTENSIONS = [".js", ".css", ".json", ".png", ".svg", ".woff", ".woff2", ".ico", ".jpg", ".gif"];
 const SKIP_PREFIXES = ["/_astro/", "/_next/", "/__"];
@@ -118,8 +118,9 @@ const svelte_discoverPagesFromJs = async (entryUrl: string): Promise<string[]> =
         const newPaths = [...candidatePaths].filter((p) => !visitedPaths.has(p));
         if (newPaths.length === 0) break;
 
-        console.log(
-            chalk.cyan(`[i] Found ${newPaths.length} candidate page path(s) in JS — visiting to discover more chunks`)
+        printMsg(
+            MSG.Header,
+            `[i] Found ${newPaths.length} candidate page path(s) in JS — visiting to discover more chunks`
         );
 
         let foundThisRound = 0;
@@ -144,7 +145,7 @@ const svelte_discoverPagesFromJs = async (entryUrl: string): Promise<string[]> =
                 }
 
                 if (jsFromPage.length > 0) {
-                    console.log(chalk.green(`[✓] ${pageUrl}: found ${jsFromPage.length} JS file(s)`));
+                    printMsg(MSG.Run, `[✓] ${pageUrl}: found ${jsFromPage.length} JS file(s)`);
                 }
             } catch {
                 // page not found or network error — skip

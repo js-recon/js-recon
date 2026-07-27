@@ -1,8 +1,8 @@
-import chalk from "chalk";
 import fs from "fs";
 import yaml from "yaml";
 import { ruleSchema } from "./schemas.js";
 import CONFIG from "../../globalConfig.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 export const parseVersion = (version: string): [number, number, number] => {
     const clean = version.split("-")[0];
@@ -52,7 +52,7 @@ export const isVersionCompatible = (requirement: string, currentVersion: string)
  * @returns Promise that resolves to an object with allValid (schema validity) and compatibleRuleFiles (version-compatible files)
  */
 const validateRules = async (ruleFiles: string[]): Promise<{ allValid: boolean; compatibleRuleFiles: string[] }> => {
-    console.log(chalk.cyan("[i] Validating rules..."));
+    printMsg(MSG.Header, "[i] Validating rules...");
     let allValid = true;
     const compatibleRuleFiles: string[] = [];
 
@@ -63,19 +63,17 @@ const validateRules = async (ruleFiles: string[]): Promise<{ allValid: boolean; 
             ruleSchema.parse(rule);
 
             if (!isVersionCompatible(rule.js_recon_version, CONFIG.version)) {
-                console.error(
-                    chalk.yellow(
-                        `[!] Skipping ${ruleFile}: requires js-recon ${rule.js_recon_version} (current: ${CONFIG.version})`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] Skipping ${ruleFile}: requires js-recon ${rule.js_recon_version} (current: ${CONFIG.version})`
                 );
                 continue;
             }
 
             if (rule.js_recon_max_version && !isVersionCompatible(rule.js_recon_max_version, CONFIG.version)) {
-                console.error(
-                    chalk.yellow(
-                        `[!] Skipping ${ruleFile}: requires js-recon ${rule.js_recon_max_version} (current: ${CONFIG.version})`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] Skipping ${ruleFile}: requires js-recon ${rule.js_recon_max_version} (current: ${CONFIG.version})`
                 );
                 continue;
             }
@@ -83,10 +81,10 @@ const validateRules = async (ruleFiles: string[]): Promise<{ allValid: boolean; 
             compatibleRuleFiles.push(ruleFile);
         } catch (error: any) {
             allValid = false;
-            console.error(chalk.red(`[!] Invalid rule in ${ruleFile}:`));
+            printMsg(MSG.Err, `[!] Invalid rule in ${ruleFile}:`);
             if (error.errors) {
                 for (const err of error.errors) {
-                    console.error(chalk.red(`  - ${err.path.join(".")} - ${err.message}`));
+                    printMsg(MSG.Err, `  - ${err.path.join(".")} - ${err.message}`);
                 }
             }
         }

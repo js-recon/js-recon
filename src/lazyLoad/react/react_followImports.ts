@@ -1,5 +1,5 @@
 import makeRequest from "../../utility/makeReq.js";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Extracts all JS file references from the content of a JS file:
@@ -91,19 +91,19 @@ const react_followImports = async (
 
             const contentLength = req.headers.get("content-length");
             if (contentLength && parseInt(contentLength) > maxJsSizeMb * 1024 * 1024) {
-                console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
+                printMsg(MSG.Warn, `[!] Skipping ${jsFile} (too large)`);
                 continue;
             }
 
             const content = await req.text();
             if (content.length > maxJsSizeMb * 1024 * 1024) {
-                console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
+                printMsg(MSG.Warn, `[!] Skipping ${jsFile} (too large)`);
                 continue;
             }
 
             discovered.push(...extractImports(content, jsFile, baseUrl));
         } catch (err) {
-            console.error(chalk.yellow(`[!] Could not follow imports in ${jsFile}: ${err}`));
+            printMsg(MSG.Warn, `[!] Could not follow imports in ${jsFile}: ${err}`);
         }
     }
 

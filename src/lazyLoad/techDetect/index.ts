@@ -11,6 +11,7 @@ import { checkSvelte } from "./checkSvelte.js";
 import { checkVueJS } from "./checkVueJS.js";
 import { checkAngularJS } from "./checkAngularJS.js";
 import { checkReact } from "./checkReact.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 // Every request Puppeteer intercepted during the most recent frameworkDetect() call,
 // including anything a runtime-injected script requested (e.g. Cloudflare's own
@@ -36,7 +37,7 @@ export const getLastInterceptedUrls = (): string[] => lastInterceptedUrls;
  */
 const frameworkDetect = async (url: string): Promise<{ name: string; evidence: string }> => {
     const log = (...args: any[]) => {
-        if (!globalsUtil.getQuiet()) console.log(...args);
+        if (!globalsUtil.getQuiet()) printMsg(MSG.Plain, args.join(" "));
     };
     log(chalk.cyan("[i] Detecting front-end framework"));
 

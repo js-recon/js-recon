@@ -1,8 +1,9 @@
-import fs from "fs";
 import chalk from "chalk";
+import fs from "fs";
 import { URL } from "url";
 import zlib from "zlib";
 import * as globals from "../utility/globals.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 interface CaidoEntry {
     id: number;
@@ -159,10 +160,10 @@ function buildUrlVariants(entry: CaidoEntry): string[] {
 }
 
 const load = async (caidoFile: string, targetUrl: string): Promise<void> => {
-    console.log(chalk.cyan("[i] Loading 'Load' module"));
+    printMsg(MSG.Header, "[i] Loading 'Load' module");
 
     if (!fs.existsSync(caidoFile)) {
-        console.error(chalk.red(`[!] Caido file not found: ${caidoFile}`));
+        printMsg(MSG.Err, `[!] Caido file not found: ${caidoFile}`);
         process.exit(1);
     }
 
@@ -175,7 +176,7 @@ const load = async (caidoFile: string, targetUrl: string): Promise<void> => {
         targetScheme = u.protocol;
         targetPort = u.port ? parseInt(u.port, 10) : DEFAULT_PORTS[u.protocol];
     } catch {
-        console.error(chalk.red(`[!] Invalid target URL: ${targetUrl}`));
+        printMsg(MSG.Err, `[!] Invalid target URL: ${targetUrl}`);
         process.exit(1);
     }
 
@@ -189,8 +190,9 @@ const load = async (caidoFile: string, targetUrl: string): Promise<void> => {
         }
     }
 
-    console.log(
-        chalk.cyan(`[i] Filtering Caido entries for ${targetScheme}//${targetHost}:${targetPort} → ${cacheFile}`)
+    printMsg(
+        MSG.Header,
+        `[i] Filtering Caido entries for ${targetScheme}//${targetHost}:${targetPort} → ${cacheFile}`
     );
 
     let scanned = 0;
@@ -264,16 +266,15 @@ const load = async (caidoFile: string, targetUrl: string): Promise<void> => {
         fs.writeFileSync(cacheFile, JSON.stringify(cache));
     } catch (err: any) {
         if (err instanceof RangeError) {
-            console.error(chalk.red(`[!] Cache too large to serialize as one JSON string.`));
+            printMsg(MSG.Err, `[!] Cache too large to serialize as one JSON string.`);
             process.exit(1);
         }
         throw err;
     }
 
-    console.log(
-        chalk.green(
-            `[✓] Load complete — scanned ${scanned}, matched ${matched}, wrote ${stored} cache entries to ${cacheFile}`
-        )
+    printMsg(
+        MSG.Run,
+        `[✓] Load complete — scanned ${scanned}, matched ${matched}, wrote ${stored} cache entries to ${cacheFile}`
     );
 };
 

@@ -3,6 +3,7 @@ import cliProgress from "cli-progress";
 import vue_discoverJsFiles from "./vue_discoverJsFiles.js";
 import { setActiveBarLogger, computeBarSize, watchBarResize } from "../../utility/progressLog.js";
 import type { TechniqueRecorder } from "../researchUtils.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Recursively walks newly discovered Vue.js client-side paths.
@@ -132,7 +133,7 @@ const vue_recursiveClientSidePathDownload = async (
             if (errors.length > 0) {
                 bar.stop();
                 for (const msg of errors) {
-                    console.error(chalk.red(msg));
+                    printMsg(MSG.Err, msg);
                 }
                 bar.start(knownPaths.size, visitedPaths.size, {
                     round,
@@ -147,10 +148,9 @@ const vue_recursiveClientSidePathDownload = async (
                 refreshBar();
                 if (stagnantRounds >= STAGNATION_LIMIT) {
                     bar.stop();
-                    console.error(
-                        chalk.yellow(
-                            `[!] Stopping recursion: ${STAGNATION_LIMIT} consecutive rounds without new JS files`
-                        )
+                    printMsg(
+                        MSG.Warn,
+                        `[!] Stopping recursion: ${STAGNATION_LIMIT} consecutive rounds without new JS files`
                     );
                     break;
                 }
@@ -165,10 +165,9 @@ const vue_recursiveClientSidePathDownload = async (
     }
 
     if (allJsFiles.size > 0) {
-        console.log(
-            chalk.green(
-                `[✓] Recursive client-side discovery yielded ${allJsFiles.size} JS file(s) across ${visitedPaths.size} path(s)`
-            )
+        printMsg(
+            MSG.Run,
+            `[✓] Recursive client-side discovery yielded ${allJsFiles.size} JS file(s) across ${visitedPaths.size} path(s)`
         );
     }
 

@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import * as globals from "../globals.js";
 import makeRequest from "../../utility/makeReq.js";
 import parser from "@babel/parser";
@@ -68,11 +68,11 @@ const next_getLazyResourcesBuildManifestJs = async (url: string): Promise<string
         }
 
         if (toReturn.length > 0) {
-            console.log(chalk.green(`[✓] Found ${toReturn.length} JS files from _buildManifest.js`));
+            printMsg(MSG.Run, `[✓] Found ${toReturn.length} JS files from _buildManifest.js`);
         }
     } catch (err: any) {
         if (err?.code !== "ENOENT") {
-            console.error(chalk.red(`[!] Failed to parse _buildManifest.js: ${err?.message ?? err}`));
+            printMsg(MSG.Err, `[!] Failed to parse _buildManifest.js: ${err?.message ?? err}`);
         }
     }
 

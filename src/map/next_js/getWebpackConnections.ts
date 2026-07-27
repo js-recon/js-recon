@@ -3,13 +3,13 @@ import path from "path";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-import chalk from "chalk";
 
 import { Chunks } from "../../utility/interfaces.js";
 
 import * as globals from "../../utility/globals.js";
 import { getCompletion } from "../../utility/ai.js";
 import { File } from "@babel/types";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Gets the webpack connections for a given directory and output file name.
@@ -22,19 +22,17 @@ const getWebpackConnections = async (directory, output, formats) => {
     const maxAiThreads = globals.getAiThreads();
     if (globals.getAi().length > 0) {
         // print a warning message about costs that might incur
-        console.error(
-            chalk.yellow(
-                "[!] AI integration is enabled. This may incur costs. By using this feature, you agree to the AI provider's terms of service, and accept the risk of incurring unexpected costs due to huge codebase."
-            )
+        printMsg(
+            MSG.Warn,
+            "[!] AI integration is enabled. This may incur costs. By using this feature, you agree to the AI provider's terms of service, and accept the risk of incurring unexpected costs due to huge codebase."
         );
         const provider = globals.getAiServiceProvider();
         if (provider === "openai") {
             const apiKey = globals.getAiApiKey() || process.env.OPENAI_API_KEY;
             if (!apiKey) {
-                console.error(
-                    chalk.red(
-                        "[!] OpenAI API key not found. Please provide it via --ai-api-key or OPENAI_API_KEY environment variable."
-                    )
+                printMsg(
+                    MSG.Err,
+                    "[!] OpenAI API key not found. Please provide it via --ai-api-key or OPENAI_API_KEY environment variable."
                 );
                 process.exit(19);
             }
@@ -42,27 +40,24 @@ const getWebpackConnections = async (directory, output, formats) => {
         if (provider === "anthropic") {
             const apiKey = globals.getAiApiKey() || process.env.ANTHROPIC_API_KEY;
             if (!apiKey) {
-                console.error(
-                    chalk.red(
-                        "[!] Anthropic API key not found. Please provide it via --ai-api-key or ANTHROPIC_API_KEY environment variable."
-                    )
+                printMsg(
+                    MSG.Err,
+                    "[!] Anthropic API key not found. Please provide it via --ai-api-key or ANTHROPIC_API_KEY environment variable."
                 );
                 process.exit(19);
             }
         }
-        console.log(chalk.cyan(`[i] AI provider "${provider}" initialized.`));
+        printMsg(MSG.Header, `[i] AI provider "${provider}" initialized.`);
     }
 
     // if the output file already exists, and AI mode is enabled, skip coz it burns $$$
     if (fs.existsSync(`${output}.json`) && globals.getAi().length > 0) {
-        console.error(
-            chalk.yellow(`[!] Output file ${output}.json already exists. Skipping regeneration to save costs.`)
-        );
+        printMsg(MSG.Warn, `[!] Output file ${output}.json already exists. Skipping regeneration to save costs.`);
         const chunks = JSON.parse(fs.readFileSync(`${output}.json`, "utf8"));
         return chunks;
     }
 
-    console.log(chalk.cyan("[i] Getting webpack connections"));
+    printMsg(MSG.Header, "[i] Getting webpack connections");
     // list all the files in the directory
     let files = fs.readdirSync(directory, {
         recursive: true,
@@ -169,7 +164,7 @@ const getWebpackConnections = async (directory, output, formats) => {
     }
 
     // now, iterate through every chunk, and find the imports in the function
-    console.log(chalk.cyan("[i] Finding imports for chunks"));
+    printMsg(MSG.Header, "[i] Finding imports for chunks");
     for (const [key, value] of Object.entries(chunks)) {
         let ast: parser.ParseResult<File>;
         try {
@@ -225,7 +220,7 @@ const getWebpackConnections = async (directory, output, formats) => {
 
     // if AI description is enabled, add them
     if (globals.getAi() && globals.getAi().includes("description")) {
-        console.log(chalk.cyan("[i] Generating descriptions for chunks"));
+        printMsg(MSG.Header, "[i] Generating descriptions for chunks");
         const chunkEntries = Object.entries(chunks);
         const descriptionPromises = [];
         let activeThreads = 0;
@@ -244,7 +239,7 @@ const getWebpackConnections = async (directory, output, formats) => {
                     const description = await getCompletion(value.code, systemPrompt);
                     return { key, description };
                 } catch (err) {
-                    console.error(chalk.red(`[!] Error generating description for chunk ${key}: ${err.message}`));
+                    printMsg(MSG.Err, `[!] Error generating description for chunk ${key}: ${err.message}`);
                     return { key, description: "none" };
                 } finally {
                     activeThreads--;
@@ -258,17 +253,17 @@ const getWebpackConnections = async (directory, output, formats) => {
         results.forEach(({ key, description }) => {
             if (chunks[key]) {
                 chunks[key].description = description || "none";
-                console.log(chalk.green(`[✓] Generated description for ${key}: ${chunks[key].description}`));
+                printMsg(MSG.Run, `[✓] Generated description for ${key}: ${chunks[key].description}`);
             }
         });
     }
 
-    console.log(chalk.green(`[✓] Found ${Object.keys(chunks).length} webpack functions`));
+    printMsg(MSG.Run, `[✓] Found ${Object.keys(chunks).length} webpack functions`);
 
     if (formats.includes("json")) {
         const chunks_json = JSON.stringify(chunks, null, 2);
         fs.writeFileSync(`${output}.json`, chunks_json);
-        console.log(chalk.green(`[✓] Saved webpack connections to ${output}.json`));
+        printMsg(MSG.Run, `[✓] Saved webpack connections to ${output}.json`);
     }
 
     return chunks;

@@ -1,9 +1,9 @@
 import makeRequest from "../../utility/makeReq.js";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const next_bruteForceJsFiles = async (urls: string[]) => {
     // just append .map to all of them and bruteforce for 200
-    console.log(chalk.cyan("[i] Bruteforcing .map files"));
+    printMsg(MSG.Header, "[i] Bruteforcing .map files");
     const mapFiles = urls.map((url) => url + ".map");
 
     let foundSourceMaps: string[] = [];
@@ -18,16 +18,16 @@ const next_bruteForceJsFiles = async (urls: string[]) => {
                 foundSourceMaps.push(mapFile);
             }
         } else {
-            console.error(chalk.red(`[!] Failed to request ${mapFile}`));
+            printMsg(MSG.Err, `[!] Failed to request ${mapFile}`);
         }
     }
 
     if (foundSourceMaps.length === 0) {
-        console.error(chalk.red("[!] No source maps found"));
+        printMsg(MSG.Err, "[!] No source maps found");
         return foundSourceMaps;
     }
 
-    console.log(chalk.green(`[✓] Found ${foundSourceMaps.length} source maps`));
+    printMsg(MSG.Run, `[✓] Found ${foundSourceMaps.length} source maps`);
     return foundSourceMaps;
 };
 

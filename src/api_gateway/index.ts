@@ -1,7 +1,7 @@
-import chalk from "chalk";
 import { APIGatewayClient, CreateRestApiCommand, DeleteRestApiCommand } from "@aws-sdk/client-api-gateway";
 import fs from "fs";
 import checkFeasibility from "./checkFeasibility.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 // read the docs for all the methods for api gateway at https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/api-gateway/
 // for the rate limits, refer to https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html
@@ -82,7 +82,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
  * @returns {Promise<void>}
  */
 const createGateway = async () => {
-    console.log(chalk.cyan("[i] Creating API Gateway"));
+    printMsg(MSG.Header, "[i] Creating API Gateway");
     const client = new APIGatewayClient({
         region,
         credentials: {
@@ -111,10 +111,10 @@ const createGateway = async () => {
     });
     const response = await client.send(command);
     await sleep(3000);
-    console.log(chalk.green(`[✓] Created API Gateway`));
-    console.log(chalk.bgGreen("ID:"), chalk.green(response.id));
-    console.log(chalk.bgGreen("Name:"), chalk.green(apigw_name));
-    console.log(chalk.bgGreen("Region:"), chalk.green(region));
+    printMsg(MSG.Run, `[✓] Created API Gateway`);
+    printMsg(MSG.Run, `ID: ${response.id}`);
+    printMsg(MSG.Run, `Name: ${apigw_name}`);
+    printMsg(MSG.Run, `Region: ${region}`);
 
     // load the config file if any. Else, create a new one
     let config = {};
@@ -135,7 +135,7 @@ const createGateway = async () => {
     };
 
     fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
-    console.log(chalk.green(`[✓] Config saved to ${configFile}`));
+    printMsg(MSG.Run, `[✓] Config saved to ${configFile}`);
 };
 
 /**
@@ -146,9 +146,9 @@ const createGateway = async () => {
  * @returns {Promise<void>}
  */
 const destroyGateway = async (id: string): Promise<void> => {
-    console.log(chalk.cyan("[i] Destroying API Gateway"));
+    printMsg(MSG.Header, "[i] Destroying API Gateway");
     if (!id) {
-        console.error(chalk.red("[!] Please provide an API Gateway ID"));
+        printMsg(MSG.Err, "[!] Please provide an API Gateway ID");
         return;
     }
     //   read the config file
@@ -156,9 +156,9 @@ const destroyGateway = async (id: string): Promise<void> => {
     //   get the name of the api gateway
     let name = Object.keys(config).find((key) => config[key].id === id);
 
-    console.log(chalk.bgGreen("Name:"), chalk.green(name));
-    console.log(chalk.bgGreen("ID:"), chalk.green(id));
-    console.log(chalk.bgGreen("Region:"), chalk.green(config[name].region));
+    printMsg(MSG.Run, `Name: ${name}`);
+    printMsg(MSG.Run, `ID: ${id}`);
+    printMsg(MSG.Run, `Region: ${config[name].region}`);
     region = config[name].region;
 
     const client = new APIGatewayClient({
@@ -180,7 +180,7 @@ const destroyGateway = async (id: string): Promise<void> => {
 
     await sleep(30000);
 
-    console.log(chalk.green(`[✓] Destroyed API Gateway: ${id}`));
+    printMsg(MSG.Run, `[✓] Destroyed API Gateway: ${id}`);
 };
 
 /**
@@ -190,7 +190,7 @@ const destroyGateway = async (id: string): Promise<void> => {
  * @returns {Promise<void>}
  */
 const destroyAllGateways = async () => {
-    console.log(chalk.cyan("[i] Destroying all API Gateways"));
+    printMsg(MSG.Header, "[i] Destroying all API Gateways");
     //   read the config file
     let config: ApiGatewayConfig = JSON.parse(fs.readFileSync(configFile, "utf8"));
 
@@ -203,19 +203,19 @@ const destroyAllGateways = async () => {
                 secretAccessKey: aws_secret_key,
             },
         });
-        console.log(chalk.cyan(`[i] Destroying API Gateway: ${key} : ${value.id} : ${value.region}`));
+        printMsg(MSG.Header, `[i] Destroying API Gateway: ${key} : ${value.id} : ${value.region}`);
 
         const command = new DeleteRestApiCommand({
             restApiId: value.id,
         });
         await sleep(30000);
         await client.send(command);
-        console.log(chalk.green(`[✓] Destroyed API Gateway: ${key} : ${value.id} : ${value.region}`));
+        printMsg(MSG.Run, `[✓] Destroyed API Gateway: ${key} : ${value.id} : ${value.region}`);
     }
 
     // nullify the config file
     fs.writeFileSync(configFile, JSON.stringify({}, null, 2));
-    console.log(chalk.green("[✓] Destroyed all API Gateways"));
+    printMsg(MSG.Run, "[✓] Destroyed all API Gateways");
 };
 
 /**
@@ -225,13 +225,13 @@ const destroyAllGateways = async () => {
  * @returns {Promise<void>}
  */
 const listGateways = async () => {
-    console.log(chalk.cyan("[i] Listing all API Gateways"));
+    printMsg(MSG.Header, "[i] Listing all API Gateways");
 
     // read the config file, and list these
 
     // check if the config file exists
     if (!fs.existsSync(configFile)) {
-        console.error(chalk.red("[!] Config file does not exist"));
+        printMsg(MSG.Err, "[!] Config file does not exist");
         return;
     }
 
@@ -239,17 +239,17 @@ const listGateways = async () => {
 
     //   if list is empty
     if (Object.keys(config).length === 0) {
-        console.error(chalk.red("[!] No API Gateways found"));
+        printMsg(MSG.Err, "[!] No API Gateways found");
         return;
     }
 
-    console.log(chalk.green("[✓] List of API Gateways"));
+    printMsg(MSG.Run, "[✓] List of API Gateways");
 
     for (const [key, value] of Object.entries(config)) {
-        console.log(chalk.bgGreen("Name:"), chalk.green(key));
-        console.log(chalk.bgGreen("ID:"), chalk.green(value.id));
-        console.log(chalk.bgGreen("Region:"), chalk.green(value.region));
-        console.log("\n");
+        printMsg(MSG.Run, `Name: ${key}`);
+        printMsg(MSG.Run, `ID: ${value.id}`);
+        printMsg(MSG.Run, `Region: ${value.region}`);
+        printMsg(MSG.Plain, "\n");
     }
 };
 
@@ -281,12 +281,12 @@ const apiGateway = async (
     feasibilityInput: boolean,
     feasibilityUrlInput: string
 ): Promise<void> => {
-    console.log(chalk.cyan("[i] Loading 'API Gateway' module"));
+    printMsg(MSG.Header, "[i] Loading 'API Gateway' module");
 
     // if feasibility is true, check feasibility
     if (feasibilityInput) {
         if (!feasibilityUrlInput) {
-            console.error(chalk.red("[!] Please provide a URL to check feasibility of"));
+            printMsg(MSG.Err, "[!] Please provide a URL to check feasibility of");
             return;
         }
         await checkFeasibility(feasibilityUrlInput);
@@ -300,11 +300,11 @@ const apiGateway = async (
     configFile = configInput || "config.json";
 
     if (!aws_access_key || !aws_secret_key) {
-        console.error(chalk.red("[!] AWS Access Key or Secret Key not found. Run with -h to see help"));
+        printMsg(MSG.Err, "[!] AWS Access Key or Secret Key not found. Run with -h to see help");
         return;
     }
 
-    console.log(chalk.cyan(`[i] Using region: ${region}`));
+    printMsg(MSG.Header, `[i] Using region: ${region}`);
 
     /**
      * Masks an API key for secure display by showing only first and last 4 characters.
@@ -316,7 +316,7 @@ const apiGateway = async (
         if (key.length < 6) return key;
         return key.slice(0, 4) + "..." + key.slice(-4);
     };
-    console.log(chalk.cyan(`[i] Using access key: ${keyMask(aws_access_key)}`));
+    printMsg(MSG.Header, `[i] Using access key: ${keyMask(aws_access_key)}`);
 
     // create a new API gateway
     if (initInput) {
@@ -328,7 +328,7 @@ const apiGateway = async (
     } else if (listInput) {
         await listGateways();
     } else {
-        console.error(chalk.red("[!] Please provide a valid action (-i/--init or -d/--destroy or --destroy-all)"));
+        printMsg(MSG.Err, "[!] Please provide a valid action (-i/--init or -d/--destroy or --destroy-all)");
     }
 };
 

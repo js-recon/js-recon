@@ -2,7 +2,7 @@ import makeRequest from "../../utility/makeReq.js";
 import * as cheerio from "cheerio";
 import fs from "fs";
 import path from "path";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const react_getScriptTags = async (url: string, maxJsSizeMb: number, outputDir?: string): Promise<string[]> => {
     let toReturn: string[] = [];
@@ -28,7 +28,7 @@ const react_getScriptTags = async (url: string, maxJsSizeMb: number, outputDir?:
             const filename = `inline-${inlineIndex++}.js`;
             const filePath = path.join(hostDir, filename);
             fs.writeFileSync(filePath, `// File Source: ${url} (inline script #${inlineIndex - 1})\n${content}`);
-            console.log(chalk.green(`[✓] Saved inline script to ${filePath}`));
+            printMsg(MSG.Run, `[✓] Saved inline script to ${filePath}`);
         }
     });
 

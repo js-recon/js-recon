@@ -5,10 +5,10 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-import chalk from "chalk";
 import { cs_mast_init, ScatCategory } from "@shriyanss/cs-mast";
 import { HF_BUCKET, getHfRawUrl, getHfApiTreeUrl, fetchText } from "./hf-client.js";
 import { Chunks } from "../../utility/interfaces.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 // Maps refactor tech identifier to the bundler name used in the HF version bucket path.
 export const VERSION_TECH_TO_BUNDLER: Record<string, string> = {
@@ -167,20 +167,21 @@ export async function selectDynamicScatConfigs(
 
     // Use the first version to enumerate available scat dirs; all versions share the same set.
     const referenceVersion = versions[0];
-    console.log(
-        chalk.cyan(`[i] Dynamic scat config selection: listing scat dirs for ${bundler}/${referenceVersion}...`)
+    printMsg(
+        MSG.Header,
+        `[i] Dynamic scat config selection: listing scat dirs for ${bundler}/${referenceVersion}...`
     );
 
     let scatDirs: string[];
     try {
         scatDirs = await listScatDirsForVersion(bundler, referenceVersion);
     } catch (e) {
-        console.log(chalk.yellow(`[!] Dynamic scat selection: could not list scat dirs (${String(e)})`));
+        printMsg(MSG.Warn, `[!] Dynamic scat selection: could not list scat dirs (${String(e)})`);
         return [];
     }
 
     if (scatDirs.length === 0) {
-        console.log(chalk.yellow(`[!] Dynamic scat selection: no scat dirs found for ${bundler}/${referenceVersion}`));
+        printMsg(MSG.Warn, `[!] Dynamic scat selection: no scat dirs found for ${bundler}/${referenceVersion}`);
         return [];
     }
 
@@ -201,7 +202,7 @@ export async function selectDynamicScatConfigs(
 
         if (allNonEmpty) {
             selected.push(scatDir);
-            console.log(chalk.cyan(`[i] Dynamic scat config selected: ${scatDir} (${selected.length}/${threshold})`));
+            printMsg(MSG.Header, `[i] Dynamic scat config selected: ${scatDir} (${selected.length}/${threshold})`);
         }
     }
 
@@ -298,21 +299,21 @@ export async function detectReactVersion(
     if (scatDirs.length === 0) return null;
 
     // List available versions for this bundler
-    console.log(chalk.cyan(`[i] Version detection: listing available React versions for ${bundler}...`));
+    printMsg(MSG.Header, `[i] Version detection: listing available React versions for ${bundler}...`);
     let versions: string[];
     try {
         versions = await listAvailableVersions(bundler);
     } catch (e) {
-        console.log(chalk.yellow(`[!] Version detection: could not list versions (${String(e)})`));
+        printMsg(MSG.Warn, `[!] Version detection: could not list versions (${String(e)})`);
         return null;
     }
 
     if (versions.length === 0) {
-        console.log(chalk.yellow(`[!] Version detection: no version data found for ${bundler} in the dataset`));
+        printMsg(MSG.Warn, `[!] Version detection: no version data found for ${bundler} in the dataset`);
         return null;
     }
 
-    console.log(chalk.cyan(`[i] Version detection: using ${scatDirs.length} scat config(s): ${scatDirs.join(", ")}`));
+    printMsg(MSG.Header, `[i] Version detection: using ${scatDirs.length} scat config(s): ${scatDirs.join(", ")}`);
 
     const totalCodeUnits = Object.keys(chunks).length + (extraCodes?.length ?? 0);
 
@@ -326,19 +327,18 @@ export async function detectReactVersion(
         // splitting on "-" yields valid ScatCategory values for all 511 combos.
         const scat = scatDir.split("-") as ScatCategory[];
 
-        console.log(
-            chalk.cyan(
-                `[i] Version detection: generating signatures from ${totalCodeUnits} code unit(s) (scat: ${scatDir})...`
-            )
+        printMsg(
+            MSG.Header,
+            `[i] Version detection: generating signatures from ${totalCodeUnits} code unit(s) (scat: ${scatDir})...`
         );
         const bundleSigs = generateBundleSignatures(chunks, scat, extraCodes);
 
         if (bundleSigs.size === 0) {
-            console.log(chalk.yellow(`[!] Version detection: no signatures generated for scat "${scatDir}", skipping`));
+            printMsg(MSG.Warn, `[!] Version detection: no signatures generated for scat "${scatDir}", skipping`);
             continue;
         }
 
-        console.log(chalk.cyan(`[i] Version detection: checking ${versions.length} versions for scat "${scatDir}"...`));
+        printMsg(MSG.Header, `[i] Version detection: checking ${versions.length} versions for scat "${scatDir}"...`);
 
         for (const version of versions) {
             const reliableSigs = await fetchReliableSignatures(bundler, version, scatDir);

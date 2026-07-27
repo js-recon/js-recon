@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import { execSync, spawn } from "child_process";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 const isTrufflehogInstalled = (): boolean => {
     try {
@@ -18,18 +18,17 @@ const maskSecret = (value: string): string => {
 export const runTrufflehog = (directory: string): Promise<void> => {
     return new Promise((resolve) => {
         if (!isTrufflehogInstalled()) {
-            console.error(chalk.red("[!] trufflehog not found in PATH."));
-            console.error(
-                chalk.yellow(
-                    "    Install: curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh"
-                )
+            printMsg(MSG.Err, "[!] trufflehog not found in PATH.");
+            printMsg(
+                MSG.Warn,
+                "    Install: curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh"
             );
-            console.error(chalk.yellow("    Or: brew install trufflehog"));
-            console.error(chalk.yellow("    Then re-run with --trufflehog."));
+            printMsg(MSG.Warn, "    Or: brew install trufflehog");
+            printMsg(MSG.Warn, "    Then re-run with --trufflehog.");
             process.exit(1);
         }
 
-        console.log(chalk.cyan("[i] Running TruffleHog on output directory"));
+        printMsg(MSG.Header, "[i] Running TruffleHog on output directory");
 
         const proc = spawn("trufflehog", ["filesystem", directory, "--json", "--no-update"], {
             stdio: ["ignore", "pipe", "pipe"],
@@ -53,8 +52,8 @@ export const runTrufflehog = (directory: string): Promise<void> => {
                         finding.SourceMetadata?.Data?.Filesystem?.file ??
                         finding.sourceMetadata?.data?.filesystem?.file ??
                         "unknown file";
-                    console.log(chalk.green(`[✓] [trufflehog] ${detector} found in ${file}`));
-                    console.log(chalk.bgGreen(`  → ${maskSecret(raw)}`));
+                    printMsg(MSG.Run, `[✓] [trufflehog] ${detector} found in ${file}`);
+                    printMsg(MSG.Run, `  → ${maskSecret(raw)}`);
                     totalFindings++;
                 } catch {
                     // not valid JSON, skip
@@ -65,15 +64,15 @@ export const runTrufflehog = (directory: string): Promise<void> => {
         proc.stderr.on("data", (chunk: Buffer) => {
             const msg = chunk.toString().trim();
             if (msg) {
-                console.error(chalk.yellow(`[trufflehog] ${msg}`));
+                printMsg(MSG.Warn, `[trufflehog] ${msg}`);
             }
         });
 
         proc.on("close", () => {
             if (totalFindings === 0) {
-                console.log(chalk.yellow("[!] TruffleHog found no secrets"));
+                printMsg(MSG.Warn, "[!] TruffleHog found no secrets");
             } else {
-                console.log(chalk.green(`[✓] TruffleHog found ${totalFindings} secrets`));
+                printMsg(MSG.Run, `[✓] TruffleHog found ${totalFindings} secrets`);
             }
             resolve();
         });

@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import fs from "fs";
 import frameworkDetect, { getLastInterceptedUrls } from "./techDetect/index.js";
 import _traverse from "@babel/traverse";
@@ -52,6 +51,7 @@ import * as lazyLoadGlobals from "./globals.js";
 import * as globals from "../utility/globals.js";
 import { shouldRunMethod } from "./methodFilter.js";
 import { accumulateTechnique, createTechniqueRecorder } from "./researchUtils.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Downloads the required JavaScript files for a given URL
@@ -96,15 +96,15 @@ const lazyLoad = async (
     let activeQueue: DownloadQueue | null = null;
 
     const work = async () => {
-        console.log(chalk.cyan("[i] Loading 'Lazy Load' module"));
+        printMsg(MSG.Header, "[i] Loading 'Lazy Load' module");
 
         if (globals.getDisableSandbox()) {
-            console.error(chalk.yellow("[!] Browser sandbox disabled"));
+            printMsg(MSG.Warn, "[!] Browser sandbox disabled");
         }
 
         if (insecure) {
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-            console.error(chalk.yellow("[!] Running in insecure mode. SSL certificate verification disabled"));
+            printMsg(MSG.Warn, "[!] Running in insecure mode. SSL certificate verification disabled");
         }
 
         // if cache enabled, check if the cache file exists or not. If no, then create a new one
@@ -124,12 +124,12 @@ const lazyLoad = async (
         } else if (url.match(/https?:\/\/[a-zA-Z0-9\-_\.:]+/)) {
             urls = [url];
         } else {
-            console.error(chalk.red("[!] Invalid URL or file path"));
+            printMsg(MSG.Err, "[!] Invalid URL or file path");
             process.exit(3);
         }
 
         for (const url of urls) {
-            console.log(chalk.cyan(`[i] Processing ${url}`));
+            printMsg(MSG.Header, `[i] Processing ${url}`);
 
             if (strictScope) {
                 lazyLoadGlobals.pushToScope(new URL(url).host);
@@ -144,8 +144,8 @@ const lazyLoad = async (
 
             if (tech) {
                 if (tech.name === "next") {
-                    console.log(chalk.green("[✓] Next.js detected"));
-                    console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
+                    printMsg(MSG.Run, "[✓] Next.js detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     activeQueue = new DownloadQueue(output, threads);
                     const crawler = new NextJsCrawler({
@@ -177,7 +177,7 @@ const lazyLoad = async (
                         );
 
                         if (buildId) {
-                            console.log(chalk.cyan("[+] Found buildId: " + buildId));
+                            printMsg(MSG.Header, "[+] Found buildId: " + buildId);
                             // now, write it to a file
                             fs.writeFileSync(
                                 path.join(output, new URL(url).host.replace(":", "_") + "/BUILD_ID"),
@@ -190,16 +190,17 @@ const lazyLoad = async (
                     if (research) {
                         // prettify the JSON and write
                         fs.writeFileSync(researchOutput, JSON.stringify(crawler.techniqueEfficiencyMapping, null, 4));
-                        console.log(
-                            chalk.green("[✓] Research mode enabled. Technique efficiency written to " + researchOutput)
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
                         );
                     }
 
                     // extract the source maps
                     await extractSourceMaps(output, join(output, sourcemapDir));
                 } else if (tech.name === "vue") {
-                    console.log(chalk.green("[✓] Vue.js detected"));
-                    console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
+                    printMsg(MSG.Run, "[✓] Vue.js detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     activeQueue = new DownloadQueue(output, threads);
                     const queue = activeQueue;
@@ -234,16 +235,17 @@ const lazyLoad = async (
 
                     if (research) {
                         fs.writeFileSync(researchOutput, JSON.stringify(vueResearchMap, null, 4));
-                        console.log(
-                            chalk.green("[✓] Research mode enabled. Technique efficiency written to " + researchOutput)
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
                         );
                     }
 
                     // extract the source maps
                     await extractSourceMaps(output, join(output, sourcemapDir));
                 } else if (tech.name === "nuxt") {
-                    console.log(chalk.green("[✓] Nuxt.js detected"));
-                    console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
+                    printMsg(MSG.Run, "[✓] Nuxt.js detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads);
                     activeQueue = queue;
@@ -276,7 +278,7 @@ const lazyLoad = async (
 
                     let jsFilesFromAST = [];
                     if (shouldRunMethod("nuxt_astParse", includeMethods, excludeMethods)) {
-                        console.log(chalk.cyan("[i] Analyzing functions in the files found"));
+                        printMsg(MSG.Header, "[i] Analyzing functions in the files found");
                         for (const jsFile of firstBatch) {
                             jsFilesFromAST.push(...(await nuxt_astParse(jsFile)));
                         }
@@ -300,13 +302,14 @@ const lazyLoad = async (
 
                     if (research) {
                         fs.writeFileSync(researchOutput, JSON.stringify(nuxtResearchMap, null, 4));
-                        console.log(
-                            chalk.green("[✓] Research mode enabled. Technique efficiency written to " + researchOutput)
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
                         );
                     }
                 } else if (tech.name === "svelte") {
-                    console.log(chalk.green("[✓] Svelte detected"));
-                    console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
+                    printMsg(MSG.Run, "[✓] Svelte detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads);
                     activeQueue = queue;
@@ -376,7 +379,7 @@ const lazyLoad = async (
                     while (toFollow.length > 0) {
                         const newFiles = await react_followImports(toFollow, maxJsSizeMb, url, visited);
                         if (newFiles.length === 0) break;
-                        console.log(chalk.green(`[✓] Discovered ${newFiles.length} more JS file(s) via imports`));
+                        printMsg(MSG.Run, `[✓] Discovered ${newFiles.length} more JS file(s) via imports`);
                         queue.push(newFiles);
                         if (research) accumulateTechnique(svelteResearchMap, "react_followImports", newFiles);
                         toFollow = newFiles;
@@ -442,15 +445,16 @@ const lazyLoad = async (
 
                     if (research) {
                         fs.writeFileSync(researchOutput, JSON.stringify(svelteResearchMap, null, 4));
-                        console.log(
-                            chalk.green("[✓] Research mode enabled. Technique efficiency written to " + researchOutput)
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
                         );
                     }
 
                     await extractSourceMaps(output, join(output, sourcemapDir));
                 } else if (tech.name === "angular") {
-                    console.log(chalk.green("[✓] Angular detected"));
-                    console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
+                    printMsg(MSG.Run, "[✓] Angular detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads);
                     activeQueue = queue;
@@ -492,13 +496,14 @@ const lazyLoad = async (
 
                     if (research) {
                         fs.writeFileSync(researchOutput, JSON.stringify(angularResearchMap, null, 4));
-                        console.log(
-                            chalk.green("[✓] Research mode enabled. Technique efficiency written to " + researchOutput)
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
                         );
                     }
                 } else if (tech.name === "react") {
-                    console.log(chalk.green("[✓] React detected"));
-                    console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
+                    printMsg(MSG.Run, "[✓] React detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads);
                     activeQueue = queue;
@@ -527,7 +532,7 @@ const lazyLoad = async (
                         while (toFollow.length > 0) {
                             const newFiles = await react_followImports(toFollow, maxJsSizeMb, url, visited);
                             if (newFiles.length === 0) break;
-                            console.log(chalk.green(`[✓] Discovered ${newFiles.length} more JS file(s) via imports`));
+                            printMsg(MSG.Run, `[✓] Discovered ${newFiles.length} more JS file(s) via imports`);
                             queue.push(newFiles);
                             if (research) accumulateTechnique(reactResearchMap, "react_followImports", newFiles);
                             toFollow = newFiles;
@@ -546,15 +551,16 @@ const lazyLoad = async (
 
                     if (research) {
                         fs.writeFileSync(researchOutput, JSON.stringify(reactResearchMap, null, 4));
-                        console.log(
-                            chalk.green("[✓] Research mode enabled. Technique efficiency written to " + researchOutput)
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
                         );
                     }
 
                     extractSourceMaps(output, join(output, sourcemapDir));
                 }
             } else {
-                console.log(chalk.yellow("[i] Framework not detected — falling back to generic JS extraction"));
+                printMsg(MSG.Warn, "[i] Framework not detected — falling back to generic JS extraction");
                 globals.setTech("generic");
 
                 // If the caller didn't customize scope (still the "*" default) and isn't
@@ -584,16 +590,14 @@ const lazyLoad = async (
                 );
 
                 if (allUrls.length > 0) {
-                    console.log(chalk.green(`[✓] Found ${allUrls.length} JS file(s)`));
+                    printMsg(MSG.Run, `[✓] Found ${allUrls.length} JS file(s)`);
                 } else {
-                    console.log(chalk.yellow("[i] No JS files discovered"));
+                    printMsg(MSG.Warn, "[i] No JS files discovered");
                 }
 
                 if (research) {
                     fs.writeFileSync(researchOutput, JSON.stringify(genericResearchMap, null, 4));
-                    console.log(
-                        chalk.green("[✓] Research mode enabled. Technique efficiency written to " + researchOutput)
-                    );
+                    printMsg(MSG.Run, "[✓] Research mode enabled. Technique efficiency written to " + researchOutput);
                 }
             }
         }
@@ -614,10 +618,9 @@ const lazyLoad = async (
         }),
         new Promise<void>((resolve) => {
             timeoutHandle = setTimeout(() => {
-                console.error(
-                    chalk.yellow(
-                        `[!] Lazyload hard timeout reached (${hardTimeoutMs / 60000} min). Draining discovered files before moving on...`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] Lazyload hard timeout reached (${hardTimeoutMs / 60000} min). Draining discovered files before moving on...`
                 );
                 // Signal the crawler to stop at its next iteration boundary.
                 activeCrawler?.stop();

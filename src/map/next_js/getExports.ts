@@ -1,9 +1,9 @@
-import chalk from "chalk";
 import { Chunks } from "../../utility/interfaces.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import { ArrowFunctionExpression, FunctionDeclaration } from "@babel/types";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Gets the exports of each chunk.
@@ -11,7 +11,7 @@ const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
  * @returns {Promise<Chunks>} - A promise that resolves with a dictionary of chunk names to chunk objects with their exports.
  */
 const getExports = async (chunks: Chunks): Promise<Chunks> => {
-    console.log(chalk.cyan("[i] Getting exports"));
+    printMsg(MSG.Header, "[i] Getting exports");
 
     let chunkCopy = chunks;
 

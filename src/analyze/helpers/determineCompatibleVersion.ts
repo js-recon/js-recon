@@ -1,8 +1,8 @@
-import chalk from "chalk";
 import fs from "fs";
 import yaml from "yaml";
 import { Rule } from "../types/index.js";
 import { computeRequiredVersion } from "../../utility/ruleVersionMap.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * For each rule file, computes the js_recon_version/js_recon_max_version actually
@@ -17,7 +17,7 @@ import { computeRequiredVersion } from "../../utility/ruleVersionMap.js";
  * @returns true only if every rule file was already correct
  */
 const checkOrApplyRuleVersions = async (ruleFiles: string[], apply: boolean): Promise<boolean> => {
-    console.log(chalk.cyan(`[i] ${apply ? "Applying" : "Determining"} compatible rule versions...`));
+    printMsg(MSG.Header, `[i] ${apply ? "Applying" : "Determining"} compatible rule versions...`);
     let allCorrect = true;
 
     for (const ruleFile of ruleFiles) {
@@ -39,15 +39,14 @@ const checkOrApplyRuleVersions = async (ruleFiles: string[], apply: boolean): Pr
         allCorrect = false;
 
         if (!apply) {
-            console.error(chalk.red(`[!] ${ruleFile}: incompatible declared version`));
+            printMsg(MSG.Err, `[!] ${ruleFile}: incompatible declared version`);
             if (minMismatch) {
-                console.error(
-                    chalk.red(`  - js_recon_version is "${rule.js_recon_version}", expected "${expectedMin}"`)
-                );
+                printMsg(MSG.Err, `  - js_recon_version is "${rule.js_recon_version}", expected "${expectedMin}"`);
             }
             if (maxMismatch) {
-                console.error(
-                    chalk.red(`  - js_recon_max_version is "${rule.js_recon_max_version}", expected "${expectedMax}"`)
+                printMsg(
+                    MSG.Err,
+                    `  - js_recon_max_version is "${rule.js_recon_max_version}", expected "${expectedMax}"`
                 );
             }
             continue;
@@ -68,7 +67,7 @@ const checkOrApplyRuleVersions = async (ruleFiles: string[], apply: boolean): Pr
             }
         }
         fs.writeFileSync(ruleFile, updated);
-        console.log(chalk.green(`[✓] Updated ${ruleFile}`));
+        printMsg(MSG.Run, `[✓] Updated ${ruleFile}`);
     }
 
     return allCorrect;

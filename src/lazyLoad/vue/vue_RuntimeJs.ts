@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import makeRequest from "../../utility/makeReq.js";
 import * as cheerio from "cheerio";
 import * as parser from "@babel/parser";
@@ -8,11 +7,12 @@ import inquirer from "inquirer";
 import CONFIG from "../../globalConfig.js";
 import execFunc from "../../utility/runSandboxed.js";
 import * as globals from "../../utility/globals.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const vue_runtimeJs = async (url: string): Promise<string[]> => {
     const rootHtmlRes = await makeRequest(url);
     if (!rootHtmlRes) {
-        console.error(chalk.red(`[!] Failed to fetch ${url}`));
+        printMsg(MSG.Err, `[!] Failed to fetch ${url}`);
         return [];
     }
     const rootHtml: string = await rootHtmlRes.text();
@@ -34,8 +34,8 @@ const vue_runtimeJs = async (url: string): Promise<string[]> => {
     });
 
     if (!runtimeJsUrl) {
-        console.error(chalk.red("[!] No runtime JS file found in page source"));
-        console.log(chalk.magenta(CONFIG.notFoundMessage));
+        printMsg(MSG.Err, "[!] No runtime JS file found in page source");
+        printMsg(MSG.Info, CONFIG.notFoundMessage);
         return [];
     }
 
@@ -45,7 +45,7 @@ const vue_runtimeJs = async (url: string): Promise<string[]> => {
 
     const runtimeJsRes = await makeRequest(runtimeJsUrl);
     if (!runtimeJsRes) {
-        console.error(chalk.red(`[!] Failed to fetch ${runtimeJsUrl}`));
+        printMsg(MSG.Err, `[!] Failed to fetch ${runtimeJsUrl}`);
         return [];
     }
     const runtimeJsContent: string = await runtimeJsRes.text();
@@ -105,21 +105,20 @@ const vue_runtimeJs = async (url: string): Promise<string[]> => {
     });
 
     if (!scriptSrcFuncSource) {
-        console.error(chalk.red("[!] Could not find chunk URL builder function in runtime JS"));
-        console.log(chalk.magenta(CONFIG.notFoundMessage));
+        printMsg(MSG.Err, "[!] Could not find chunk URL builder function in runtime JS");
+        printMsg(MSG.Info, CONFIG.notFoundMessage);
         return [];
     }
 
-    console.log(chalk.green("[✓] Found chunk URL builder function"));
-    console.log(chalk.yellow(scriptSrcFuncSource));
+    printMsg(MSG.Run, "[✓] Found chunk URL builder function");
+    printMsg(MSG.Warn, scriptSrcFuncSource);
 
     if (publicPathObj && publicPathProp) {
-        console.log(chalk.green(`[✓] Public-path variable detected: ${publicPathObj}.${publicPathProp}`));
+        printMsg(MSG.Run, `[✓] Public-path variable detected: ${publicPathObj}.${publicPathProp}`);
     } else {
-        console.error(
-            chalk.yellow(
-                "[!] Could not detect public-path variable; will resolve chunk paths against runtime.js directory regardless"
-            )
+        printMsg(
+            MSG.Warn,
+            "[!] Could not detect public-path variable; will resolve chunk paths against runtime.js directory regardless"
         );
     }
 
@@ -133,12 +132,12 @@ const vue_runtimeJs = async (url: string): Promise<string[]> => {
             },
         ]);
         if (!confirmed) {
-            console.error(chalk.red("[!] Not executing function."));
+            printMsg(MSG.Err, "[!] Not executing function.");
             return [];
         }
     }
 
-    console.log(chalk.cyan("[i] Proceeding with the selected function to fetch files"));
+    printMsg(MSG.Header, "[i] Proceeding with the selected function to fetch files");
 
     // Stub the public-path variable with empty string so the function returns
     // just the relative chunk path (e.g. "pages/index.<hash>.js"). The real
@@ -160,14 +159,14 @@ const vue_runtimeJs = async (url: string): Promise<string[]> => {
             }
         }
     } catch (err) {
-        console.error(chalk.red("Unsafe or invalid code:", err instanceof Error ? err.message : String(err)));
+        printMsg(MSG.Err, `Unsafe or invalid code: ${err instanceof Error ? err.message : String(err)}`);
         return [];
     }
 
     const unique_paths = [...new Set(js_paths)];
 
     if (unique_paths.length > 0) {
-        console.log(chalk.green(`[✓] Found ${unique_paths.length} JS chunks`));
+        printMsg(MSG.Run, `[✓] Found ${unique_paths.length} JS chunks`);
     }
 
     const runtimeDir = runtimeJsUrl.split("/").slice(0, -1).join("/") + "/";

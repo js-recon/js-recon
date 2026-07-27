@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Extracts the host (scheme-independent, matches the format used throughout
@@ -53,7 +53,7 @@ export const resolveRedirectChain = async (
 const resolveGenericScope = async (url: string, maxRedirects: number): Promise<string[]> => {
     const finalUrl = await resolveRedirectChain(url, maxRedirects);
     const host = hostFromUrl(finalUrl);
-    console.log(chalk.cyan(`[i] Generic crawl scope resolved to: ${host}`));
+    printMsg(MSG.Header, `[i] Generic crawl scope resolved to: ${host}`);
     return [host];
 };
 

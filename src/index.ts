@@ -12,6 +12,7 @@ import refactor from "./refactor/index.js";
 import run from "./run/index.js";
 import chalk from "chalk";
 import analyze from "./analyze/index.js";
+import { printMsg, MSG } from "./utility/printMsg.js";
 import report from "./report/index.js";
 import configureSandbox from "./utility/configureSandbox.js";
 import mcp from "./mcp/index.js";
@@ -68,7 +69,7 @@ const validAiOptions = ["description"];
 function parseMaxHeapMb(rawValue: string | undefined): number {
     const parsed = parseInt(rawValue ?? "0", 10);
     if (!Number.isInteger(parsed) || parsed < 0) {
-        console.error(chalk.red(`[!] Invalid --max-heap value: ${rawValue}. Use 0 or a positive integer (MB).`));
+        printMsg(MSG.Err, `[!] Invalid --max-heap value: ${rawValue}. Use 0 or a positive integer (MB).`);
         process.exit(1);
     }
     return parsed;
@@ -77,7 +78,7 @@ function parseMaxHeapMb(rawValue: string | undefined): number {
 function validateAndSetTimeout(timeoutValue: string): void {
     const parsedTimeout = parseInt(timeoutValue, 10);
     if (Number.isNaN(parsedTimeout) || parsedTimeout < 1) {
-        console.error(chalk.yellow(`[!] Invalid timeout value: "${timeoutValue}". Using default of 30000ms.`));
+        printMsg(MSG.Warn, `[!] Invalid timeout value: "${timeoutValue}". Using default of 30000ms.`);
         globalsUtil.setRequestTimeout(30000);
     } else {
         globalsUtil.setRequestTimeout(parsedTimeout);
@@ -160,16 +161,14 @@ program
             const filter = typeof cmd.listMethods === "string" ? cmd.listMethods : null;
             const frameworkKeys = Object.keys(FRAMEWORK_METHODS);
             if (filter && !frameworkKeys.includes(filter)) {
-                console.error(
-                    chalk.red(`[!] Unknown framework: "${filter}". Valid frameworks: ${frameworkKeys.join(", ")}`)
-                );
+                printMsg(MSG.Err, `[!] Unknown framework: "${filter}". Valid frameworks: ${frameworkKeys.join(", ")}`);
                 process.exit(1);
             }
             const keys = filter ? [filter] : frameworkKeys;
             for (const fw of keys) {
-                console.log(chalk.cyan(`\n[${fw}]`));
+                printMsg(MSG.Header, `\n[${fw}]`);
                 for (const method of FRAMEWORK_METHODS[fw]) {
-                    console.log(chalk.green(`  - ${method}`));
+                    printMsg(MSG.Run, `  - ${method}`);
                 }
             }
             process.exit(0);
@@ -192,23 +191,22 @@ program
         const allMethods = [...includeMethods, ...excludeMethods];
         const invalid = allMethods.filter((m) => !VALID_METHODS.includes(m));
         if (invalid.length > 0) {
-            console.error(chalk.red(`[!] Invalid method name(s): ${invalid.join(", ")}`));
-            console.error(chalk.yellow(`[i] Valid methods: ${VALID_METHODS.join(", ")}`));
+            printMsg(MSG.Err, `[!] Invalid method name(s): ${invalid.join(", ")}`);
+            printMsg(MSG.Warn, `[i] Valid methods: ${VALID_METHODS.join(", ")}`);
             process.exit(22);
         }
 
         if (!cmd.url) {
-            console.error(chalk.red("[!] Missing required option: -u, --url <url/file>"));
+            printMsg(MSG.Err, "[!] Missing required option: -u, --url <url/file>");
             process.exit(1);
         }
 
         const lazyloadTimeoutMin = Number(cmd.lazyloadTimeout);
         const stagnationTimeinMin = Number(cmd.stagnationTimein);
         if (lazyloadTimeoutMin > 0 && stagnationTimeinMin > lazyloadTimeoutMin) {
-            console.error(
-                chalk.red(
-                    `[!] --stagnation-timein (${stagnationTimeinMin}m) cannot exceed --lazyload-timeout (${lazyloadTimeoutMin}m)`
-                )
+            printMsg(
+                MSG.Err,
+                `[!] --stagnation-timein (${stagnationTimeinMin}m) cannot exceed --lazyload-timeout (${lazyloadTimeoutMin}m)`
             );
             process.exit(27);
         }
@@ -397,14 +395,14 @@ program
         if (globalsUtil.getAi().length !== 0) {
             for (const aiType of globalsUtil.getAi()) {
                 if (aiType !== "" && !validAiOptions.includes(aiType)) {
-                    console.error(chalk.red(`[!] Invalid AI option: ${aiType}`));
+                    printMsg(MSG.Err, `[!] Invalid AI option: ${aiType}`);
                     process.exit(1);
                 }
             }
         }
         const maxRecursionDepth = parseInt(cmd.maxRecursionDepth ?? "3", 10);
         if (!Number.isFinite(maxRecursionDepth) || maxRecursionDepth < 0) {
-            console.error(chalk.red(`[!] Invalid --max-recursion-depth: ${cmd.maxRecursionDepth}`));
+            printMsg(MSG.Err, `[!] Invalid --max-recursion-depth: ${cmd.maxRecursionDepth}`);
             process.exit(1);
         }
         globalsUtil.setMaxRecursionDepth(maxRecursionDepth);
@@ -477,7 +475,8 @@ program
             : undefined;
         const detectVersionDynamicThreshold = Number(cmd.detectVersionDynamicThreshold ?? 3);
         if (!Number.isInteger(detectVersionDynamicThreshold) || detectVersionDynamicThreshold < 1) {
-            console.error(
+            printMsg(
+                MSG.Err,
                 `[!] --detect-version-dynamic-threshold must be a positive integer (got "${cmd.detectVersionDynamicThreshold}")`
             );
             process.exit(1);
@@ -656,16 +655,14 @@ program
             const filter = typeof cmd.listMethods === "string" ? cmd.listMethods : null;
             const frameworkKeys = Object.keys(FRAMEWORK_METHODS);
             if (filter && !frameworkKeys.includes(filter)) {
-                console.error(
-                    chalk.red(`[!] Unknown framework: "${filter}". Valid frameworks: ${frameworkKeys.join(", ")}`)
-                );
+                printMsg(MSG.Err, `[!] Unknown framework: "${filter}". Valid frameworks: ${frameworkKeys.join(", ")}`);
                 process.exit(1);
             }
             const keys = filter ? [filter] : frameworkKeys;
             for (const fw of keys) {
-                console.log(chalk.cyan(`\n[${fw}]`));
+                printMsg(MSG.Header, `\n[${fw}]`);
                 for (const method of FRAMEWORK_METHODS[fw]) {
-                    console.log(chalk.green(`  - ${method}`));
+                    printMsg(MSG.Run, `  - ${method}`);
                 }
             }
             process.exit(0);
@@ -687,25 +684,24 @@ program
         const allMethods = [...includeMethods, ...excludeMethods];
         const invalid = allMethods.filter((m) => !VALID_METHODS.includes(m));
         if (invalid.length > 0) {
-            console.error(chalk.red(`[!] Invalid method name(s): ${invalid.join(", ")}`));
-            console.error(chalk.yellow(`[i] Valid methods: ${VALID_METHODS.join(", ")}`));
+            printMsg(MSG.Err, `[!] Invalid method name(s): ${invalid.join(", ")}`);
+            printMsg(MSG.Warn, `[i] Valid methods: ${VALID_METHODS.join(", ")}`);
             process.exit(22);
         }
         cmd._includeMethods = includeMethods;
         cmd._excludeMethods = excludeMethods;
 
         if (!cmd.url) {
-            console.error(chalk.red("[!] Missing required option: -u, --url <url/file>"));
+            printMsg(MSG.Err, "[!] Missing required option: -u, --url <url/file>");
             process.exit(1);
         }
 
         const runLazyloadTimeoutMin = Number(cmd.lazyloadTimeout);
         const runStagnationTimeinMin = Number(cmd.stagnationTimein);
         if (runLazyloadTimeoutMin > 0 && runStagnationTimeinMin > runLazyloadTimeoutMin) {
-            console.error(
-                chalk.red(
-                    `[!] --stagnation-timein (${runStagnationTimeinMin}m) cannot exceed --lazyload-timeout (${runLazyloadTimeoutMin}m)`
-                )
+            printMsg(
+                MSG.Err,
+                `[!] --stagnation-timein (${runStagnationTimeinMin}m) cannot exceed --lazyload-timeout (${runLazyloadTimeoutMin}m)`
             );
             process.exit(27);
         }
@@ -731,7 +727,7 @@ program
         if (globalsUtil.getAi().length !== 0) {
             for (const aiType of globalsUtil.getAi()) {
                 if (aiType !== "" && !validAiOptions.includes(aiType)) {
-                    console.error(chalk.red(`[!] Invalid AI option: ${aiType}`));
+                    printMsg(MSG.Err, `[!] Invalid AI option: ${aiType}`);
                     process.exit(2);
                 }
             }

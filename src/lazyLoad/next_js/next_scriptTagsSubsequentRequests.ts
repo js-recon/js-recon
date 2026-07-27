@@ -1,9 +1,9 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import next_getJSScript from "./next_GetJSScript.js";
 import fs from "fs";
 
 const next_scriptTagsSubsequentRequests = async (url: string, endpointsFile: string) => {
-    console.log(chalk.cyan("[i] Getting JS files from subsequent requests (script tags)"));
+    printMsg(MSG.Header, "[i] Getting JS files from subsequent requests (script tags)");
 
     let endpoints = JSON.parse(fs.readFileSync(endpointsFile, "utf8")).paths;
 
@@ -38,7 +38,7 @@ const next_scriptTagsSubsequentRequests = async (url: string, endpointsFile: str
     jsUrls = [...new Set(jsUrls)];
 
     if (jsUrls.length !== 0) {
-        console.log(chalk.green(`[✓] Found ${jsUrls.length} JS files from subsequent requests (script tags)`));
+        printMsg(MSG.Run, `[✓] Found ${jsUrls.length} JS files from subsequent requests (script tags)`);
     }
 
     return jsUrls;

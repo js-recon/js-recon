@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Checks if a response body contains signs of firewall or security system blocking.
@@ -12,10 +12,10 @@ import chalk from "chalk";
 const checkFireWallBlocking = async (body: string): Promise<boolean> => {
     // check common signs of CF first
     if (body.includes("<title>Just a moment...</title>")) {
-        console.error(chalk.red("[!] Cloudflare detected"));
+        printMsg(MSG.Err, "[!] Cloudflare detected");
         return true;
     } else if (body.includes("<title>Attention Required! | Cloudflare</title>")) {
-        console.error(chalk.red("[!] Cloudflare detected"));
+        printMsg(MSG.Err, "[!] Cloudflare detected");
         return true;
     }
 

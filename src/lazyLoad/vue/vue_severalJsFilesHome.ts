@@ -1,13 +1,13 @@
-import chalk from "chalk";
 import makeRequest from "../../utility/makeReq.js";
 import * as cheerio from "cheerio";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 const vue_severalJsFilesHome = async (url: string): Promise<string[]> => {
     let jsFilesToReturn: string[] = [];
 
     // get the contents of the homepage
     const homepageReq = await makeRequest(url);
     if (homepageReq == null) {
-        console.error(chalk.red(`Failed to fetch ${url}`));
+        printMsg(MSG.Err, `Failed to fetch ${url}`);
         return jsFilesToReturn;
     }
     const homepageContent = await homepageReq.text();

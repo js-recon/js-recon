@@ -1,7 +1,7 @@
 import makeRequest from "../../utility/makeReq.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import next_getJSScript from "./next_GetJSScript.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
@@ -67,7 +67,7 @@ export const extractHrefsFromLayoutJs = (jsContent: string): string[] => {
 };
 
 const next_parseLayoutJs = async (baseUrl: string, urls: string[]) => {
-    console.log(chalk.cyan("[i] Parsing layout.js files"));
+    printMsg(MSG.Header, "[i] Parsing layout.js files");
 
     let toReturn: string[] = [];
     const MAX_LAYOUT_JS_BYTES = 1.5 * 1024 * 1024;
@@ -79,10 +79,9 @@ const next_parseLayoutJs = async (baseUrl: string, urls: string[]) => {
 
             const contentLength = req.headers.get("content-length");
             if (contentLength && parseInt(contentLength, 10) > MAX_LAYOUT_JS_BYTES) {
-                console.log(
-                    chalk.yellow(
-                        `[!] Skipping oversized layout.js (${Math.round(parseInt(contentLength, 10) / 1024)} KB): ${url}`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] Skipping oversized layout.js (${Math.round(parseInt(contentLength, 10) / 1024)} KB): ${url}`
                 );
                 continue;
             }
@@ -90,9 +89,7 @@ const next_parseLayoutJs = async (baseUrl: string, urls: string[]) => {
             const jsContent = await req.text();
 
             if (jsContent.length > MAX_LAYOUT_JS_BYTES) {
-                console.log(
-                    chalk.yellow(`[!] Skipping oversized layout.js (${Math.round(jsContent.length / 1024)} KB): ${url}`)
-                );
+                printMsg(MSG.Warn, `[!] Skipping oversized layout.js (${Math.round(jsContent.length / 1024)} KB): ${url}`);
                 continue;
             }
 
@@ -111,7 +108,7 @@ const next_parseLayoutJs = async (baseUrl: string, urls: string[]) => {
                 }
 
                 if (hreqResult.status === 200) {
-                    console.log(chalk.green("[✓] Found new client side URL: ", newUrl));
+                    printMsg(MSG.Run, `[✓] Found new client side URL: ${newUrl}`);
                     const jsFiles = await next_getJSScript(newUrl);
                     toReturn.push(...jsFiles);
                 }
@@ -122,7 +119,7 @@ const next_parseLayoutJs = async (baseUrl: string, urls: string[]) => {
     toReturn = [...new Set(toReturn)];
 
     if (toReturn.length !== 0) {
-        console.log(chalk.green(`[✓] Found ${toReturn.length} JS files from the layout.js files`));
+        printMsg(MSG.Run, `[✓] Found ${toReturn.length} JS files from the layout.js files`);
     }
     return toReturn;
 };

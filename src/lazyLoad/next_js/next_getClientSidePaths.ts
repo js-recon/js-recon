@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import * as cheerio from "cheerio";
 import { URL } from "url";
 import makeRequest from "../../utility/makeReq.js";
@@ -74,7 +74,7 @@ const next_getClientSidePaths = async (url: string): Promise<string[]> => {
     });
 
     if (found.size > 0) {
-        console.log(chalk.green(`[✓] Found ${found.size} client-side path(s) on ${url}`));
+        printMsg(MSG.Run, `[✓] Found ${found.size} client-side path(s) on ${url}`);
     }
 
     return [...found];

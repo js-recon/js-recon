@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import YAML from "yaml";
-import chalk from "chalk";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 export interface McpConfig {
     provider: "openai" | "anthropic";
@@ -32,7 +32,7 @@ const CONFIG_FILE = path.join(CONFIG_DIR, "mcp.yaml");
 export const ensureConfigDir = (): void => {
     if (!fs.existsSync(CONFIG_DIR)) {
         fs.mkdirSync(CONFIG_DIR, { recursive: true });
-        console.log(chalk.cyan(`[i] Created config directory: ${CONFIG_DIR}`));
+        printMsg(MSG.Header, `[i] Created config directory: ${CONFIG_DIR}`);
     }
 };
 
@@ -46,7 +46,7 @@ export const loadConfig = (configPath?: string): McpConfig => {
 
     if (!fs.existsSync(filePath)) {
         saveConfig(DEFAULT_CONFIG, filePath);
-        console.log(chalk.cyan(`[i] Created default MCP config at ${filePath}`));
+        printMsg(MSG.Header, `[i] Created default MCP config at ${filePath}`);
         return { ...DEFAULT_CONFIG };
     }
 
@@ -55,7 +55,7 @@ export const loadConfig = (configPath?: string): McpConfig => {
         const parsed = YAML.parse(raw) as Partial<McpConfig>;
         return { ...DEFAULT_CONFIG, ...parsed };
     } catch (err) {
-        console.error(chalk.yellow(`[!] Failed to parse config at ${filePath}. Using defaults.`));
+        printMsg(MSG.Warn, `[!] Failed to parse config at ${filePath}. Using defaults.`);
         return { ...DEFAULT_CONFIG };
     }
 };

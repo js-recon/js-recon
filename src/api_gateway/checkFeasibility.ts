@@ -1,6 +1,6 @@
 import { get } from "./genReq.js";
-import chalk from "chalk";
 import checkFireWallBlocking from "./checkFireWallBlocking.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Checks the feasibility of using API Gateway by testing for firewall blocking.
@@ -12,23 +12,23 @@ import checkFireWallBlocking from "./checkFireWallBlocking.js";
  * @returns Promise that resolves when feasibility check is complete
  */
 const checkFeasibility = async (url: string): Promise<void> => {
-    console.log(chalk.cyan(`[i] Checking feasibility of API Gateway with ${url}`));
+    printMsg(MSG.Header, `[i] Checking feasibility of API Gateway with ${url}`);
     try {
         // send 10 requests, and check if any of those contain any signs of blocking
         for (let i = 0; i < 10; i++) {
             const response = await get(url);
             const isFireWallBlocking = await checkFireWallBlocking(response);
             if (isFireWallBlocking) {
-                console.error(chalk.magenta("[!] Please try again without API Gateway"));
+                printMsg(MSG.Err, "[!] Please try again without API Gateway");
                 return;
             }
         }
-        console.log(
-            chalk.green("[✓] Feasibility check passed."),
-            chalk.dim("However, this doesn't represent the true nature of the firewall used.")
+        printMsg(
+            MSG.Run,
+            `[✓] Feasibility check passed. However, this doesn't represent the true nature of the firewall used.`
         );
     } catch (error) {
-        console.error(chalk.red(`[!] An error occured in feasibility check: ${error}`));
+        printMsg(MSG.Err, `[!] An error occured in feasibility check: ${error}`);
     }
 };
 

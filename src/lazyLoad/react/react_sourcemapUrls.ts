@@ -1,5 +1,5 @@
 import makeRequest from "../../utility/makeReq.js";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const react_sourcemapUrls = async (jsFiles: string[]): Promise<string[]> => {
     const mapUrls: string[] = [];
@@ -28,7 +28,7 @@ const react_sourcemapUrls = async (jsFiles: string[]): Promise<string[]> => {
     }
 
     if (mapUrls.length > 0) {
-        console.log(chalk.green(`[✓] Found ${mapUrls.length} sourcemaps from ${jsFiles.length} JS files`));
+        printMsg(MSG.Run, `[✓] Found ${mapUrls.length} sourcemaps from ${jsFiles.length} JS files`);
     }
 
     return mapUrls;

@@ -1,7 +1,7 @@
-import chalk from "chalk";
 import parser from "@babel/parser";
 import _generator from "@babel/generator";
 import * as t from "@babel/types";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const generate = (_generator.default ?? _generator) as typeof _generator.default;
 
@@ -109,12 +109,11 @@ export const applyFixes = (code: string, statements: t.Statement[]): t.Statement
         }
 
         // Last resort: drop the statement entirely.
-        console.log(
-            chalk.yellow(
-                `    [~] Dropping unresolvable statement at index ${i}: ${generate(stmt as any)
-                    .code.slice(0, 80)
-                    .replace(/\s+/g, " ")}`
-            )
+        printMsg(
+            MSG.Warn,
+            `    [~] Dropping unresolvable statement at index ${i}: ${generate(stmt as any)
+                .code.slice(0, 80)
+                .replace(/\s+/g, " ")}`
         );
         // (no push — statement omitted)
     }
@@ -132,19 +131,21 @@ export const validateAndFix = (statements: t.Statement[], moduleId: string): str
         if (errors.length === 0) return code;
 
         if (attempt === MAX_FIX_ITERATIONS) {
-            console.log(
-                chalk.red(`[!] Module ${moduleId} could not be fixed after ${MAX_FIX_ITERATIONS} attempts — skipping`)
+            printMsg(
+                MSG.Err,
+                `[!] Module ${moduleId} could not be fixed after ${MAX_FIX_ITERATIONS} attempts — skipping`
             );
             return null;
         }
 
         for (const err of errors) {
             const loc = (err as any).loc ? ` at line ${(err as any).loc.line}, col ${(err as any).loc.column}` : "";
-            console.log(
-                chalk.red(`[!] Syntax error in module ${moduleId} (attempt ${attempt + 1}/${MAX_FIX_ITERATIONS}):`)
+            printMsg(
+                MSG.Err,
+                `[!] Syntax error in module ${moduleId} (attempt ${attempt + 1}/${MAX_FIX_ITERATIONS}):`
             );
-            console.log(chalk.red(`    ${(err as any).message}${loc}`));
-            if ((err as any).codeFrame) console.log((err as any).codeFrame);
+            printMsg(MSG.Err, `    ${(err as any).message}${loc}`);
+            if ((err as any).codeFrame) printMsg(MSG.Plain, (err as any).codeFrame);
         }
 
         current = applyFixes(code, current);

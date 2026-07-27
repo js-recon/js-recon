@@ -3,7 +3,7 @@ import path from "path";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 import { Chunks } from "../../utility/interfaces.js";
 import { File } from "@babel/types";
@@ -42,19 +42,17 @@ interface ImportRef {
 const getViteConnections = async (directory: string, output: string, formats: string[]): Promise<Chunks> => {
     const maxAiThreads = globals.getAiThreads();
     if (globals.getAi().length > 0) {
-        console.error(
-            chalk.yellow(
-                "[!] AI integration is enabled. This may incur costs. By using this feature, you agree to the AI provider's terms of service, and accept the risk of incurring unexpected costs due to huge codebase."
-            )
+        printMsg(
+            MSG.Warn,
+            "[!] AI integration is enabled. This may incur costs. By using this feature, you agree to the AI provider's terms of service, and accept the risk of incurring unexpected costs due to huge codebase."
         );
         const provider = globals.getAiServiceProvider();
         if (provider === "openai") {
             const apiKey = globals.getAiApiKey() || process.env.OPENAI_API_KEY;
             if (!apiKey) {
-                console.error(
-                    chalk.red(
-                        "[!] OpenAI API key not found. Please provide it via --ai-api-key or OPENAI_API_KEY environment variable."
-                    )
+                printMsg(
+                    MSG.Err,
+                    "[!] OpenAI API key not found. Please provide it via --ai-api-key or OPENAI_API_KEY environment variable."
                 );
                 process.exit(19);
             }
@@ -62,27 +60,24 @@ const getViteConnections = async (directory: string, output: string, formats: st
         if (provider === "anthropic") {
             const apiKey = globals.getAiApiKey() || process.env.ANTHROPIC_API_KEY;
             if (!apiKey) {
-                console.error(
-                    chalk.red(
-                        "[!] Anthropic API key not found. Please provide it via --ai-api-key or ANTHROPIC_API_KEY environment variable."
-                    )
+                printMsg(
+                    MSG.Err,
+                    "[!] Anthropic API key not found. Please provide it via --ai-api-key or ANTHROPIC_API_KEY environment variable."
                 );
                 process.exit(19);
             }
         }
-        console.log(chalk.cyan(`[i] AI provider "${provider}" initialized.`));
+        printMsg(MSG.Header, `[i] AI provider "${provider}" initialized.`);
     }
 
     // skip regeneration when an AI-tagged JSON already exists, since it would burn $$$
     if (fs.existsSync(`${output}.json`) && globals.getAi().length > 0) {
-        console.error(
-            chalk.yellow(`[!] Output file ${output}.json already exists. Skipping regeneration to save costs.`)
-        );
+        printMsg(MSG.Warn, `[!] Output file ${output}.json already exists. Skipping regeneration to save costs.`);
         const chunks = JSON.parse(fs.readFileSync(`${output}.json`, "utf8"));
         return chunks;
     }
 
-    console.log(chalk.cyan("[i] Getting Vite (Vue.JS) connections"));
+    printMsg(MSG.Header, "[i] Getting Vite (Vue.JS) connections");
 
     let files = fs.readdirSync(directory, {
         recursive: true,
@@ -133,13 +128,13 @@ const getViteConnections = async (directory: string, output: string, formats: st
     // This replaces the previous two-pass approach (Pass 1 + Pass 2) that parsed
     // every file twice and kept ASTs alive across both loops.
     const MAX_MAP_FILE_SIZE_BYTES = 1.5 * 1024 * 1024;
-    console.log(chalk.cyan(`[i] Scanning ${files.length} JS files for root functions`));
+    printMsg(MSG.Header, `[i] Scanning ${files.length} JS files for root functions`);
     for (const file of files) {
         const meta = fileMeta.get(file);
 
         const filePath = path.join(directory, file);
         if (fs.statSync(filePath).size > MAX_MAP_FILE_SIZE_BYTES) {
-            console.error(chalk.yellow(`[!] Skipping ${file} (too large for map analysis)`));
+            printMsg(MSG.Warn, `[!] Skipping ${file} (too large for map analysis)`);
             continue;
         }
         let code: string;
@@ -284,7 +279,7 @@ const getViteConnections = async (directory: string, output: string, formats: st
     }
 
     // Resolve collected import references to chunk IDs (no re-parsing needed).
-    console.log(chalk.cyan("[i] Resolving imports and exports"));
+    printMsg(MSG.Header, "[i] Resolving imports and exports");
     for (const [chunkId, refs] of chunkImportRefs.entries()) {
         const chunk = chunks[chunkId];
         if (!chunk) continue;
@@ -302,11 +297,11 @@ const getViteConnections = async (directory: string, output: string, formats: st
         chunk.imports = Array.from(importsSet);
     }
 
-    console.log(chalk.green(`[✓] Found ${Object.keys(chunks).length} Vue.JS functions`));
+    printMsg(MSG.Run, `[✓] Found ${Object.keys(chunks).length} Vue.JS functions`);
 
     // if AI description is enabled, generate descriptions for each chunk in parallel batches
     if (globals.getAi() && globals.getAi().includes("description")) {
-        console.log(chalk.cyan("[i] Generating descriptions for chunks"));
+        printMsg(MSG.Header, "[i] Generating descriptions for chunks");
         const chunkEntries = Object.entries(chunks);
         const descriptionPromises: Promise<{ key: string; description: string }>[] = [];
         let activeThreads = 0;
@@ -326,7 +321,7 @@ const getViteConnections = async (directory: string, output: string, formats: st
                     return { key, description };
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    console.error(chalk.red(`[!] Error generating description for chunk ${key}: ${msg}`));
+                    printMsg(MSG.Err, `[!] Error generating description for chunk ${key}: ${msg}`);
                     return { key, description: "none" };
                 } finally {
                     activeThreads--;
@@ -340,7 +335,7 @@ const getViteConnections = async (directory: string, output: string, formats: st
         results.forEach(({ key, description }) => {
             if (chunks[key]) {
                 chunks[key].description = description || "none";
-                console.log(chalk.green(`[✓] Generated description for ${key}: ${chunks[key].description}`));
+                printMsg(MSG.Run, `[✓] Generated description for ${key}: ${chunks[key].description}`);
             }
         });
     }
@@ -370,7 +365,7 @@ const getViteConnections = async (directory: string, output: string, formats: st
                 else resolve();
             });
         });
-        console.log(chalk.green(`[✓] Saved Vite connections to ${output}.json`));
+        printMsg(MSG.Run, `[✓] Saved Vite connections to ${output}.json`);
     }
 
     return chunks;

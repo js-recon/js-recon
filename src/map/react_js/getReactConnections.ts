@@ -3,12 +3,11 @@ import path from "path";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-import chalk from "chalk";
-
 import { Chunks } from "../../utility/interfaces.js";
 import { File } from "@babel/types";
 import * as globals from "../../utility/globals.js";
 import { getCompletion } from "../../utility/ai.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const FUNC_NAME_RE = /^[a-zA-Z_]{2}$/;
 
@@ -38,19 +37,17 @@ const parseFilename = (filename: string): FileMeta | null => {
 const getReactConnections = async (directory: string, output: string, formats: string[]): Promise<Chunks> => {
     const maxAiThreads = globals.getAiThreads();
     if (globals.getAi().length > 0) {
-        console.error(
-            chalk.yellow(
-                "[!] AI integration is enabled. This may incur costs. By using this feature, you agree to the AI provider's terms of service, and accept the risk of incurring unexpected costs due to huge codebase."
-            )
+        printMsg(
+            MSG.Warn,
+            "[!] AI integration is enabled. This may incur costs. By using this feature, you agree to the AI provider's terms of service, and accept the risk of incurring unexpected costs due to huge codebase."
         );
         const provider = globals.getAiServiceProvider();
         if (provider === "openai") {
             const apiKey = globals.getAiApiKey() || process.env.OPENAI_API_KEY;
             if (!apiKey) {
-                console.error(
-                    chalk.red(
-                        "[!] OpenAI API key not found. Please provide it via --ai-api-key or OPENAI_API_KEY environment variable."
-                    )
+                printMsg(
+                    MSG.Err,
+                    "[!] OpenAI API key not found. Please provide it via --ai-api-key or OPENAI_API_KEY environment variable."
                 );
                 process.exit(19);
             }
@@ -58,25 +55,22 @@ const getReactConnections = async (directory: string, output: string, formats: s
         if (provider === "anthropic") {
             const apiKey = globals.getAiApiKey() || process.env.ANTHROPIC_API_KEY;
             if (!apiKey) {
-                console.error(
-                    chalk.red(
-                        "[!] Anthropic API key not found. Please provide it via --ai-api-key or ANTHROPIC_API_KEY environment variable."
-                    )
+                printMsg(
+                    MSG.Err,
+                    "[!] Anthropic API key not found. Please provide it via --ai-api-key or ANTHROPIC_API_KEY environment variable."
                 );
                 process.exit(19);
             }
         }
-        console.log(chalk.cyan(`[i] AI provider "${provider}" initialized.`));
+        printMsg(MSG.Header, `[i] AI provider "${provider}" initialized.`);
     }
 
     if (fs.existsSync(`${output}.json`) && globals.getAi().length > 0) {
-        console.error(
-            chalk.yellow(`[!] Output file ${output}.json already exists. Skipping regeneration to save costs.`)
-        );
+        printMsg(MSG.Warn, `[!] Output file ${output}.json already exists. Skipping regeneration to save costs.`);
         return JSON.parse(fs.readFileSync(`${output}.json`, "utf8"));
     }
 
-    console.log(chalk.cyan("[i] Getting React (Vite/Rolldown) connections"));
+    printMsg(MSG.Header, "[i] Getting React (Vite/Rolldown) connections");
 
     let files = fs.readdirSync(directory, { recursive: true, encoding: "utf8" }) as string[];
     files = files.filter(
@@ -100,12 +94,12 @@ const getReactConnections = async (directory: string, output: string, formats: s
 
     // Pass 1: find root-level 2-char function declarations (Vite/Rolldown minification pattern)
     const MAX_MAP_FILE_SIZE_BYTES = 1.5 * 1024 * 1024;
-    console.log(chalk.cyan(`[i] Scanning ${files.length} React JS files for functions`));
+    printMsg(MSG.Header, `[i] Scanning ${files.length} React JS files for functions`);
     for (const file of files) {
         const meta = parseFilename(file);
         const filePath = path.join(directory, file);
         if (fs.statSync(filePath).size > MAX_MAP_FILE_SIZE_BYTES) {
-            console.error(chalk.yellow(`[!] Skipping ${file} (too large for map analysis)`));
+            printMsg(MSG.Warn, `[!] Skipping ${file} (too large for map analysis)`);
             continue;
         }
         let code: string;
@@ -189,7 +183,7 @@ const getReactConnections = async (directory: string, output: string, formats: s
     };
 
     // Pass 2: resolve imports and exports
-    console.log(chalk.cyan("[i] Resolving imports and exports"));
+    printMsg(MSG.Header, "[i] Resolving imports and exports");
     for (const file of files) {
         const meta = parseFilename(file);
         if (!meta) continue;
@@ -279,10 +273,10 @@ const getReactConnections = async (directory: string, output: string, formats: s
         });
     }
 
-    console.log(chalk.green(`[✓] Found ${Object.keys(chunks).length} React chunks`));
+    printMsg(MSG.Run, `[✓] Found ${Object.keys(chunks).length} React chunks`);
 
     if (globals.getAi() && globals.getAi().includes("description")) {
-        console.log(chalk.cyan("[i] Generating AI descriptions for chunks"));
+        printMsg(MSG.Header, "[i] Generating AI descriptions for chunks");
         const chunkEntries = Object.entries(chunks);
         const descriptionPromises: Promise<{ key: string; description: string }>[] = [];
         let activeThreads = 0;
@@ -316,7 +310,7 @@ const getReactConnections = async (directory: string, output: string, formats: s
 
     if (formats.includes("json")) {
         fs.writeFileSync(`${output}.json`, JSON.stringify(chunks, null, 2));
-        console.log(chalk.green(`[✓] Saved React connections to ${output}.json`));
+        printMsg(MSG.Run, `[✓] Saved React connections to ${output}.json`);
     }
 
     return chunks;

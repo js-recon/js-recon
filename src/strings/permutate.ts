@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import fs from "fs";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Permute URLs and paths, and write the results to a .txt file.
@@ -9,7 +9,7 @@ import fs from "fs";
  * @returns {Promise<void>} - A promise that resolves when the permutated URLs and paths are written to the output file
  */
 const permutate = async (urls: string[], paths: string[], output: string): Promise<void> => {
-    console.log(chalk.cyan("[i] Permutating URLs and paths"));
+    printMsg(MSG.Header, "[i] Permutating URLs and paths");
 
     let permutedUrls = [];
 
@@ -49,9 +49,9 @@ const permutate = async (urls: string[], paths: string[], output: string): Promi
     const results = permutedUrls.join("\n");
     try {
         fs.writeFileSync(`${output}.txt`, results);
-        console.log(chalk.green(`[✓] Written permuted URLs to ${output}.txt`));
+        printMsg(MSG.Run, `[✓] Written permuted URLs to ${output}.txt`);
     } catch (error) {
-        console.error(chalk.red(`[✗] Failed to write to ${output}.txt: ${error.message}`));
+        printMsg(MSG.Err, `[✗] Failed to write to ${output}.txt: ${error.message}`);
         throw error;
     }
 };

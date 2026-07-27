@@ -13,9 +13,9 @@ import {
 } from "@aws-sdk/client-api-gateway";
 import fs from "fs";
 import md5 from "md5";
-import chalk from "chalk";
 import * as globals from "../utility/globals.js";
 import checkFireWallBlocking from "./checkFireWallBlocking.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Utility function to pause execution for a specified duration.
@@ -186,11 +186,11 @@ const get = async (url: string, headers: {} = {}): Promise<string> => {
     try {
         await client.send(deleteResourceCommand);
     } catch (err) {
-        console.error(chalk.red(`[!] Error when sending delete resource command to AWS: ${err}`));
+        printMsg(MSG.Err, `[!] Error when sending delete resource command to AWS: ${err}`);
     }
 
     if (isFireWallBlocking) {
-        console.error(chalk.magenta("[!] Please try again without API Gateway"));
+        printMsg(MSG.Err, "[!] Please try again without API Gateway");
         process.exit(18);
     }
 

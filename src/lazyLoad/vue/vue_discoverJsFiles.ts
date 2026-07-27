@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import vue_pageSrc from "./vue_pageSrc.js";
 import vue_runtimeJs from "./vue_RuntimeJs.js";
 import vue_singleJsFileOnHome from "./vue_SingleJsFileOnHome.js";
@@ -10,6 +9,7 @@ import vue_viteMapDeps from "./vue_viteMapDeps.js";
 import vue_stringJsFiles from "./vue_stringJsFiles.js";
 import { shouldRunMethod } from "../methodFilter.js";
 import type { TechniqueRecorder } from "../researchUtils.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 export interface VueDiscoveryResult {
     jsFiles: string[];
@@ -70,7 +70,7 @@ const vue_discoverJsFiles = async (
         emit("vue_SingleJsFileOnHome", fromSingleJs);
         const newSingleJs = countNew(fromSingleJs, beforeSingleJs);
         if (newSingleJs > 0) {
-            console.log(chalk.green(`[✓] Found ${newSingleJs} new files from the single JS file on home`));
+            printMsg(MSG.Run, `[✓] Found ${newSingleJs} new files from the single JS file on home`);
         }
     }
 
@@ -86,7 +86,7 @@ const vue_discoverJsFiles = async (
         emit("vue_viteMapDeps", fromViteMapDeps);
         const newViteMapDeps = countNew(fromViteMapDeps, beforeViteMapDeps);
         if (newViteMapDeps > 0) {
-            console.log(chalk.green(`[✓] Found ${newViteMapDeps} new files from __vite__mapDeps`));
+            printMsg(MSG.Run, `[✓] Found ${newViteMapDeps} new files from __vite__mapDeps`);
         }
     }
 
@@ -97,7 +97,7 @@ const vue_discoverJsFiles = async (
         emit("vue_jsImports", fromImports);
         const newJsImports = countNew(fromImports, beforeJsImports);
         if (newJsImports > 0) {
-            console.log(chalk.green(`[✓] Found ${newJsImports} new files from import statements`));
+            printMsg(MSG.Run, `[✓] Found ${newJsImports} new files from import statements`);
         }
     }
 
@@ -108,7 +108,7 @@ const vue_discoverJsFiles = async (
         emit("vue_stringJsFiles", fromStringRefs);
         const newStringRefs = countNew(fromStringRefs, beforeStringRefs);
         if (newStringRefs > 0) {
-            console.log(chalk.green(`[✓] Found ${newStringRefs} new files from string literal JS references`));
+            printMsg(MSG.Run, `[✓] Found ${newStringRefs} new files from string literal JS references`);
         }
     }
 
@@ -119,7 +119,7 @@ const vue_discoverJsFiles = async (
         emit("vue_reconstructSourceMaps", fromSourceMaps);
         const newSourceMaps = countNew(fromSourceMaps, beforeSourceMaps);
         if (newSourceMaps > 0) {
-            console.log(chalk.green(`[✓] Found ${newSourceMaps} new files from reconstructing source maps`));
+            printMsg(MSG.Run, `[✓] Found ${newSourceMaps} new files from reconstructing source maps`);
         }
     }
 

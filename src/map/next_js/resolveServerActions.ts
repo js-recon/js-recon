@@ -1,10 +1,10 @@
-import chalk from "chalk";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import path from "path";
 import { Chunks } from "../../utility/interfaces.js";
 import * as globals from "../../utility/globals.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Derives the Next.js App Router page route from a chunk file path.
@@ -356,7 +356,7 @@ interface ServerActionEntry {
  *    are recorded for reference.
  */
 const resolveServerActions = async (chunks: Chunks, directory: string): Promise<void> => {
-    console.log(chalk.cyan("[i] Resolving Next.js Server Actions"));
+    printMsg(MSG.Header, "[i] Resolving Next.js Server Actions");
 
     const importedBy = new Map<string, Set<string>>();
     for (const [id, chunk] of Object.entries(chunks)) {
@@ -448,11 +448,11 @@ const resolveServerActions = async (chunks: Chunks, directory: string): Promise<
             if (callSite && callSite.args.length > 0) {
                 const hints = callSite.args.map(getArgHint);
                 body = JSON.stringify(hints);
-                console.log(chalk.cyan(`    [i] Args for '${entry.actionName || entry.actionId}': ${body}`));
+                printMsg(MSG.Header, `    [i] Args for '${entry.actionName || entry.actionId}': ${body}`);
             }
 
             const logLabel = entry.actionName ? `${entry.actionName} (${entry.actionId})` : entry.actionId;
-            console.log(chalk.blue(`[+] Server Action '${logLabel}' at route '${route}' (chunk ${chunk.id})`));
+            printMsg(MSG.Info, `[+] Server Action '${logLabel}' at route '${route}' (chunk ${chunk.id})`);
 
             globals.addOpenapiOutput({
                 url: route,

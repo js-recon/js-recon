@@ -1,7 +1,7 @@
-import chalk from "chalk";
 import { execSync, spawn } from "child_process";
 import path from "path";
 import { parse as shellParse } from "shell-quote";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 const isSjInstalled = (sjBin: string): boolean => {
     try {
@@ -20,13 +20,13 @@ export const runSwaggerJacker = (
 ): Promise<void> => {
     return new Promise((resolve) => {
         if (!isSjInstalled(sjBin)) {
-            console.error(chalk.red(`[!] ${sjBin} not found in PATH.`));
-            console.error(chalk.yellow("    Install: go install github.com/BishopFox/sj@latest"));
-            console.error(chalk.yellow("    Then re-run with --sj."));
+            printMsg(MSG.Err, `[!] ${sjBin} not found in PATH.`);
+            printMsg(MSG.Warn, "    Install: go install github.com/BishopFox/sj@latest");
+            printMsg(MSG.Warn, "    Then re-run with --sj.");
             process.exit(28);
         }
 
-        console.log(chalk.cyan("[i] Running sj (swagger-jacker) against the mapped OpenAPI spec"));
+        printMsg(MSG.Header, "[i] Running sj (swagger-jacker) against the mapped OpenAPI spec");
 
         const baseArgs = [
             "automate",
@@ -50,22 +50,22 @@ export const runSwaggerJacker = (
         proc.stdout.on("data", (chunk: Buffer) => {
             const msg = chunk.toString().trim();
             if (msg) {
-                console.log(chalk.green(`[sj] ${msg}`));
+                printMsg(MSG.Run, `[sj] ${msg}`);
             }
         });
 
         proc.stderr.on("data", (chunk: Buffer) => {
             const msg = chunk.toString().trim();
             if (msg) {
-                console.error(chalk.yellow(`[sj] ${msg}`));
+                printMsg(MSG.Warn, `[sj] ${msg}`);
             }
         });
 
         proc.on("close", (code) => {
             if (code === 0) {
-                console.log(chalk.green("[✓] sj run complete"));
+                printMsg(MSG.Run, "[✓] sj run complete");
             } else {
-                console.log(chalk.yellow(`[!] sj exited with code ${code}`));
+                printMsg(MSG.Warn, `[!] sj exited with code ${code}`);
             }
             resolve();
         });

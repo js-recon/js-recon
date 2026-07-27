@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
-import chalk from "chalk";
 import strings from "../../strings/index.js";
 import { resolveJsPathCandidate, confirmJsContentType } from "./generic_scanAttributesForJs.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Parses the `// File Source: <url>` header every generic-downloaded file carries
@@ -77,7 +77,7 @@ const generic_stringsDiscovery = async (
     try {
         await strings(outputDir, tmpStringsFile, false, "", false, false, false);
     } catch (err) {
-        console.error(chalk.yellow(`[!] Generic strings discovery pass failed: ${err}`));
+        printMsg(MSG.Warn, `[!] Generic strings discovery pass failed: ${err}`);
         return [];
     }
 

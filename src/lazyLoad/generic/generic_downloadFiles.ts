@@ -1,10 +1,10 @@
-import chalk from "chalk";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import makeRequest from "../../utility/makeReq.js";
 import { getURLDirectory } from "../../utility/urlUtils.js";
 import * as lazyLoadGlobals from "../globals.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Synthesizes an on-disk filename for a generic-tech JS URL. downloadFilesUtil.ts's
@@ -34,7 +34,7 @@ export const synthesizeFilename = (url: string): string => {
 const generic_downloadFiles = async (urls: string[], output: string, threads: number): Promise<void> => {
     if (urls.length === 0) return;
 
-    console.log(chalk.cyan(`[i] Attempting to download ${urls.length} generic JS file(s)`));
+    printMsg(MSG.Header, `[i] Attempting to download ${urls.length} generic JS file(s)`);
 
     let downloadCount = 0;
     let cursor = 0;
@@ -48,7 +48,7 @@ const generic_downloadFiles = async (urls: string[], output: string, threads: nu
 
             const res = await makeRequest(url, {});
             if (!res) {
-                console.error(chalk.red(`[!] Failed to download: ${url}`));
+                printMsg(MSG.Err, `[!] Failed to download: ${url}`);
                 return;
             }
 
@@ -59,7 +59,7 @@ const generic_downloadFiles = async (urls: string[], output: string, threads: nu
             lazyLoadGlobals.recordJsFileHash(crypto.createHash("sha256").update(rawText).digest("hex"));
             downloadCount++;
         } catch (err) {
-            console.error(chalk.red(`[!] Failed to download: ${url} : ${err}`));
+            printMsg(MSG.Err, `[!] Failed to download: ${url} : ${err}`);
         }
     };
 
@@ -74,7 +74,7 @@ const generic_downloadFiles = async (urls: string[], output: string, threads: nu
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
     if (downloadCount > 0) {
-        console.log(chalk.green(`[✓] Downloaded ${downloadCount} generic JS file(s) to ${output} directory`));
+        printMsg(MSG.Run, `[✓] Downloaded ${downloadCount} generic JS file(s) to ${output} directory`);
     }
 };
 

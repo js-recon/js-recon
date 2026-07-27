@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import fs from "fs";
@@ -43,13 +43,13 @@ interface XhrEntry {
  * immediately after each iteration; no persistent AST cache is maintained.
  */
 const vue_resolveXhr = async (directory: string, frameworkName = "Vue.JS"): Promise<void> => {
-    console.log(chalk.cyan(`[i] Resolving ${frameworkName} XMLHttpRequest instances`));
+    printMsg(MSG.Header, `[i] Resolving ${frameworkName} XMLHttpRequest instances`);
 
     let files: string[];
     try {
         files = fs.readdirSync(directory, { recursive: true, encoding: "utf8" }) as string[];
     } catch {
-        console.error(chalk.red(`[!] Could not read directory: ${directory}`));
+        printMsg(MSG.Err, `[!] Could not read directory: ${directory}`);
         return;
     }
 
@@ -75,10 +75,9 @@ const vue_resolveXhr = async (directory: string, frameworkName = "Vue.JS"): Prom
         const sz = fs.statSync(fp).size;
         if (sz > MAX_MAP_FILE_SIZE_BYTES) continue;
         if (callerTotalBytes + sz > MAX_TOTAL_CALLER_SIZE_BYTES) {
-            console.error(
-                chalk.yellow(
-                    `[!] XHR caller lookup capped at 50 MB total — ${files.length - allFilePaths.length} file(s) excluded from taint analysis`
-                )
+            printMsg(
+                MSG.Warn,
+                `[!] XHR caller lookup capped at 50 MB total — ${files.length - allFilePaths.length} file(s) excluded from taint analysis`
             );
             break;
         }
@@ -307,15 +306,15 @@ const vue_resolveXhr = async (directory: string, frameworkName = "Vue.JS"): Prom
 
     // Output and register with OpenAPI collector
     for (const entry of entries) {
-        console.log(chalk.blue(`[+] Found XHR call in "${entry.filePath}":${entry.fileLine}`));
-        console.log(chalk.green(`    URL: ${entry.url}`));
+        printMsg(MSG.Info, `[+] Found XHR call in "${entry.filePath}":${entry.fileLine}`);
+        printMsg(MSG.Run, `    URL: ${entry.url}`);
         if (entry.method !== "GET" || Object.keys(entry.headers).length > 0 || entry.body) {
-            console.log(chalk.green(`    Method: ${entry.method}`));
+            printMsg(MSG.Run, `    Method: ${entry.method}`);
         }
         if (Object.keys(entry.headers).length > 0) {
-            console.log(chalk.green(`    Headers: ${JSON.stringify(entry.headers)}`));
+            printMsg(MSG.Run, `    Headers: ${JSON.stringify(entry.headers)}`);
         }
-        if (entry.body) console.log(chalk.green(`    Body: ${entry.body}`));
+        if (entry.body) printMsg(MSG.Run, `    Body: ${entry.body}`);
 
         const urlStr = entry.url;
         const looksLikeUrl =
@@ -340,7 +339,7 @@ const vue_resolveXhr = async (directory: string, frameworkName = "Vue.JS"): Prom
         });
     }
 
-    console.log(chalk.green(`[✓] Found and resolved ${totalXhrCalls} XHR call(s) across ${frameworkName} files`));
+    printMsg(MSG.Run, `[✓] Found and resolved ${totalXhrCalls} XHR call(s) across ${frameworkName} files`);
 };
 
 export default vue_resolveXhr;

@@ -1,8 +1,8 @@
-import chalk from "chalk";
 import makeRequest from "../../utility/makeReq.js";
 import { getJsUrls, pushToJsUrls } from "../globals.js";
 import resolvePath from "../../utility/resolvePath.js";
 import { FoundJsFiles } from "../../utility/interfaces.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 // for parsing
 import parser from "@babel/parser";
@@ -55,14 +55,14 @@ export const parseJSFileContent = async (content) => {
  * @returns {Promise<string[]>} - A promise that resolves to an array of absolute URLs pointing to JavaScript files found in the page.
  */
 const nuxt_stringAnalysisJSFiles = async (url) => {
-    console.log(chalk.cyan("[i] Analyzing strings in the files found"));
+    printMsg(MSG.Header, "[i] Analyzing strings in the files found");
 
     while (true) {
         // get all the JS URLs
         const js_urls = getJsUrls();
 
         if (js_urls.length === 0) {
-            console.error(chalk.red("[!] No JS files found for string analysis"));
+            printMsg(MSG.Err, "[!] No JS files found for string analysis");
             break;
         }
 
@@ -107,7 +107,7 @@ const nuxt_stringAnalysisJSFiles = async (url) => {
     // dedupe the files
     filesFound = [...new Set(filesFound)];
 
-    console.log(chalk.green(`[✓] Found ${filesFound.length} JS files from string analysis`));
+    printMsg(MSG.Run, `[✓] Found ${filesFound.length} JS files from string analysis`);
 
     return filesFound;
 };

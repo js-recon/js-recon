@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
-import chalk from "chalk";
 import makeRequest from "../../utility/makeReq.js";
 import { isJsContentType } from "./generic_jsMimeTypes.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Resolves value against baseUrl and returns the href if it's a network-fetchable
@@ -93,7 +93,7 @@ export const confirmJsContentType = async (candidates: string[], concurrency: nu
             }
 
             if (isJsContentType(contentType)) {
-                console.log(chalk.green(`[✓] Confirmed JS via Content-Type: ${url}`));
+                printMsg(MSG.Run, `[✓] Confirmed JS via Content-Type: ${url}`);
                 confirmed.push(url);
             }
         }
