@@ -823,15 +823,21 @@ export default async (cmd: any): Promise<void> => {
                 }
 
                 fs.mkdirSync(thisTargetDir, { recursive: true });
-                await processUrl(
-                    url,
-                    thisTargetDir,
-                    thisTargetDir,
-                    cmd,
-                    true,
-                    cmd._includeMethods ?? [],
-                    cmd._excludeMethods ?? []
-                );
+                try {
+                    await processUrl(
+                        url,
+                        thisTargetDir,
+                        thisTargetDir,
+                        cmd,
+                        true,
+                        cmd._includeMethods ?? [],
+                        cmd._excludeMethods ?? []
+                    );
+                } catch (error) {
+                    console.error(chalk.bgRed(`[!] Unhandled error while processing ${url}: ${error}`));
+                    process.exitCode = 1;
+                    continue;
+                }
 
                 const domainDbPath = `${thisTargetDir}/js-recon.db`;
                 if (fs.existsSync(domainDbPath)) {
