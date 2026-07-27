@@ -172,11 +172,7 @@ const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
                 const memberExpression = step.checkAssignmentExist.memberExpression;
 
                 if (selectedNode && memberExpression) {
-                    const assignmentNode = findMemberExpressionAssignment(
-                        selectedNode,
-                        toMatch,
-                        matchList[step.checkAssignmentExist.name].scope
-                    );
+                    const assignmentNode = findMemberExpressionAssignment(selectedNode, toMatch);
 
                     if (assignmentNode) {
                         matchList[step.name] = { node: assignmentNode, scope: ast };
