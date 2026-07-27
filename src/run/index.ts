@@ -212,7 +212,15 @@ const processUrl = async (
                 console.log(chalk.bgCyan(`[*] Running refactor (${detectedBundlerTechReact})...`));
                 resetSkipStep();
                 await Promise.race([
-                    refactor(mappedJsonFileReact, refactorOutputDirReact, detectedBundlerTechReact, false),
+                    refactor(
+                        mappedJsonFileReact,
+                        refactorOutputDirReact,
+                        detectedBundlerTechReact,
+                        false,
+                        undefined,
+                        undefined,
+                        `${outputDir}/${targetHost}/assets`
+                    ),
                     getSkipStepPromise(),
                 ]);
                 if (shouldSkipTarget()) return;
