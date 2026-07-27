@@ -78,7 +78,12 @@ const angular_recursiveChunkImports = async (seedUrls: string[], threads: number
             const importPaths = extractImportPaths(body);
 
             for (const importPath of importPaths) {
-                const resolvedUrl = resolvePath(url, importPath);
+                let resolvedUrl: string;
+                try {
+                    resolvedUrl = resolvePath(url, importPath);
+                } catch {
+                    continue;
+                }
                 if (!visited.has(resolvedUrl)) {
                     roundDiscovered.add(resolvedUrl);
                 }

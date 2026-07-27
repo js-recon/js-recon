@@ -90,6 +90,13 @@ const vue_recursiveClientSidePathDownload = async (
             const errors: string[] = [];
             let cursor = 0;
             const workerCount = Math.max(1, Math.min(threads, batch.length));
+            // `threads` is meant to be a global concurrency budget. Each concurrent page worker
+            // here runs its own `vue_discoverJsFiles` with further internal concurrent discovery
+            // loops, so passing the full `threads` value down would multiply out to
+            // workerCount * threads concurrent requests. Give nested discovery a budget of one
+            // whenever more than one page is being crawled concurrently, keeping the total
+            // in-flight request count bounded by `threads`.
+            const nestedThreads = workerCount > 1 ? 1 : threads;
 
             const worker = async () => {
                 while (cursor < batch.length) {
@@ -101,7 +108,7 @@ const vue_recursiveClientSidePathDownload = async (
                             onFilesDiscovered,
                             includeMethods,
                             excludeMethods,
-                            threads
+                            nestedThreads
                         );
 
                         for (const file of jsFiles) {

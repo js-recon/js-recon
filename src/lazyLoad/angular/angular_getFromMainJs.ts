@@ -18,7 +18,15 @@ const angular_getFromMainJs = async (mainJsUrl: string): Promise<string[]> => {
 
     const importPaths = extractImportPaths(mainJsBody);
 
-    return importPaths.map((importPath) => resolvePath(mainJsUrl, importPath));
+    const resolvedPaths: string[] = [];
+    for (const importPath of importPaths) {
+        try {
+            resolvedPaths.push(resolvePath(mainJsUrl, importPath));
+        } catch {
+            continue;
+        }
+    }
+    return resolvedPaths;
 };
 
 export default angular_getFromMainJs;

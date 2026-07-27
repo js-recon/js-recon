@@ -38,8 +38,9 @@ describe("findAssetsDir", () => {
         tmpDirs.push(hostDir);
         fs.mkdirSync(path.join(hostDir, "assets"));
         fs.mkdirSync(path.join(hostDir, "output"), { recursive: true });
-        const mappedJsonPath = path.join(hostDir, "mapped.json");
-        fs.writeFileSync(mappedJsonPath, "{}");
+        const absoluteMappedJsonPath = path.join(hostDir, "mapped.json");
+        const mappedJsonPath = path.relative(process.cwd(), absoluteMappedJsonPath);
+        fs.writeFileSync(absoluteMappedJsonPath, "{}");
 
         expect(findAssetsDir(mappedJsonPath)).toBe(path.join(hostDir, "assets"));
     });
@@ -64,5 +65,16 @@ describe("findAssetsDir", () => {
         fs.writeFileSync(mappedJsonPath, "{}");
 
         expect(findAssetsDir(mappedJsonPath, path.join(mappedJsonDir, "does-not-exist"))).toBeNull();
+    });
+
+    it("returns null (not a crash) when the explicit assetsDir override is a file, not a directory", () => {
+        const mappedJsonDir = fs.mkdtempSync(path.join(os.tmpdir(), "jsr-mapped-"));
+        tmpDirs.push(mappedJsonDir);
+        const mappedJsonPath = path.join(mappedJsonDir, "mapped.json");
+        fs.writeFileSync(mappedJsonPath, "{}");
+        const filePath = path.join(mappedJsonDir, "not-a-dir");
+        fs.writeFileSync(filePath, "");
+
+        expect(findAssetsDir(mappedJsonPath, filePath)).toBeNull();
     });
 });

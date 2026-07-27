@@ -112,7 +112,7 @@ const next_parseLayoutJs = async (baseUrl: string, urls: string[], threads: numb
                 continue;
             }
 
-            if (hreqResult.status === 200) {
+            if (hreqResult && hreqResult.status === 200) {
                 console.log(chalk.green("[✓] Found new client side URL: ", newUrl));
                 const jsFiles = await next_getJSScript(newUrl);
                 toReturn.push(...jsFiles);

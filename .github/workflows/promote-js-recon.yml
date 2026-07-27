@@ -404,8 +404,11 @@ jobs:
           CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
           if [[ ! -x "$CHROME" ]]; then
             echo "Pre-installed Chrome not found; downloading a Chrome-for-Testing build..."
-            LINE="$(npx --yes @puppeteer/browsers install chrome@stable | tail -1)"
-            CHROME="${LINE#* }"
+            CHROME="$(npx --yes @puppeteer/browsers install chrome@stable --format "{{path}}")"
+          fi
+          if [[ ! -x "$CHROME" ]]; then
+            echo "Resolved Chrome path is not executable: $CHROME"
+            exit 1
           fi
           echo "Using Chrome at: $CHROME"
           echo "PUPPETEER_EXECUTABLE_PATH=$CHROME" >> "$GITHUB_ENV"

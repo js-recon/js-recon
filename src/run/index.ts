@@ -210,6 +210,17 @@ const processUrl = async (
                 const refactorOutputDirReact = isBatch ? `${workingDir}/refactored` : "refactored";
                 if (fs.existsSync(refactorOutputDirReact)) fs.rmSync(refactorOutputDirReact, { recursive: true });
                 console.log(chalk.bgCyan(`[*] Running refactor (${detectedBundlerTechReact})...`));
+                // Vendor chunks may have been downloaded under a different host than the target
+                // (CDN) — resolve the assets dir from an actual downloaded JS URL's host instead
+                // of always assuming targetHost, mirroring getCdnDir's approach for the map step.
+                let reactAssetsHostDir = targetHost;
+                for (const jsUrl of getJsUrls()) {
+                    const jsUrlHost = new URL(jsUrl).host.replace(":", "_");
+                    if (jsUrlHost !== targetHost) {
+                        reactAssetsHostDir = jsUrlHost;
+                        break;
+                    }
+                }
                 resetSkipStep();
                 await Promise.race([
                     refactor(
@@ -219,7 +230,7 @@ const processUrl = async (
                         false,
                         undefined,
                         undefined,
-                        `${outputDir}/${targetHost}/assets`
+                        `${outputDir}/${reactAssetsHostDir}/assets`
                     ),
                     getSkipStepPromise(),
                 ]);

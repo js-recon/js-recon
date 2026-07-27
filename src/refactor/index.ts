@@ -64,7 +64,11 @@ import {
  */
 export function findAssetsDir(mappedJsonPath: string, explicitAssetsDir?: string): string | null {
     const assetsDir = explicitAssetsDir ?? path.join(path.dirname(path.resolve(mappedJsonPath)), "assets");
-    return fs.existsSync(assetsDir) ? assetsDir : null;
+    try {
+        return fs.statSync(assetsDir).isDirectory() ? assetsDir : null;
+    } catch {
+        return null;
+    }
 }
 
 /**

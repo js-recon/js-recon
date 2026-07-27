@@ -16,7 +16,13 @@ export const runWithConcurrency = async <T>(
     const runWorker = async () => {
         while (cursor < items.length) {
             const index = cursor++;
-            await worker(items[index], index);
+            try {
+                await worker(items[index], index);
+            } catch (err) {
+                // Best-effort: one bad item shouldn't abort the whole Promise.all batch and
+                // starve the other concurrent workers of their remaining items.
+                console.error(`[!] runWithConcurrency: worker failed for item at index ${index}: ${err}`);
+            }
         }
     };
 
