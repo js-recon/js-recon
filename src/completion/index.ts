@@ -2,280 +2,41 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import { buildProgram } from "../cliProgram.js";
+import { buildCommandTree, type CommandNode, type OptionEntry } from "./introspect.js";
 
-const COMMANDS = [
-    "lazyload",
-    "endpoints",
-    "strings",
-    "proxy",
-    "map",
-    "refactor",
-    "analyze",
-    "report",
-    "run",
-    "load",
-    "fingerprint",
-    "mcp",
-    "cs-mast",
-    "sourcemaps",
-    "completion",
-];
+function bashLeafOpts(node: CommandNode): string {
+    return [...node.options.flatMap((o) => o.flags), ...node.argumentChoices].join(" ");
+}
 
-const FLAGS: Record<string, string[]> = {
-    lazyload: [
-        "-u",
-        "--url",
-        "-o",
-        "--output",
-        "--strict-scope",
-        "-s",
-        "--scope",
-        "-t",
-        "--threads",
-        "--subsequent-requests",
-        "--urls-file",
-        "--proxy-config",
-        "--ignore-proxy-env",
-        "--cache-file",
-        "--disable-cache",
-        "--cache-only",
-        "-y",
-        "--yes",
-        "--timeout",
-        "-k",
-        "--insecure",
-        "--no-sandbox",
-        "--build-id",
-        "--sourcemap-dir",
-        "--research",
-        "--research-output",
-        "--max-iterations",
-        "--max-js-size",
-        "--lazyload-timeout",
-        "--max-pages",
-        "--include-methods",
-        "--exclude-methods",
-        "--list-methods",
-    ],
-    endpoints: [
-        "-u",
-        "--url",
-        "-d",
-        "--directory",
-        "-o",
-        "--output",
-        "--output-format",
-        "-t",
-        "--tech",
-        "-l",
-        "--list",
-        "--mapped-json",
-    ],
-    strings: [
-        "-d",
-        "--directory",
-        "-o",
-        "--output",
-        "-e",
-        "--extract-urls",
-        "--extracted-url-path",
-        "-p",
-        "--permutate",
-        "--openapi",
-        "-s",
-        "--scan-secrets",
-        "--trufflehog",
-    ],
-    // Nested `proxy <method>` subcommands aren't drilled into by this generator (no existing
-    // precedent for nested-subcommand completion in this file) — completing "proxy" itself
-    // offers the method names as the next word.
-    proxy: ["aws", "oxylabs", "socks", "http"],
-    map: [
-        "-d",
-        "--directory",
-        "-t",
-        "--tech",
-        "-l",
-        "--list",
-        "-o",
-        "--output",
-        "-f",
-        "--format",
-        "-i",
-        "--interactive",
-        "-c",
-        "--command",
-        "--ai",
-        "--ai-threads",
-        "--ai-provider",
-        "--ai-endpoint",
-        "--ai-api-key",
-        "--model",
-        "--openapi",
-        "--openapi-output",
-        "--openapi-chunk-tag",
-        "--no-graphql",
-        "--ngql",
-        "--max-recursion-depth",
-        "--max-heap",
-    ],
-    refactor: [
-        "-m",
-        "--mapped-json",
-        "-o",
-        "--output",
-        "-t",
-        "--tech",
-        "-l",
-        "--list",
-        "--collisions",
-        "--sq",
-        "--signature-quality",
-        "--refresh-cache",
-        "--skip-cache-checks",
-        "--no-remote",
-        "--remote-collisions",
-        "--scat",
-        "--detect-version",
-        "--detect-version-config",
-        "--detect-version-dynamic-threshold",
-        "--detect-version-dynamic-conf-purge",
-    ],
-    analyze: [
-        "-r",
-        "--rules",
-        "-m",
-        "--mapped-json",
-        "-t",
-        "--tech",
-        "--openapi",
-        "-l",
-        "--list",
-        "--validate",
-        "-o",
-        "--output",
-    ],
-    report: [
-        "-s",
-        "--sqlite-db",
-        "-m",
-        "--mapped-json",
-        "-a",
-        "--analyze-json",
-        "-e",
-        "--endpoints-json",
-        "--map-openapi",
-        "--mapped-openapi-json",
-        "-o",
-        "--output",
-        "--sj",
-        "--sj-bin",
-        "--sj-args",
-    ],
-    run: [
-        "-u",
-        "--url",
-        "-r",
-        "--rules",
-        "-c",
-        "--command",
-        "-o",
-        "--output",
-        "--strict-scope",
-        "-s",
-        "--scope",
-        "-t",
-        "--threads",
-        "--proxy-config",
-        "--ignore-proxy-env",
-        "--cache-file",
-        "--disable-cache",
-        "--cache-only",
-        "-y",
-        "--yes",
-        "--secrets",
-        "--trufflehog",
-        "--sj",
-        "--sj-bin",
-        "--sj-args",
-        "--ai",
-        "--ai-threads",
-        "--ai-provider",
-        "--ai-endpoint",
-        "--ai-api-key",
-        "--model",
-        "--map-openapi-chunk-tag",
-        "--no-graphql",
-        "--ngql",
-        "--timeout",
-        "-k",
-        "--insecure",
-        "--no-sandbox",
-        "--sourcemap-dir",
-        "--research",
-        "--research-output",
-        "--max-iterations",
-        "--max-js-size",
-        "--lazyload-timeout",
-        "--max-heap",
-        "--max-pages",
-        "--include-methods",
-        "--exclude-methods",
-        "--list-methods",
-        "--cs-mast-tech-detect-threshold",
-    ],
-    load: ["-c", "--caido", "-u", "--url", "--cache-file"],
-    fingerprint: [
-        "-u",
-        "--url",
-        "-o",
-        "--output",
-        "-f",
-        "--format",
-        "-t",
-        "--threads",
-        "--timeout",
-        "-k",
-        "--insecure",
-        "--no-sandbox",
-    ],
-    mcp: [
-        "--cli",
-        "--server",
-        "-c",
-        "--chat",
-        "--config",
-        "--api-key",
-        "--model",
-        "--provider",
-        "--no-refresh-claude-creds",
-        "--claude-client-id",
-    ],
-    "cs-mast": [
-        "-o",
-        "--output",
-        "--ct",
-        "--collision-table",
-        "--min-collisions",
-        "--co",
-        "--collision-output",
-        "--cf",
-        "--collision-format",
-        "--scat",
-        "--sinc",
-        "--all-scat-permutations",
-        "--perm-output",
-        "--perm-concurrency",
-    ],
-    sourcemaps: ["-i", "--input", "-o", "--output"],
-    completion: ["bash", "zsh", "fish"],
-};
+// Recursively emits nested `case` blocks so multi-level subcommands (e.g. `proxy aws`) get their
+// own flags completed, not just the parent's child-name list. `wordIndex` is the COMP_WORDS index
+// this node's name occupies (1 for top-level commands, 2 for their children, and so on).
+function generateBashCaseBranch(node: CommandNode, wordIndex: number): string {
+    const indent = "    ".repeat(wordIndex + 1);
 
-function generateBashCompletion(): string {
-    const cmdList = COMMANDS.join(" ");
-    const caseBranches = Object.entries(FLAGS)
-        .map(([cmd, flags]) => `        ${cmd})\n            opts="${flags.join(" ")}"\n            ;;`)
-        .join("\n");
+    if (node.subcommands.length === 0) {
+        return `${indent}${node.name})
+${indent}    opts="${bashLeafOpts(node)}"
+${indent}    ;;`;
+    }
+
+    const childBranches = node.subcommands.map((child) => generateBashCaseBranch(child, wordIndex + 1)).join("\n");
+    const childNames = node.subcommands.map((c) => c.name).join(" ");
+
+    return `${indent}${node.name})
+${indent}    case "\${words[${wordIndex + 1}]:-}" in
+${childBranches}
+${indent}        *)
+${indent}            opts="${childNames}"
+${indent}            ;;
+${indent}    esac
+${indent}    ;;`;
+}
+
+function generateBashCompletion(tree: CommandNode[]): string {
+    const cmdList = tree.map((n) => n.name).join(" ");
+    const caseBranches = tree.map((node) => generateBashCaseBranch(node, 1)).join("\n");
 
     return `# js-recon bash completion
 # Installed automatically by: js-recon completion bash
@@ -292,9 +53,8 @@ _js_recon_completion() {
         return 0
     fi
 
-    local cmd="\${words[1]}"
     opts=""
-    case "\${cmd}" in
+    case "\${words[1]}" in
 ${caseBranches}
     esac
 
@@ -305,29 +65,86 @@ complete -F _js_recon_completion js-recon
 `;
 }
 
-function generateZshCompletion(): string {
-    const commandDescriptions = [
-        "'lazyload:Run lazy load module'",
-        "'endpoints:Extract client-side endpoints'",
-        "'strings:Extract strings from JS files'",
-        "'proxy:Manage proxy configuration (AWS API Gateway IP rotation, SOCKS/HTTP, Oxylabs)'",
-        "'map:Map all the functions'",
-        "'refactor:Refactor the code'",
-        "'analyze:Analyze the code'",
-        "'report:Generate a report'",
-        "'run:Run all modules'",
-        "'load:Populate response cache from a Caido/Burp request history export'",
-        "'fingerprint:Detect front-end frameworks across one or more URLs'",
-        "'mcp:AI-powered CLI / one-shot chat / MCP server'",
-        "'cs-mast:Compute CS-MAST hashes for downloaded JS files'",
-        "'sourcemaps:Extract source files from .map sourcemap file(s)'",
-        "'completion:Generate shell completion scripts'",
-    ].join("\n                ");
+// zsh escaping: backslash first, then compsys metacharacters, then the shell-level single-quote
+// trick last (since every spec string here is wrapped in '...').
+function zshBracketDesc(desc: string): string {
+    return desc.replace(/\\/g, "\\\\").replace(/\]/g, "\\]").replace(/\[/g, "\\[").replace(/'/g, "'\\''");
+}
 
-    const caseBranches = Object.entries(FLAGS)
-        .map(([cmd, flags]) => {
-            const flagArgs = flags.map((f) => `'${f}'`).join(" ");
-            return `                (${cmd})\n                    _arguments '*: :(${flagArgs})'\n                    ;;`;
+// Used inside `_describe` `name:description` arrays, where `:` is the field delimiter.
+function zshDescribeDesc(desc: string): string {
+    return desc.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+}
+
+function zshOptionSpec(option: OptionEntry): string {
+    const desc = zshBracketDesc(option.description);
+    const short = option.flags.find((f) => f.length === 2 && f.startsWith("-") && !f.startsWith("--"));
+    const long = option.flags.find((f) => f.startsWith("--"));
+    if (short && long) return `'(${short} ${long})'{${short},${long}}'[${desc}]'`;
+    if (long) return `'${long}[${desc}]'`;
+    if (short) return `'${short}[${desc}]'`;
+    return "";
+}
+
+function zshDescribeEntry(node: CommandNode): string {
+    return `'${node.name}:${zshDescribeDesc(node.description)}'`;
+}
+
+function zshLeafArguments(node: CommandNode): string {
+    const parts: string[] = [];
+    if (node.argumentChoices.length > 0) {
+        parts.push(`'1: :(${node.argumentChoices.join(" ")})'`);
+    }
+    parts.push(...node.options.map(zshOptionSpec).filter(Boolean));
+    if (parts.length === 0) return ":";
+    return `_arguments ${parts.join(" ")}`;
+}
+
+// Recursively emits a nested `_arguments -C` + `case $state` block for a level of subcommands.
+// Reusing the generic `cmd`/`args` state labels at every nesting level is safe here because each
+// `_arguments -C` call is evaluated strictly before the `case $state` that reads its result — by
+// the time a nested level's `$state` is inspected, the outer level's value is no longer needed.
+function zshSubcommandBlock(nodes: CommandNode[], describeTag: string): string {
+    const entries = nodes.map(zshDescribeEntry).join("\n                                ");
+    const branches = nodes
+        .map((node) => {
+            const body = node.subcommands.length > 0 ? zshSubcommandBlock(node.subcommands, node.name) : zshLeafArguments(node);
+            return `                                (${node.name})
+                                    ${body}
+                                    ;;`;
+        })
+        .join("\n");
+
+    return `_arguments -C \\
+                        '1: :->cmd' \\
+                        '*::arg:->args'
+
+                    case \$state in
+                        cmd)
+                            local -a items
+                            items=(
+                                ${entries}
+                            )
+                            _describe -t items '${describeTag}' items
+                            ;;
+                        args)
+                            case \$line[1] in
+${branches}
+                            esac
+                            ;;
+                    esac`;
+}
+
+function generateZshCompletion(tree: CommandNode[]): string {
+    const commandDescriptions = tree.map(zshDescribeEntry).join("\n                ");
+
+    const caseBranches = tree
+        .map((node) => {
+            const body =
+                node.subcommands.length > 0 ? zshSubcommandBlock(node.subcommands, `${node.name} subcommand`) : zshLeafArguments(node);
+            return `                (${node.name})
+                    ${body}
+                    ;;`;
         })
         .join("\n");
 
@@ -365,24 +182,53 @@ _js_recon "\$@"
 `;
 }
 
-function generateFishCompletion(): string {
-    const cmdCompletions = COMMANDS.map((cmd) => `complete -c js-recon -f -n '__fish_use_subcommand' -a ${cmd}`).join(
-        "\n"
-    );
+function fishDesc(desc: string): string {
+    return desc.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
 
-    const flagCompletions = Object.entries(FLAGS)
-        .flatMap(([cmd, flags]) =>
-            flags.map((flag) => {
-                if (flag.startsWith("--")) {
-                    return `complete -c js-recon -n '__fish_seen_subcommand_from ${cmd}' -l ${flag.slice(2)}`;
-                } else if (flag.startsWith("-") && flag.length === 2) {
-                    return `complete -c js-recon -n '__fish_seen_subcommand_from ${cmd}' -s ${flag.slice(1)}`;
-                }
-                // positional (e.g. shell names for 'completion' subcommand)
-                return `complete -c js-recon -n '__fish_seen_subcommand_from ${cmd}' -a ${flag}`;
-            })
-        )
+function fishConditionForPath(namePath: string[]): string {
+    return namePath.map((name) => `__fish_seen_subcommand_from ${name}`).join("; and ");
+}
+
+// Recursively emits `complete` lines for a node's own flags/argument choices (gated on the full
+// name path having been seen so far) and, for each child, both a name-completion at this level
+// and a recursive call so the child's own flags are completed too (e.g. `proxy aws --<tab>`).
+function generateFishNode(node: CommandNode, parentPath: string[]): string[] {
+    const namePath = [...parentPath, node.name];
+    const cond = fishConditionForPath(namePath);
+    const lines: string[] = [];
+
+    for (const option of node.options) {
+        const short = option.flags.find((f) => f.length === 2 && f.startsWith("-") && !f.startsWith("--"));
+        const long = option.flags.find((f) => f.startsWith("--"));
+        const desc = fishDesc(option.description);
+        if (short && long) {
+            lines.push(`complete -c js-recon -n '${cond}' -s ${short.slice(1)} -l ${long.slice(2)} -d '${desc}'`);
+        } else if (long) {
+            lines.push(`complete -c js-recon -n '${cond}' -l ${long.slice(2)} -d '${desc}'`);
+        } else if (short) {
+            lines.push(`complete -c js-recon -n '${cond}' -s ${short.slice(1)} -d '${desc}'`);
+        }
+    }
+
+    if (node.argumentChoices.length > 0) {
+        lines.push(`complete -c js-recon -n '${cond}' -a '${node.argumentChoices.join(" ")}'`);
+    }
+
+    for (const child of node.subcommands) {
+        lines.push(`complete -c js-recon -f -n '${cond}' -a ${child.name} -d '${fishDesc(child.description)}'`);
+        lines.push(...generateFishNode(child, namePath));
+    }
+
+    return lines;
+}
+
+function generateFishCompletion(tree: CommandNode[]): string {
+    const cmdCompletions = tree
+        .map((node) => `complete -c js-recon -f -n '__fish_use_subcommand' -a ${node.name} -d '${fishDesc(node.description)}'`)
         .join("\n");
+
+    const flagCompletions = tree.flatMap((node) => generateFishNode(node, [])).join("\n");
 
     return `# js-recon fish completion
 # Installed automatically by: js-recon completion fish
@@ -468,13 +314,14 @@ compinit
 }
 
 function generateCompletionScript(shell: string): string {
+    const tree = buildCommandTree(buildProgram());
     switch (shell) {
         case "bash":
-            return generateBashCompletion();
+            return generateBashCompletion(tree);
         case "zsh":
-            return generateZshCompletion();
+            return generateZshCompletion(tree);
         case "fish":
-            return generateFishCompletion();
+            return generateFishCompletion(tree);
         default:
             throw new Error(`Unknown shell: ${shell}`);
     }
