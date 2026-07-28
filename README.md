@@ -78,23 +78,23 @@ js-recon run -u https://app.example.com
 
 `js-recon` provides a suite of commands for comprehensive JavaScript analysis. For detailed usage and examples, please refer to its full documentation.
 
-| Command       | Description                                                                      | Documentation                                                  |
-| ------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `lazyload`    | Downloads dynamically loaded JavaScript files from a target.                     | [Read Docs](https://js-recon.io/docs/docs/modules/lazyload)    |
-| `endpoints`   | Extracts API endpoints and client-side paths from JS files.                      | [Read Docs](https://js-recon.io/docs/docs/modules/endpoints)   |
-| `strings`     | Extracts strings, URLs, and potential secrets from JS files.                     | [Read Docs](https://js-recon.io/docs/docs/modules/strings)     |
-| `map`         | Maps function calls and analyzes code, with optional AI-powered descriptions.    | [Read Docs](https://js-recon.io/docs/docs/modules/map)         |
-| `proxy`       | Configures a proxy (AWS API Gateway IP rotation, SOCKS/HTTP, or Oxylabs) via `proxy aws`/`proxy oxylabs`/`proxy socks`/`proxy http`. | [Read Docs](https://js-recon.io/docs/docs/modules/proxy) |
-| `run`         | Runs all analysis modules automatically on a target.                             | [Read Docs](https://js-recon.io/docs/docs/modules/run)         |
-| `analyze`     | Analyzes the code.                                                               | [Read Docs](https://js-recon.io/docs/docs/modules/analyze)     |
-| `report`      | Generates a report from the analysis modules.                                    | [Read Docs](https://js-recon.io/docs/docs/modules/report)      |
-| `mcp`         | AI-powered interactive CLI, one-shot chat, and MCP stdio server.                 | [Read Docs](https://js-recon.io/docs/docs/modules/mcp)         |
-| `fingerprint` | Detects the JavaScript framework used by a target URL (JSON/JSONL output).       | [Read Docs](https://js-recon.io/docs/docs/modules/fingerprint) |
-| `refactor`    | Recovers readable JSX and strips library code from React (webpack/Vite) bundles. | [Read Docs](https://js-recon.io/docs/docs/modules/refactor)    |
-| `load`        | Populates the response cache from a Caido or Burp Suite export.                  | [Read Docs](https://js-recon.io/docs/docs/modules/load)        |
-| `cs-mast`     | Computes CS-MAST structural hashes for JS files and finds hash collisions.       | [Read Docs](https://js-recon.io/docs/docs/modules/cs-mast)     |
-| `sourcemaps`  | Extracts original source files from `.map` sourcemap files.                      | [Read Docs](https://js-recon.io/docs/docs/modules/sourcemaps)  |
-| `completion`  | Generates shell completion scripts for bash, zsh, or fish.                       | [Read Docs](https://js-recon.io/docs/docs/modules/completion)  |
+| Command       | Description                                                                                                                          | Documentation                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `lazyload`    | Downloads dynamically loaded JavaScript files from a target.                                                                         | [Read Docs](https://js-recon.io/docs/docs/modules/lazyload)    |
+| `endpoints`   | Extracts API endpoints and client-side paths from JS files.                                                                          | [Read Docs](https://js-recon.io/docs/docs/modules/endpoints)   |
+| `strings`     | Extracts strings, URLs, and potential secrets from JS files.                                                                         | [Read Docs](https://js-recon.io/docs/docs/modules/strings)     |
+| `map`         | Maps function calls and analyzes code, with optional AI-powered descriptions.                                                        | [Read Docs](https://js-recon.io/docs/docs/modules/map)         |
+| `proxy`       | Configures a proxy (AWS API Gateway IP rotation, SOCKS/HTTP, or Oxylabs) via `proxy aws`/`proxy oxylabs`/`proxy socks`/`proxy http`. | [Read Docs](https://js-recon.io/docs/docs/modules/proxy)       |
+| `run`         | Runs all analysis modules automatically on a target.                                                                                 | [Read Docs](https://js-recon.io/docs/docs/modules/run)         |
+| `analyze`     | Analyzes the code.                                                                                                                   | [Read Docs](https://js-recon.io/docs/docs/modules/analyze)     |
+| `report`      | Generates a report from the analysis modules.                                                                                        | [Read Docs](https://js-recon.io/docs/docs/modules/report)      |
+| `mcp`         | AI-powered interactive CLI, one-shot chat, and MCP stdio server.                                                                     | [Read Docs](https://js-recon.io/docs/docs/modules/mcp)         |
+| `fingerprint` | Detects the JavaScript framework used by a target URL (JSON/JSONL output).                                                           | [Read Docs](https://js-recon.io/docs/docs/modules/fingerprint) |
+| `refactor`    | Recovers readable JSX and strips library code from React (webpack/Vite) bundles.                                                     | [Read Docs](https://js-recon.io/docs/docs/modules/refactor)    |
+| `load`        | Populates the response cache from a Caido or Burp Suite export.                                                                      | [Read Docs](https://js-recon.io/docs/docs/modules/load)        |
+| `cs-mast`     | Computes CS-MAST structural hashes for JS files and finds hash collisions.                                                           | [Read Docs](https://js-recon.io/docs/docs/modules/cs-mast)     |
+| `sourcemaps`  | Extracts original source files from `.map` sourcemap files.                                                                          | [Read Docs](https://js-recon.io/docs/docs/modules/sourcemaps)  |
+| `completion`  | Generates shell completion scripts for bash, zsh, or fish.                                                                           | [Read Docs](https://js-recon.io/docs/docs/modules/completion)  |
 
 ## Key Features
 
