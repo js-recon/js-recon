@@ -225,7 +225,7 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
         .filter((f) => !fs.lstatSync(path.join(directory, f)).isDirectory())
         .sort();
 
-    const MAX_MAP_FILE_SIZE_BYTES = 1.5 * 1024 * 1024;
+    const MAX_MAP_FILE_SIZE_BYTES = 8 * 1024 * 1024;
     const MAX_TOTAL_CALLER_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
     let callerTotalBytes = 0;
     const allFilePaths: string[] = [];
@@ -269,7 +269,7 @@ const vue_resolveHttpClient = async (directory: string, frameworkName = "Vue.JS"
         if (fs.statSync(filePath).size > MAX_MAP_FILE_SIZE_BYTES) {
             printMsg(
                 MSG.Warn,
-                `[!] Skipping ${file} (${(fs.statSync(filePath).size / 1024 / 1024).toFixed(1)} MB > 1.5 MB limit) — HTTP client coverage may be incomplete`
+                `[!] Skipping ${file} (${(fs.statSync(filePath).size / 1024 / 1024).toFixed(1)} MB > ${MAX_MAP_FILE_SIZE_BYTES / 1024 / 1024} MB limit) — HTTP client coverage may be incomplete`
             );
             continue;
         }

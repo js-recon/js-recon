@@ -93,7 +93,7 @@ const getReactConnections = async (directory: string, output: string, formats: s
     const fileFuncToChunkId = new Map<string, Map<string, string>>();
 
     // Pass 1: find root-level 2-char function declarations (Vite/Rolldown minification pattern)
-    const MAX_MAP_FILE_SIZE_BYTES = 1.5 * 1024 * 1024;
+    const MAX_MAP_FILE_SIZE_BYTES = 8 * 1024 * 1024;
     printMsg(MSG.Header, `[i] Scanning ${files.length} React JS files for functions`);
     for (const file of files) {
         const meta = parseFilename(file);

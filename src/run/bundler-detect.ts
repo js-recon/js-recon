@@ -36,7 +36,40 @@ const FRAMEWORK_TO_TECHS: Record<string, string[]> = {
 
 const DETECTION_SCAT: ScatCategory[] = ["lit", "decl", "loop", "cond"];
 const DETECTION_SCAT_DIR = "lit-decl-loop-cond";
-const DETECTION_SAMPLE_SIZE = 15;
+// Current react-webpack/react-vite buckets hold ~36 collision files each for this scat.
+// Sampling only 15 of them left match counts sensitive to which random subset was drawn —
+// close calls (e.g. two candidates within a few percent of each other) could flip which
+// tech "won" between identical runs against the same bundle. Set high enough to cover the
+// full bucket at its current size; `randomSample` still caps it if the bucket grows well
+// past this.
+const DETECTION_SAMPLE_SIZE = 200;
+
+// Literal bundler-runtime markers, checked before the CS-MAST-S structural comparison.
+// Module-loader glue and preload polyfills are emitted verbatim by the bundler itself —
+// unlike app/library code, minifiers don't rename these literal property/string
+// accesses, so they're a cheap, high-confidence signal when exactly one candidate's
+// markers are present. CS-MAST-S structural signatures can't discriminate reliably here:
+// they're computed over app + vendored library code, which is largely bundler-agnostic,
+// so two candidates can score closely even when only one bundler's runtime is actually
+// present in the bundle.
+const BUNDLER_MARKERS: Record<string, RegExp[]> = {
+    "react-webpack": [/__webpack_require__/, /__webpack_modules__/, /webpackJsonp/],
+    "react-vite": [/\.supports\(\s*["']modulepreload["']\s*\)/, /__vite__mapDeps/, /__vitePreload/],
+};
+
+/**
+ * Checks bundle code for literal bundler-runtime markers unique to each candidate tech.
+ * Returns the matching tech only when exactly one candidate's markers are present —
+ * ambiguous (multiple or zero matches) cases are left to the CS-MAST-S comparison.
+ */
+export function detectByMarker(chunks: Chunks, candidateTechs: string[]): string | null {
+    const allCode = Object.values(chunks)
+        .map((c) => c.code)
+        .filter(Boolean)
+        .join("\n");
+    const matched = candidateTechs.filter((tech) => (BUNDLER_MARKERS[tech] ?? []).some((re) => re.test(allCode)));
+    return matched.length === 1 ? matched[0] : null;
+}
 
 function randomSample<T>(arr: T[], n: number): T[] {
     const copy = [...arr];
@@ -83,6 +116,15 @@ export async function detectBundler(
     } catch {
         printMsg(MSG.Warn, "[!] Bundler detection: could not read mapped.json — skipping refactor.");
         return null;
+    }
+
+    const markerTech = detectByMarker(chunks, availableTechs);
+    if (markerTech) {
+        printMsg(
+            MSG.Header,
+            `[i] Bundler detection: ${markerTech} — matched via bundler runtime marker (skipping CS-MAST-S sampling)`
+        );
+        return markerTech;
     }
 
     const bundleSigs = generateBundleSignatures(chunks, DETECTION_SCAT);

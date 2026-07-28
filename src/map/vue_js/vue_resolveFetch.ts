@@ -128,7 +128,7 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
         .filter((f) => (f.endsWith(".js") || f.endsWith(".mjs")) && !f.includes("___subsequent_requests"))
         .filter((f) => !fs.lstatSync(path.join(directory, f)).isDirectory());
 
-    const MAX_MAP_FILE_SIZE_BYTES = 1.5 * 1024 * 1024;
+    const MAX_MAP_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 
     // Pre-pass: scan every file for object-literal properties whose value is a
     // function that ultimately calls fetch(). Their property names are the
@@ -197,7 +197,7 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
         if (fs.statSync(filePath).size > MAX_MAP_FILE_SIZE_BYTES) {
             printMsg(
                 MSG.Warn,
-                `[!] Skipping ${file} (${(fs.statSync(filePath).size / 1024 / 1024).toFixed(1)} MB > 1.5 MB limit) — fetch coverage may be incomplete`
+                `[!] Skipping ${file} (${(fs.statSync(filePath).size / 1024 / 1024).toFixed(1)} MB > ${MAX_MAP_FILE_SIZE_BYTES / 1024 / 1024} MB limit) — fetch coverage may be incomplete`
             );
             continue;
         }

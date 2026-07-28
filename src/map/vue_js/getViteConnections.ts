@@ -127,7 +127,7 @@ const getViteConnections = async (directory: string, output: string, formats: st
     // Single pass: parse each file once, extract functions + imports + exports.
     // This replaces the previous two-pass approach (Pass 1 + Pass 2) that parsed
     // every file twice and kept ASTs alive across both loops.
-    const MAX_MAP_FILE_SIZE_BYTES = 1.5 * 1024 * 1024;
+    const MAX_MAP_FILE_SIZE_BYTES = 8 * 1024 * 1024;
     printMsg(MSG.Header, `[i] Scanning ${files.length} JS files for root functions`);
     for (const file of files) {
         const meta = fileMeta.get(file);

@@ -15,7 +15,7 @@ const isSkippedFile = (filename: string): boolean => {
     return SKIP_PREFIXES.some((p) => base.startsWith(p));
 };
 
-const MAX_MAP_FILE_SIZE_BYTES = 1.5 * 1024 * 1024;
+const MAX_MAP_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 
 /**
  * Reads all Angular CLI (esbuild) JS chunks from the download directory and
