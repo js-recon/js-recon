@@ -1,3 +1,6 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { printMsg, MSG } from "../utility/printMsg.js";
 
 const COMMANDS = [
@@ -290,7 +293,7 @@ function generateBashCompletion(): string {
         .join("\n");
 
     return `# js-recon bash completion
-# Add to ~/.bashrc:  eval "$(js-recon completion bash)"
+# Installed automatically by: js-recon completion bash
 _js_recon_completion() {
     local cur prev words cword opts
     COMPREPLY=()
@@ -345,8 +348,7 @@ function generateZshCompletion(): string {
 
     return `#compdef js-recon
 # js-recon zsh completion
-# Add to ~/.zshrc:  eval "$(js-recon completion zsh)"
-# Or:               js-recon completion zsh > "\${fpath[1]}/_js-recon"
+# Installed automatically by: js-recon completion zsh
 
 _js_recon() {
     local state line
@@ -398,8 +400,8 @@ function generateFishCompletion(): string {
         .join("\n");
 
     return `# js-recon fish completion
-# Save to: ~/.config/fish/completions/js-recon.fish
-# Or run: js-recon completion fish > ~/.config/fish/completions/js-recon.fish
+# Installed automatically by: js-recon completion fish
+# (written to ~/.config/fish/completions/js-recon.fish, which fish auto-loads)
 
 function __fish_use_subcommand
     set -l cmd (commandline -poc)
@@ -429,24 +431,123 @@ ${flagCompletions}
 `;
 }
 
-export default function completion(shell: string | undefined): void {
+const RC_MARKER = "# JS Recon shell completion";
+
+function getCompletionDir(): string {
+    return path.join(os.homedir(), ".js-recon", "completion");
+}
+
+function getFishCompletionsDir(): string {
+    return path.join(os.homedir(), ".config", "fish", "completions");
+}
+
+// Path each shell's full generated script gets written to. Fish uses its own
+// auto-loaded completions dir instead of ~/.js-recon, so it needs no rc-file entry.
+function getInstalledScriptPath(shell: string): string {
+    switch (shell) {
+        case "bash":
+            return path.join(getCompletionDir(), "js-recon.bash");
+        case "zsh":
+            return path.join(getCompletionDir(), "_js-recon");
+        case "fish":
+            return path.join(getFishCompletionsDir(), "js-recon.fish");
+        default:
+            throw new Error(`Unknown shell: ${shell}`);
+    }
+}
+
+function getRcFilePath(shell: "bash" | "zsh"): string {
+    return path.join(os.homedir(), shell === "bash" ? ".bashrc" : ".zshrc");
+}
+
+// Small snippet printed for `--rc-file` — this is what actually goes in the user's rc file
+// (via `eval "$(js-recon completion <shell> --rc-file)"`), pointing at the full script on disk.
+function generateRcFileLoader(shell: "bash" | "zsh"): string {
+    const importantHeader = `# IMPORTANT: the contents of this command are expected to be present in
+# the shell's rc file, invoked as \`eval "$(js-recon completion ${shell} --rc-file)"\`.
+# Run \`js-recon completion ${shell}\` to (re)install.`;
+
+    if (shell === "bash") {
+        return `${importantHeader}
+if [ -f "$HOME/.js-recon/completion/js-recon.bash" ]; then
+    source "$HOME/.js-recon/completion/js-recon.bash"
+fi
+`;
+    }
+
+    return `${importantHeader}
+fpath=("$HOME/.js-recon/completion" $fpath)
+autoload -Uz compinit
+compinit
+`;
+}
+
+function generateCompletionScript(shell: string): string {
+    switch (shell) {
+        case "bash":
+            return generateBashCompletion();
+        case "zsh":
+            return generateZshCompletion();
+        case "fish":
+            return generateFishCompletion();
+        default:
+            throw new Error(`Unknown shell: ${shell}`);
+    }
+}
+
+// Writes the full script to disk and, for bash/zsh, wires a tiny loader entry into the
+// user's rc file (idempotent — checks RC_MARKER before appending).
+function installCompletion(shell: "bash" | "zsh" | "fish"): void {
+    const scriptPath = getInstalledScriptPath(shell);
+    fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
+    fs.writeFileSync(scriptPath, generateCompletionScript(shell));
+
+    if (shell === "fish") {
+        printMsg(MSG.Run, `[+] Installed fish completion to ${scriptPath}`);
+        printMsg(MSG.Run, "[+] Fish auto-loads this — no further action needed.");
+        return;
+    }
+
+    const rcPath = getRcFilePath(shell);
+    const rcContent = fs.existsSync(rcPath) ? fs.readFileSync(rcPath, "utf8") : "";
+
+    if (rcContent.includes(RC_MARKER)) {
+        printMsg(MSG.Run, `[+] Installed ${shell} completion to ${scriptPath}`);
+        printMsg(MSG.Run, `[+] ${rcPath} already wired for js-recon completion.`);
+        return;
+    }
+
+    const entry = `\n${RC_MARKER}\neval "$(js-recon completion ${shell} --rc-file)"\n`;
+    fs.appendFileSync(rcPath, entry);
+
+    printMsg(MSG.Run, `[+] Installed ${shell} completion to ${scriptPath}`);
+    printMsg(MSG.Run, `[+] Added completion loader to ${rcPath}`);
+    printMsg(MSG.Run, `[+] Restart your shell or run: source ${rcPath}`);
+}
+
+export default function completion(shell: string | undefined, rcFile?: boolean): void {
     if (!shell) {
         printMsg(MSG.Err, "[!] Shell type required. Usage: js-recon completion <bash|zsh|fish>");
         process.exit(1);
     }
 
-    switch (shell.toLowerCase()) {
-        case "bash":
-            process.stdout.write(generateBashCompletion());
-            break;
-        case "zsh":
-            process.stdout.write(generateZshCompletion());
-            break;
-        case "fish":
-            process.stdout.write(generateFishCompletion());
-            break;
-        default:
-            printMsg(MSG.Err, `[!] Unknown shell: "${shell}". Supported shells: bash, zsh, fish`);
-            process.exit(1);
+    const normalizedShell = shell.toLowerCase();
+    if (normalizedShell !== "bash" && normalizedShell !== "zsh" && normalizedShell !== "fish") {
+        printMsg(MSG.Err, `[!] Unknown shell: "${shell}". Supported shells: bash, zsh, fish`);
+        process.exit(1);
     }
+
+    if (rcFile) {
+        if (normalizedShell === "fish") {
+            printMsg(
+                MSG.Err,
+                '[!] --rc-file is not applicable to fish; fish auto-loads completions from "~/.config/fish/completions/".'
+            );
+            process.exit(1);
+        }
+        process.stdout.write(generateRcFileLoader(normalizedShell));
+        return;
+    }
+
+    installCompletion(normalizedShell);
 }

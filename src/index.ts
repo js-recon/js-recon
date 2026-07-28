@@ -849,18 +849,22 @@ program
 
 program
     .command("completion")
-    .description("Generate shell completion scripts for bash, zsh, or fish")
+    .description("Install shell completion for bash, zsh, or fish")
     .argument("<shell>", "Shell type: bash, zsh, or fish")
+    .option(
+        "--rc-file",
+        "Print the small rc-file loader snippet instead of installing (used internally by the generated rc entry)"
+    )
     .addHelpText(
         "after",
         `
 Examples:
-  eval "$(js-recon completion bash)"   # Add to ~/.bashrc
-  eval "$(js-recon completion zsh)"    # Add to ~/.zshrc
-  js-recon completion fish > ~/.config/fish/completions/js-recon.fish`
+  js-recon completion bash   # installs the script and wires ~/.bashrc automatically
+  js-recon completion zsh    # installs the script and wires ~/.zshrc automatically
+  js-recon completion fish   # installs to ~/.config/fish/completions/js-recon.fish (auto-loaded)`
     )
-    .action(async (shell) => {
-        completion(shell);
+    .action(async (shell, cmd) => {
+        completion(shell, !!cmd.rcFile);
     });
 
 program.parse(process.argv);
