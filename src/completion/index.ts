@@ -108,7 +108,8 @@ function zshSubcommandBlock(nodes: CommandNode[], describeTag: string): string {
     const entries = nodes.map(zshDescribeEntry).join("\n                                ");
     const branches = nodes
         .map((node) => {
-            const body = node.subcommands.length > 0 ? zshSubcommandBlock(node.subcommands, node.name) : zshLeafArguments(node);
+            const body =
+                node.subcommands.length > 0 ? zshSubcommandBlock(node.subcommands, node.name) : zshLeafArguments(node);
             return `                                (${node.name})
                                     ${body}
                                     ;;`;
@@ -141,7 +142,9 @@ function generateZshCompletion(tree: CommandNode[]): string {
     const caseBranches = tree
         .map((node) => {
             const body =
-                node.subcommands.length > 0 ? zshSubcommandBlock(node.subcommands, `${node.name} subcommand`) : zshLeafArguments(node);
+                node.subcommands.length > 0
+                    ? zshSubcommandBlock(node.subcommands, `${node.name} subcommand`)
+                    : zshLeafArguments(node);
             return `                (${node.name})
                     ${body}
                     ;;`;
@@ -225,7 +228,10 @@ function generateFishNode(node: CommandNode, parentPath: string[]): string[] {
 
 function generateFishCompletion(tree: CommandNode[]): string {
     const cmdCompletions = tree
-        .map((node) => `complete -c js-recon -f -n '__fish_use_subcommand' -a ${node.name} -d '${fishDesc(node.description)}'`)
+        .map(
+            (node) =>
+                `complete -c js-recon -f -n '__fish_use_subcommand' -a ${node.name} -d '${fishDesc(node.description)}'`
+        )
         .join("\n");
 
     const flagCompletions = tree.flatMap((node) => generateFishNode(node, [])).join("\n");

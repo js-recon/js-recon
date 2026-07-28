@@ -12,10 +12,7 @@ function buildTestProgram(): Command {
         .option("--no-sandbox", "Disable sandbox");
 
     const nested = program.command("proxy").description("Manage proxy configuration");
-    nested
-        .command("aws")
-        .description("Rotate outbound IP")
-        .option("-i, --init", "Initialize the config file");
+    nested.command("aws").description("Rotate outbound IP").option("-i, --init", "Initialize the config file");
 
     program
         .command("completion")

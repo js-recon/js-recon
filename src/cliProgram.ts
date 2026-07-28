@@ -100,11 +100,7 @@ export function buildProgram(): Command {
         .option("-t, --threads <threads>", "Number of threads to use", "1")
         .option("--subsequent-requests", "Download JS files from subsequent requests (Next.JS only)", false)
         .option("--urls-file <file>", "Input JSON file containing URLs", "extracted_urls.json")
-        .option(
-            "--proxy-config <file>",
-            "Proxy config file (generated via the `proxy` command)",
-            ".proxy_config.json"
-        )
+        .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` command)", ".proxy_config.json")
         .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
         .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
         .option("--disable-cache", "Disable response caching", false)
@@ -476,7 +472,15 @@ export function buildProgram(): Command {
                 process.exit(1);
             }
             globalsUtil.setMaxRecursionDepth(maxRecursionDepth);
-            await map(cmd.directory, cmd.output, cmd.format.split(","), cmd.tech, cmd.list, cmd.interactive, cmd.command || []);
+            await map(
+                cmd.directory,
+                cmd.output,
+                cmd.format.split(","),
+                cmd.tech,
+                cmd.list,
+                cmd.interactive,
+                cmd.command || []
+            );
         });
 
     program
@@ -632,11 +636,7 @@ export function buildProgram(): Command {
         .option("--strict-scope", "Download JS files from only the input URL domain", false)
         .option("-s, --scope <scope>", "Download JS files from specific domains (comma-separated)", "*")
         .option("-t, --threads <threads>", "Number of threads to use", "1")
-        .option(
-            "--proxy-config <file>",
-            "Proxy config file (generated via the `proxy` command)",
-            ".proxy_config.json"
-        )
+        .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` command)", ".proxy_config.json")
         .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
         .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
         .option("--disable-cache", "Disable response caching", false)
