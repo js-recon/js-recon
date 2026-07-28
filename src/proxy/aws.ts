@@ -1,22 +1,11 @@
 import { APIGatewayClient, CreateRestApiCommand, DeleteRestApiCommand } from "@aws-sdk/client-api-gateway";
-import fs from "fs";
-import checkFeasibility from "./checkFeasibility.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import checkFeasibility from "./checkFeasibility.js";
+import { readAwsGatewayMap, writeAwsGatewayMap } from "./awsConfig.js";
+import { setActiveProxyMethod } from "./configFile.js";
 
 // read the docs for all the methods for api gateway at https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/api-gateway/
 // for the rate limits, refer to https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html
-
-interface ApiGatewayConfig {
-    (key: string): {
-        id: string;
-        name: string;
-        description: string;
-        created_at: number;
-        region: string;
-        access_key: string;
-        secret_key: string;
-    };
-}
 
 /**
  * Selects a random AWS region from the available API Gateway regions.
@@ -26,8 +15,8 @@ interface ApiGatewayConfig {
 const randomRegion = (): string => {
     const apiGatewayRegions = [
         "us-east-2", // US East (Ohio)
-        "us-east-1", // US East (N. Virginia)
-        "us-west-1", // US West (N. California)
+        "us-east-1", // US East (N. Virginia)
+        "us-west-1", // US West (N. California)
         "us-west-2", // US West (Oregon)
         "af-south-1", // Africa (Cape Town)
         "ap-east-1", // Asia Pacific (Hong Kong)
@@ -53,18 +42,18 @@ const randomRegion = (): string => {
         "eu-south-2", // Europe (Spain)
         "eu-north-1", // Europe (Stockholm)
         "eu-central-2", // Europe (Zurich)
-        "il-central-1", // Israel (Tel Aviv)
+        "il-central-1", // Israel (Tel Aviv)
         "mx-central-1", // Mexico (Central)
         "me-south-1", // Middle East (Bahrain)
         "me-central-1", // Middle East (UAE)
-        "sa-east-1", // South America (São Paulo)
+        "sa-east-1", // South America (São Paulo)
     ];
     return apiGatewayRegions[Math.floor(Math.random() * apiGatewayRegions.length)];
 };
 
-let aws_access_key;
-let aws_secret_key;
-let region;
+let aws_access_key: string;
+let aws_secret_key: string;
+let region: string;
 let configFile = "";
 
 /**
@@ -74,6 +63,12 @@ let configFile = "";
  * @returns Promise that resolves after the specified delay
  */
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Masks a credential for secure display by showing only the first and last 4 characters. */
+const keyMask = (key: string): string => {
+    if (key.length < 6) return key;
+    return key.slice(0, 4) + "..." + key.slice(-4);
+};
 
 /**
  * Create a new API Gateway.
@@ -116,13 +111,7 @@ const createGateway = async () => {
     printMsg(MSG.Run, `Name: ${apigw_name}`);
     printMsg(MSG.Run, `Region: ${region}`);
 
-    // load the config file if any. Else, create a new one
-    let config = {};
-    try {
-        config = JSON.parse(fs.readFileSync(configFile, "utf8"));
-    } catch (e) {
-        config = {};
-    }
+    const config = readAwsGatewayMap(configFile);
 
     config[apigw_name] = {
         id: response.id,
@@ -134,7 +123,8 @@ const createGateway = async () => {
         secret_key: aws_secret_key,
     };
 
-    fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+    writeAwsGatewayMap(configFile, config);
+    setActiveProxyMethod(configFile, "aws");
     printMsg(MSG.Run, `[✓] Config saved to ${configFile}`);
 };
 
@@ -151,10 +141,8 @@ const destroyGateway = async (id: string): Promise<void> => {
         printMsg(MSG.Err, "[!] Please provide an API Gateway ID");
         return;
     }
-    //   read the config file
-    let config = JSON.parse(fs.readFileSync(configFile, "utf8"));
-    //   get the name of the api gateway
-    let name = Object.keys(config).find((key) => config[key].id === id);
+    const config = readAwsGatewayMap(configFile);
+    const name = Object.keys(config).find((key) => config[key].id === id);
 
     printMsg(MSG.Run, `Name: ${name}`);
     printMsg(MSG.Run, `ID: ${id}`);
@@ -174,9 +162,8 @@ const destroyGateway = async (id: string): Promise<void> => {
     });
     await client.send(command);
 
-    // remove from the config file
     delete config[name];
-    fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+    writeAwsGatewayMap(configFile, config);
 
     await sleep(30000);
 
@@ -191,10 +178,8 @@ const destroyGateway = async (id: string): Promise<void> => {
  */
 const destroyAllGateways = async () => {
     printMsg(MSG.Header, "[i] Destroying all API Gateways");
-    //   read the config file
-    let config: ApiGatewayConfig = JSON.parse(fs.readFileSync(configFile, "utf8"));
+    const config = readAwsGatewayMap(configFile);
 
-    //   destroy all the gateways
     for (const [key, value] of Object.entries(config)) {
         const client = new APIGatewayClient({
             region: value.region,
@@ -213,8 +198,7 @@ const destroyAllGateways = async () => {
         printMsg(MSG.Run, `[✓] Destroyed API Gateway: ${key} : ${value.id} : ${value.region}`);
     }
 
-    // nullify the config file
-    fs.writeFileSync(configFile, JSON.stringify({}, null, 2));
+    writeAwsGatewayMap(configFile, {});
     printMsg(MSG.Run, "[✓] Destroyed all API Gateways");
 };
 
@@ -227,17 +211,8 @@ const destroyAllGateways = async () => {
 const listGateways = async () => {
     printMsg(MSG.Header, "[i] Listing all API Gateways");
 
-    // read the config file, and list these
+    const config = readAwsGatewayMap(configFile);
 
-    // check if the config file exists
-    if (!fs.existsSync(configFile)) {
-        printMsg(MSG.Err, "[!] Config file does not exist");
-        return;
-    }
-
-    const config: ApiGatewayConfig = JSON.parse(fs.readFileSync(configFile, "utf8"));
-
-    //   if list is empty
     if (Object.keys(config).length === 0) {
         printMsg(MSG.Err, "[!] No API Gateways found");
         return;
@@ -253,83 +228,65 @@ const listGateways = async () => {
     }
 };
 
+export interface ProxyAwsOptions {
+    init: boolean;
+    destroy?: string;
+    destroyAll: boolean;
+    list: boolean;
+    region?: string;
+    accessKey?: string;
+    secretKey?: string;
+    config: string;
+    feasibility: boolean;
+    feasibilityUrl?: string;
+}
+
 /**
- * Main function for API Gateway.
+ * Entry point for `proxy aws`: create/destroy/list AWS API Gateways for IP rotation, or check
+ * feasibility of routing a target through API Gateway.
  *
  * @async
- * @param {boolean} initInput - Whether to initialize the API Gateway.
- * @param {string} destroyInput - The ID of the API Gateway to destroy.
- * @param {boolean} destroyAllInput - Whether to destroy all API Gateways.
- * @param {boolean} listInput - Whether to list all API Gateways.
- * @param {string} regionInput - The region to use.
- * @param {string} accessKey - The access key to use.
- * @param {string} secretKey - The secret key to use.
- * @param {string} configInput - The config file to use.
- * @param {boolean} feasibilityInput - Whether to check feasibility.
- * @param {string} feasibilityUrlInput - The URL to check feasibility for.
+ * @param opts - Resolved CLI options for the `proxy aws` subcommand.
  * @returns {Promise<void>}
  */
-const apiGateway = async (
-    initInput: boolean,
-    destroyInput: string,
-    destroyAllInput: boolean,
-    listInput: boolean,
-    regionInput: string,
-    accessKey: string,
-    secretKey: string,
-    configInput: string,
-    feasibilityInput: boolean,
-    feasibilityUrlInput: string
-): Promise<void> => {
-    printMsg(MSG.Header, "[i] Loading 'API Gateway' module");
+const proxyAws = async (opts: ProxyAwsOptions): Promise<void> => {
+    configFile = opts.config || ".proxy_config.json";
 
-    // if feasibility is true, check feasibility
-    if (feasibilityInput) {
-        if (!feasibilityUrlInput) {
+    if (opts.feasibility) {
+        if (!opts.feasibilityUrl) {
             printMsg(MSG.Err, "[!] Please provide a URL to check feasibility of");
             return;
         }
-        await checkFeasibility(feasibilityUrlInput);
+        await checkFeasibility(opts.feasibilityUrl);
         return;
     }
 
-    // configure the access and secret key
-    aws_access_key = accessKey || process.env.AWS_ACCESS_KEY_ID || undefined;
-    aws_secret_key = secretKey || process.env.AWS_SECRET_ACCESS_KEY || undefined;
-    region = regionInput || randomRegion();
-    configFile = configInput || "config.json";
+    if (!opts.init && !opts.destroy && !opts.destroyAll && !opts.list) {
+        printMsg(MSG.Err, "[!] Please provide a valid action (-i/--init, -d/--destroy, --destroy-all, or -l/--list)");
+        return;
+    }
+
+    aws_access_key = opts.accessKey || process.env.AWS_ACCESS_KEY_ID || undefined;
+    aws_secret_key = opts.secretKey || process.env.AWS_SECRET_ACCESS_KEY || undefined;
+    region = opts.region || randomRegion();
 
     if (!aws_access_key || !aws_secret_key) {
         printMsg(MSG.Err, "[!] AWS Access Key or Secret Key not found. Run with -h to see help");
-        return;
+        process.exit(1);
     }
 
     printMsg(MSG.Header, `[i] Using region: ${region}`);
-
-    /**
-     * Masks an API key for secure display by showing only first and last 4 characters.
-     *
-     * @param key - The API key to mask
-     * @returns Masked version of the key
-     */
-    const keyMask = (key: string): string => {
-        if (key.length < 6) return key;
-        return key.slice(0, 4) + "..." + key.slice(-4);
-    };
     printMsg(MSG.Header, `[i] Using access key: ${keyMask(aws_access_key)}`);
 
-    // create a new API gateway
-    if (initInput) {
+    if (opts.init) {
         await createGateway();
-    } else if (destroyInput) {
-        await destroyGateway(destroyInput);
-    } else if (destroyAllInput) {
+    } else if (opts.destroy) {
+        await destroyGateway(opts.destroy);
+    } else if (opts.destroyAll) {
         await destroyAllGateways();
-    } else if (listInput) {
-        await listGateways();
     } else {
-        printMsg(MSG.Err, "[!] Please provide a valid action (-i/--init or -d/--destroy or --destroy-all)");
+        await listGateways();
     }
 };
 
-export default apiGateway;
+export default proxyAws;

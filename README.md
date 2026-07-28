@@ -84,7 +84,7 @@ js-recon run -u https://app.example.com
 | `endpoints`   | Extracts API endpoints and client-side paths from JS files.                      | [Read Docs](https://js-recon.io/docs/docs/modules/endpoints)   |
 | `strings`     | Extracts strings, URLs, and potential secrets from JS files.                     | [Read Docs](https://js-recon.io/docs/docs/modules/strings)     |
 | `map`         | Maps function calls and analyzes code, with optional AI-powered descriptions.    | [Read Docs](https://js-recon.io/docs/docs/modules/map)         |
-| `api-gateway` | Manages AWS API Gateway for IP rotation to bypass rate limits.                   | [Read Docs](https://js-recon.io/docs/docs/modules/api-gateway) |
+| `proxy`       | Configures a proxy (AWS API Gateway IP rotation, SOCKS/HTTP, or Oxylabs) via `proxy aws`/`proxy oxylabs`/`proxy socks`/`proxy http`. | [Read Docs](https://js-recon.io/docs/docs/modules/proxy) |
 | `run`         | Runs all analysis modules automatically on a target.                             | [Read Docs](https://js-recon.io/docs/docs/modules/run)         |
 | `analyze`     | Analyzes the code.                                                               | [Read Docs](https://js-recon.io/docs/docs/modules/analyze)     |
 | `report`      | Generates a report from the analysis modules.                                    | [Read Docs](https://js-recon.io/docs/docs/modules/report)      |

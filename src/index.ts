@@ -5,7 +5,11 @@ import { FRAMEWORK_METHODS, VALID_METHODS } from "./lazyLoad/methodFilter.js";
 import endpoints from "./endpoints/index.js";
 import CONFIG from "./globalConfig.js";
 import strings from "./strings/index.js";
-import apiGateway from "./api_gateway/index.js";
+import proxyAws from "./proxy/aws.js";
+import proxyOxylabs from "./proxy/oxylabs.js";
+import proxySocks from "./proxy/socks.js";
+import proxyHttp from "./proxy/http.js";
+import configureProxy from "./utility/configureProxy.js";
 import map from "./map/index.js";
 import * as globalsUtil from "./utility/globals.js";
 import refactor from "./refactor/index.js";
@@ -95,8 +99,8 @@ program
     .option("-t, --threads <threads>", "Number of threads to use", "1")
     .option("--subsequent-requests", "Download JS files from subsequent requests (Next.JS only)", false)
     .option("--urls-file <file>", "Input JSON file containing URLs", "extracted_urls.json")
-    .option("--api-gateway", "Generate requests using API Gateway", false)
-    .option("--api-gateway-config <file>", "API Gateway config file", ".api_gateway_config.json")
+    .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` command)", ".proxy_config.json")
+    .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
     .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
     .option("--disable-cache", "Disable response caching", false)
     .option("--cache-only", "Only use the response cache; never make network requests", false)
@@ -211,8 +215,7 @@ program
             process.exit(27);
         }
 
-        globalsUtil.setApiGatewayConfigFile(cmd.apiGatewayConfig);
-        globalsUtil.setUseApiGateway(cmd.apiGateway);
+        configureProxy(cmd);
         globalsUtil.setDisableCache(cmd.disableCache);
         globalsUtil.setRespCacheFile(cmd.cacheFile);
         globalsUtil.setCacheOnly(cmd.cacheOnly);
@@ -309,40 +312,91 @@ program
         );
     });
 
-program
-    .command("api-gateway")
-    .description("Configure AWS API Gateway to rotate IP addresses")
+const proxyCmd = program
+    .command("proxy")
+    .description("Manage proxy configuration (AWS API Gateway IP rotation, SOCKS/HTTP, Oxylabs)");
+
+proxyCmd
+    .command("aws")
+    .description("Rotate outbound IP via throwaway AWS API Gateway REST APIs")
     .option("-i, --init", "Initialize the config file (create API)", false)
     .option("-d, --destroy <id>", "Destroy API with the given ID")
     .option("--destroy-all", "Destroy all the API created by this tool in all regions", false)
     .option("-r, --region <region>", "AWS region (default: random region)")
     .option(
-        "-a, --access-key <access-key>",
+        "-a, --access-key <key>",
         "AWS access key (if not provided, AWS_ACCESS_KEY_ID environment variable will be used)"
     )
     .option(
-        "-s, --secret-key <secret-key>",
+        "-s, --secret-key <key>",
         "AWS secret key (if not provided, AWS_SECRET_ACCESS_KEY environment variable will be used)"
     )
-    .option("-c, --config <config>", "Name of the config file", ".api_gateway_config.json")
+    .option("-c, --config <config>", "Name of the config file", ".proxy_config.json")
     .option("-l, --list", "List all the API created by this tool", false)
     .option("--feasibility", "Check feasibility of API Gateway", false)
     .option("--feasibility-url <url>", "URL to check feasibility of")
     .action(async (cmd) => {
-        globalsUtil.setApiGatewayConfigFile(cmd.config);
-        globalsUtil.setUseApiGateway(true);
-        await apiGateway(
-            cmd.init,
-            cmd.destroy,
-            cmd.destroyAll,
-            cmd.list,
-            cmd.region,
-            cmd.accessKey,
-            cmd.secretKey,
-            cmd.config,
-            cmd.feasibility,
-            cmd.feasibilityUrl
-        );
+        try {
+            await proxyAws(cmd);
+        } catch (err) {
+            printMsg(MSG.Err, `[!] ${err.message}`);
+            process.exit(1);
+        }
+    });
+
+proxyCmd
+    .command("oxylabs")
+    .description("Configure an Oxylabs datacenter proxy")
+    .option("-i, --init", "Initialize the config file", false)
+    .option("-c, --config <config>", "Name of the config file", ".proxy_config.json")
+    .option("--username <username>", "Oxylabs datacenter proxy username")
+    .option("--password <password>", "Oxylabs datacenter proxy password")
+    .option("--country <country>", "Oxylabs datacenter proxy country code")
+    .option(
+        "--city <city>",
+        "Oxylabs datacenter proxy city (currently unsupported — no documented username-level city targeting)"
+    )
+    .option(
+        "--session-id <id>",
+        "Oxylabs datacenter proxy sticky session id (currently unsupported via username — sessions are selected by port)"
+    )
+    .action(async (cmd) => {
+        try {
+            await proxyOxylabs(cmd);
+        } catch (err) {
+            printMsg(MSG.Err, `[!] ${err.message}`);
+            process.exit(1);
+        }
+    });
+
+proxyCmd
+    .command("socks")
+    .description("Configure a generic SOCKS5 proxy")
+    .option("-i, --init", "Initialize the config file", false)
+    .option("-c, --config <config>", "Name of the config file", ".proxy_config.json")
+    .option("--url <url>", "SOCKS5 proxy URL (socks5://[user:pass@]host:port)")
+    .action(async (cmd) => {
+        try {
+            await proxySocks(cmd);
+        } catch (err) {
+            printMsg(MSG.Err, `[!] ${err.message}`);
+            process.exit(1);
+        }
+    });
+
+proxyCmd
+    .command("http")
+    .description("Configure a generic HTTP proxy")
+    .option("-i, --init", "Initialize the config file", false)
+    .option("-c, --config <config>", "Name of the config file", ".proxy_config.json")
+    .option("--url <url>", "HTTP proxy URL (http://[user:pass@]host:port)")
+    .action(async (cmd) => {
+        try {
+            await proxyHttp(cmd);
+        } catch (err) {
+            printMsg(MSG.Err, `[!] ${err.message}`);
+            process.exit(1);
+        }
     });
 
 program
@@ -574,8 +628,8 @@ program
     .option("--strict-scope", "Download JS files from only the input URL domain", false)
     .option("-s, --scope <scope>", "Download JS files from specific domains (comma-separated)", "*")
     .option("-t, --threads <threads>", "Number of threads to use", "1")
-    .option("--api-gateway", "Generate requests using API Gateway", false)
-    .option("--api-gateway-config <file>", "API Gateway config file", ".api_gateway_config.json")
+    .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` command)", ".proxy_config.json")
+    .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
     .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
     .option("--disable-cache", "Disable response caching", false)
     .option("--cache-only", "Only use the response cache; never make network requests", false)

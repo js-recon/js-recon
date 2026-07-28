@@ -20,6 +20,7 @@ import {
 } from "./interruptHandler.js";
 import { detectBundler } from "./bundler-detect.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import configureProxy from "../utility/configureProxy.js";
 
 /**
  * Determines the directory for a Content Delivery Network (CDN) if used by the target.
@@ -774,8 +775,7 @@ const processUrl = async (
  * @returns Promise that resolves when all URL processing is complete
  */
 export default async (cmd: any): Promise<void> => {
-    globalsUtil.setApiGatewayConfigFile(cmd.apiGatewayConfig);
-    globalsUtil.setUseApiGateway(cmd.apiGateway);
+    configureProxy(cmd);
     globalsUtil.setDisableCache(cmd.disableCache);
     globalsUtil.setRespCacheFile(cmd.cacheFile);
     globalsUtil.setYes(cmd.yes);

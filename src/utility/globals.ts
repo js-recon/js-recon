@@ -1,23 +1,67 @@
-// API Gateway Configuration
-/** Path to the API Gateway configuration file */
-export let apiGatewayConfigFile = "";
-/** Whether to use API Gateway for requests */
-export let useApiGateway = false;
+// Proxy Configuration
+/** Path to the proxy configuration file */
+export let proxyConfigFile = ".proxy_config.json";
+/** Whether to route requests through a proxy */
+export let useProxy = false;
+/** Selected proxy method */
+export let proxyMethod: "aws" | "socks" | "http" | "oxylabs" | null = null;
+/** Resolved SOCKS/HTTP proxy URL (method === "socks" | "http") */
+export let proxyUrl: string | undefined;
+/** Resolved Oxylabs datacenter proxy config (method === "oxylabs") */
+export let oxylabsConfig:
+    | { username: string; password: string; country?: string; city?: string; sessionId?: string }
+    | undefined;
+/** Whether to skip reading JS_RECON_* env vars during proxy config resolution */
+export let ignoreProxyEnv = false;
 
 /**
- * Sets the API Gateway configuration file path.
- * @param file - Path to the API Gateway configuration file
+ * Sets the proxy configuration file path.
+ * @param file - Path to the proxy configuration file
  */
-export const setApiGatewayConfigFile = (file: string): void => {
-    apiGatewayConfigFile = file;
+export const setProxyConfigFile = (file: string): void => {
+    proxyConfigFile = file;
 };
 
 /**
- * Enables or disables the use of API Gateway.
- * @param value - Whether to use API Gateway
+ * Enables or disables routing requests through a proxy.
+ * @param value - Whether to use a proxy
  */
-export const setUseApiGateway = (value: boolean): void => {
-    useApiGateway = value;
+export const setUseProxy = (value: boolean): void => {
+    useProxy = value;
+};
+
+/**
+ * Sets the selected proxy method.
+ * @param value - The resolved proxy method, or null if none configured
+ */
+export const setProxyMethod = (value: "aws" | "socks" | "http" | "oxylabs" | null): void => {
+    proxyMethod = value;
+};
+
+/**
+ * Sets the resolved SOCKS/HTTP proxy URL.
+ * @param value - The proxy URL
+ */
+export const setProxyUrl = (value: string | undefined): void => {
+    proxyUrl = value;
+};
+
+/**
+ * Sets the resolved Oxylabs datacenter proxy config.
+ * @param value - The Oxylabs config
+ */
+export const setOxylabsConfig = (
+    value: { username: string; password: string; country?: string; city?: string; sessionId?: string } | undefined
+): void => {
+    oxylabsConfig = value;
+};
+
+/**
+ * Sets whether JS_RECON_* env vars should be ignored during proxy config resolution.
+ * @param value - Whether to ignore env vars
+ */
+export const setIgnoreProxyEnv = (value: boolean): void => {
+    ignoreProxyEnv = value;
 };
 
 // Response Cache Configuration

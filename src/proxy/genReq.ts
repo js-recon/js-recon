@@ -36,7 +36,7 @@ const get = async (url: string, headers: {} = {}): Promise<string> => {
     // Load and parse API Gateway config with error handling
     let config;
     try {
-        config = JSON.parse(fs.readFileSync(globals.apiGatewayConfigFile, "utf8"));
+        config = JSON.parse(fs.readFileSync(globals.proxyConfigFile, "utf8"));
     } catch (error) {
         throw new Error(`Failed to read or parse API Gateway config file: ${error.message}`);
     }
