@@ -167,10 +167,7 @@ export async function selectDynamicScatConfigs(
 
     // Use the first version to enumerate available scat dirs; all versions share the same set.
     const referenceVersion = versions[0];
-    printMsg(
-        MSG.Header,
-        `[i] Dynamic scat config selection: listing scat dirs for ${bundler}/${referenceVersion}...`
-    );
+    printMsg(MSG.Header, `[i] Dynamic scat config selection: listing scat dirs for ${bundler}/${referenceVersion}...`);
 
     let scatDirs: string[];
     try {

@@ -231,10 +231,7 @@ const subsequentRequests = async (url, urlsFile, threads, output, js_urls): Prom
     // dedupe
     jsFilesFromPageHtml = [...new Set(jsFilesFromPageHtml)];
 
-    printMsg(
-        MSG.Run,
-        `[✓] Found ${new Set([...staticJSURLs, ...jsFilesFromPageHtml]).size} JS chunks from page HTML`
-    );
+    printMsg(MSG.Run, `[✓] Found ${new Set([...staticJSURLs, ...jsFilesFromPageHtml]).size} JS chunks from page HTML`);
 
     return new Set([...staticJSURLs, ...jsFilesFromPageHtml]);
 };

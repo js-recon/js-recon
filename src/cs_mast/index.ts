@@ -207,10 +207,7 @@ export default async (
     }
 
     if (collisionTable) {
-        printMsg(
-            MSG.Run,
-            `\n[+] ${collisions.length} collision group(s) found (min-collisions: ${minCollisions}):\n`
-        );
+        printMsg(MSG.Run, `\n[+] ${collisions.length} collision group(s) found (min-collisions: ${minCollisions}):\n`);
 
         const sigColWidth = 60;
         const countColWidth = 7;

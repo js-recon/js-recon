@@ -392,10 +392,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                         if (typeof url === "string" && (url.includes("[var ") || url.includes("[MemberExpression"))) {
                             const substitutedUrl = substituteVariablesInString(url, chunk.code, chunks, thirdArgName);
                             if (substitutedUrl !== url) {
-                                printMsg(
-                                    MSG.Header,
-                                    `    [i] Resolved variables in URL: ${url} -> ${substitutedUrl}`
-                                );
+                                printMsg(MSG.Header, `    [i] Resolved variables in URL: ${url} -> ${substitutedUrl}`);
                                 url = substitutedUrl;
                             }
                         }
@@ -429,10 +426,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                         const varMatch = url.match(/\[var ([^\]]+)\]/);
                                         if (varMatch) {
                                             url = url.replace(varMatch[0], firstArgResolved);
-                                            printMsg(
-                                                MSG.Header,
-                                                `    [i] Resolved URL from internal caller: ${url}`
-                                            );
+                                            printMsg(MSG.Header, `    [i] Resolved URL from internal caller: ${url}`);
                                         }
                                     }
                                 }
@@ -664,10 +658,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                                 !callerUrl.startsWith("[error") &&
                                                 (callerUrl.includes("/") || callerUrl.includes("://"))
                                             ) {
-                                                printMsg(
-                                                    MSG.Header,
-                                                    `    [i] Resolved URL from caller: ${callerUrl}`
-                                                );
+                                                printMsg(MSG.Header, `    [i] Resolved URL from caller: ${callerUrl}`);
                                                 resolvedUrl = callerUrl;
                                             }
                                         }

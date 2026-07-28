@@ -712,7 +712,10 @@ async function resolveVersionDetectionScatDirs(bundler: string, opts: RemoteLibS
         .filter(Boolean);
     const scatDir = scatToDir(categories);
     if (!scatDir) {
-        printMsg(MSG.Err, `[!] --detect-version-config "${detectConfig}" produced an empty scat dir; check category names`);
+        printMsg(
+            MSG.Err,
+            `[!] --detect-version-config "${detectConfig}" produced an empty scat dir; check category names`
+        );
         process.exit(26);
     }
 

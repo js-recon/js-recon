@@ -85,10 +85,7 @@ const client_mappedJsonFile = async (filePath: string): Promise<string[]> => {
                                             if (firstArg.elements.length > 0) {
                                                 const element = firstArg.elements[0];
                                                 if (element.type === "StringLiteral") {
-                                                    printMsg(
-                                                        MSG.Run,
-                                                        `[+] Found client-side path: ${element.value}`
-                                                    );
+                                                    printMsg(MSG.Run, `[+] Found client-side path: ${element.value}`);
                                                     if (chunksCopy[key].description === "none") {
                                                         chunksCopy[key].description =
                                                             "Client-side path definition: " + element.value;

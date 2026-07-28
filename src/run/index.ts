@@ -173,7 +173,17 @@ const processUrl = async (
         resetSkipStep();
         // @ts-ignore
         await Promise.race([
-            analyze(cmd.rules || "", mappedJsonFileReact, "react", false, openapiFile, false, analyzeFile, false, false),
+            analyze(
+                cmd.rules || "",
+                mappedJsonFileReact,
+                "react",
+                false,
+                openapiFile,
+                false,
+                analyzeFile,
+                false,
+                false
+            ),
             getSkipStepPromise(),
         ]);
         printMsg(MSG.Run, "[+] Analyze complete.");
@@ -430,7 +440,17 @@ const processUrl = async (
         resetSkipStep();
         // @ts-ignore
         await Promise.race([
-            analyze(cmd.rules || "", mappedJsonFileSvelte, "svelte", false, openapiFile, false, analyzeFile, false, false),
+            analyze(
+                cmd.rules || "",
+                mappedJsonFileSvelte,
+                "svelte",
+                false,
+                openapiFile,
+                false,
+                analyzeFile,
+                false,
+                false
+            ),
             getSkipStepPromise(),
         ]);
         printMsg(MSG.Run, "[+] Analyze complete.");
@@ -497,7 +517,17 @@ const processUrl = async (
         resetSkipStep();
         // @ts-ignore
         await Promise.race([
-            analyze(cmd.rules || "", mappedJsonFileAngular, "angular", false, openapiFile, false, analyzeFile, false, false),
+            analyze(
+                cmd.rules || "",
+                mappedJsonFileAngular,
+                "angular",
+                false,
+                openapiFile,
+                false,
+                analyzeFile,
+                false,
+                false
+            ),
             getSkipStepPromise(),
         ]);
         printMsg(MSG.Run, "[+] Analyze complete.");

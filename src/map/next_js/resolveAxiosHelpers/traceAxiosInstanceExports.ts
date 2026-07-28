@@ -47,10 +47,7 @@ export const traceAxiosInstanceExports = (
     const exportName = findAxiosInstanceExport(sourceChunkId, axiosVarName, chunks);
 
     if (!exportName) {
-        printMsg(
-            MSG.Warn,
-            `    [!] Axios instance '${axiosVarName}' in chunk ${sourceChunkId} is not exported`
-        );
+        printMsg(MSG.Warn, `    [!] Axios instance '${axiosVarName}' in chunk ${sourceChunkId} is not exported`);
         return;
     }
 
@@ -63,17 +60,11 @@ export const traceAxiosInstanceExports = (
     const importingChunks = findImportingChunks(sourceChunkId, chunks);
 
     if (importingChunks.length === 0) {
-        printMsg(
-            MSG.Warn,
-            `    [!] No chunks import the axios instance '${exportName}' from chunk ${sourceChunkId}`
-        );
+        printMsg(MSG.Warn, `    [!] No chunks import the axios instance '${exportName}' from chunk ${sourceChunkId}`);
         return;
     }
 
-    printMsg(
-        MSG.Info,
-        `    [→] Found ${importingChunks.length} chunk(s) importing axios instance '${exportName}'`
-    );
+    printMsg(MSG.Info, `    [→] Found ${importingChunks.length} chunk(s) importing axios instance '${exportName}'`);
 
     // Step 3: Process each importing chunk
     for (const importingChunkId of importingChunks) {
@@ -228,18 +219,12 @@ const processImportingChunk = (
     const isReexported = checkIfReexported(ast, importVarName, exportName, chunks, importingChunkId);
 
     if (isReexported.reexported) {
-        printMsg(
-            MSG.Info,
-            `    [↻] Axios instance re-exported from chunk ${importingChunkId}, tracing further...`
-        );
+        printMsg(MSG.Info, `    [↻] Axios instance re-exported from chunk ${importingChunkId}, tracing further...`);
         // Recursively trace the re-export
         traceAxiosInstanceExports(importingChunkId, isReexported.localVarName!, chunks, directory, visited);
     } else {
         // This chunk uses the axios instance, extract API calls
-        printMsg(
-            MSG.Run,
-            `    [✓] Chunk ${importingChunkId} uses the axios instance, extracting API calls...`
-        );
+        printMsg(MSG.Run, `    [✓] Chunk ${importingChunkId} uses the axios instance, extracting API calls...`);
         extractApiCalls(ast, chunkCode, importVarName, exportName, importingChunkId, chunks, directory, thirdArg);
     }
 };

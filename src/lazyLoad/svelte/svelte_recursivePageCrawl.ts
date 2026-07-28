@@ -158,7 +158,10 @@ const svelte_recursivePageCrawl = async (
                     }
                 }
             } catch (err) {
-                printMsg(MSG.Warn, `[!] Failed to crawl ${pageUrl}: ${err instanceof Error ? err.message : String(err)}`);
+                printMsg(
+                    MSG.Warn,
+                    `[!] Failed to crawl ${pageUrl}: ${err instanceof Error ? err.message : String(err)}`
+                );
             }
         }
 

@@ -89,7 +89,10 @@ const next_parseLayoutJs = async (baseUrl: string, urls: string[]) => {
             const jsContent = await req.text();
 
             if (jsContent.length > MAX_LAYOUT_JS_BYTES) {
-                printMsg(MSG.Warn, `[!] Skipping oversized layout.js (${Math.round(jsContent.length / 1024)} KB): ${url}`);
+                printMsg(
+                    MSG.Warn,
+                    `[!] Skipping oversized layout.js (${Math.round(jsContent.length / 1024)} KB): ${url}`
+                );
                 continue;
             }
 

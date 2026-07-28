@@ -362,7 +362,11 @@ program
     )
     .option("--ai <options>", "Use AI to analyze the code (comma-separated; available: description)")
     .option("--ai-threads <threads>", "Number of threads to use for AI", "5")
-    .option("--ai-provider <provider>", "Service provider to use for AI (available: openai, ollama, anthropic)", "openai")
+    .option(
+        "--ai-provider <provider>",
+        "Service provider to use for AI (available: openai, ollama, anthropic)",
+        "openai"
+    )
     .option("--ai-endpoint <endpoint>", "Endpoint to use for AI service (for Ollama, etc)")
     .option("--ai-api-key <key>", "API key for the configured AI provider")
     .option("--model <model>", "AI model to use", "gpt-4o-mini")
@@ -583,7 +587,11 @@ program
     .option("--sj-args <args>", "Extra arguments passed through to `sj automate`", "")
     .option("--ai <options>", "Use AI to analyze the code (comma-separated; available: description)")
     .option("--ai-threads <threads>", "Number of threads to use for AI", "5")
-    .option("--ai-provider <provider>", "Service provider to use for AI (available: openai, ollama, anthropic)", "openai")
+    .option(
+        "--ai-provider <provider>",
+        "Service provider to use for AI (available: openai, ollama, anthropic)",
+        "openai"
+    )
     .option("--ai-endpoint <endpoint>", "Endpoint to use for AI service (for Ollama, etc)")
     .option("--ai-api-key <key>", "API key for the configured AI provider")
     .option("--model <model>", "AI model to use", "gpt-4o-mini")

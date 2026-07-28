@@ -127,10 +127,7 @@ export const processDirectAxiosCall = (
     const interceptorHeaders = getGlobalInterceptorHeaders();
     const mergedHeaders: { [key: string]: string } = { ...interceptorHeaders, ...callHeaders };
 
-    printMsg(
-        MSG.Info,
-        `[+] Found direct axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`
-    );
+    printMsg(MSG.Info, `[+] Found direct axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`);
     printMsg(MSG.Run, `    URL: ${callUrl}`);
     printMsg(MSG.Run, `    Method: ${callMethod}`);
     if (callBody) {

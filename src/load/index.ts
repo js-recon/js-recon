@@ -190,10 +190,7 @@ const load = async (caidoFile: string, targetUrl: string): Promise<void> => {
         }
     }
 
-    printMsg(
-        MSG.Header,
-        `[i] Filtering Caido entries for ${targetScheme}//${targetHost}:${targetPort} → ${cacheFile}`
-    );
+    printMsg(MSG.Header, `[i] Filtering Caido entries for ${targetScheme}//${targetHost}:${targetPort} → ${cacheFile}`);
 
     let scanned = 0;
     let matched = 0;

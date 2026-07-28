@@ -298,10 +298,7 @@ export const processZDotCreateCall = (
         }
     }
 
-    printMsg(
-        MSG.Info,
-        `[+] Found Z.create() axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`
-    );
+    printMsg(MSG.Info, `[+] Found Z.create() axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`);
     printMsg(MSG.Run, `    URL: ${callUrl}`);
     printMsg(MSG.Run, `    Method: ${callMethod}`);
     if (callBody) {

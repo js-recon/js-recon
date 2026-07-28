@@ -183,10 +183,8 @@ export const handleAxiosCreate = (
                         }
                     }
 
-                    if (axiosCreateCallUrl)
-                        printMsg(MSG.Run, `    URL: ${axiosCreateBaseURL}${axiosCreateCallUrl}`);
-                    if (axiosCreateCallMethod)
-                        printMsg(MSG.Run, `    Method: ${axiosCreateCallMethod.toUpperCase()}`);
+                    if (axiosCreateCallUrl) printMsg(MSG.Run, `    URL: ${axiosCreateBaseURL}${axiosCreateCallUrl}`);
+                    if (axiosCreateCallMethod) printMsg(MSG.Run, `    Method: ${axiosCreateCallMethod.toUpperCase()}`);
                     if (axiosCreateCallParams) printMsg(MSG.Run, `    Params: ${axiosCreateCallParams}`);
                     if (axiosCreateCallHeaders) printMsg(MSG.Run, `    Headers: ${axiosCreateCallHeaders}`);
 

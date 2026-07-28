@@ -136,10 +136,7 @@ export const validateAndFix = (statements: t.Statement[], moduleId: string): str
 
         for (const err of errors) {
             const loc = (err as any).loc ? ` at line ${(err as any).loc.line}, col ${(err as any).loc.column}` : "";
-            printMsg(
-                MSG.Err,
-                `[!] Syntax error in module ${moduleId} (attempt ${attempt + 1}/${MAX_FIX_ITERATIONS}):`
-            );
+            printMsg(MSG.Err, `[!] Syntax error in module ${moduleId} (attempt ${attempt + 1}/${MAX_FIX_ITERATIONS}):`);
             printMsg(MSG.Err, `    ${(err as any).message}${loc}`);
             if ((err as any).codeFrame) printMsg(MSG.Plain, (err as any).codeFrame);
         }
