@@ -436,9 +436,7 @@ const proxy = async (opts: ProxyCliOptions): Promise<void> => {
 
         if (!resolved.method) {
             console.error(
-                chalk.red(
-                    "[!] Please specify a proxy method via --proxy-method, or configure one with -i/--init first"
-                )
+                chalk.red("[!] Please specify a proxy method via --proxy-method, or configure one with -i/--init first")
             );
             return;
         }
