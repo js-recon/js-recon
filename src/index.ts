@@ -543,6 +543,11 @@ program
     .option("-t, --threads <threads>", "Number of threads to use", "1")
     .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` module)", ".proxy_config.json")
     .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
+    .option(
+        "--proxy-waf-fallback",
+        "Before each target, check whether the configured proxy is needed and can bypass a WAF/firewall (reuses the `proxy --feasibility` logic); skip the target if the proxy can't bypass it",
+        false
+    )
     .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
     .option("--disable-cache", "Disable response caching", false)
     .option("--cache-only", "Only use the response cache; never make network requests", false)

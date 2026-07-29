@@ -9,6 +9,7 @@
 ### Added
 
 - `lazyload`/`run`: added a `--detection-timeout <seconds>` flag (default `30`, `0` disables) that bounds the front-end framework detection step. If it fires, detection falls back to the same "framework not detected" path used for a genuine no-match. (`lazyload`, `run`)
+- `run`: added a `--proxy-waf-fallback` flag. When a proxy is configured (`--proxy-config`), it runs the same feasibility check as `proxy --feasibility` against each target before processing it, and automatically decides whether to use the proxy: skips it if no firewall/WAF is detected without a proxy, keeps using it if it bypasses a detected firewall, or skips the target (new exit code 29 in single-URL mode) if the proxy can't bypass it. (`run`, `proxy`)
 
 ## 1.4.1 - 2026-07-27
 
