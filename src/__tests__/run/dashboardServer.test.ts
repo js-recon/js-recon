@@ -6,9 +6,7 @@ describe("listenWithFallback", () => {
     const servers: http.Server[] = [];
 
     afterEach(async () => {
-        await Promise.all(
-            servers.splice(0).map((s) => new Promise<void>((resolve) => s.close(() => resolve())))
-        );
+        await Promise.all(servers.splice(0).map((s) => new Promise<void>((resolve) => s.close(() => resolve()))));
     });
 
     it("listens directly on the preferred port when it's free", async () => {

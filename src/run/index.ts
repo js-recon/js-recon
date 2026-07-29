@@ -862,7 +862,8 @@ export default async (cmd: any): Promise<void> => {
                 );
                 if (cmd.webStatsDashboard) dashboardState.markCompleted(cmd.url);
             } catch (e) {
-                if (cmd.webStatsDashboard) dashboardState.markError(cmd.url, e instanceof Error ? e.message : String(e));
+                if (cmd.webStatsDashboard)
+                    dashboardState.markError(cmd.url, e instanceof Error ? e.message : String(e));
                 throw e;
             }
         } else {
@@ -928,7 +929,8 @@ export default async (cmd: any): Promise<void> => {
                         else dashboardState.markCompleted(url);
                     }
                 } catch (e) {
-                    if (cmd.webStatsDashboard) dashboardState.markError(url, e instanceof Error ? e.message : String(e));
+                    if (cmd.webStatsDashboard)
+                        dashboardState.markError(url, e instanceof Error ? e.message : String(e));
                     throw e;
                 }
             }
