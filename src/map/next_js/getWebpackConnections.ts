@@ -140,8 +140,8 @@ const getWebpackConnections = async (directory, output, formats) => {
                                     const keyValue = key.node.value;
                                     const function_code = code
                                         .slice(prop.node.start, prop.node.end)
-                                        .replace(/^\s*[\w\d]+:\s+function\s+/, `function webpack_${keyValue} `)
-                                        .replace(/^s*[\w\d]+:\s\(/, `func_${keyValue} = (`);
+                                        .replace(/^\s*[\w\d]+:\s*function\s*/, `function webpack_${keyValue} `)
+                                        .replace(/^\s*[\w\d]+:\s*\(/, `func_${keyValue} = (`);
                                     chunks[String(keyValue)] = {
                                         id: String(keyValue),
                                         description: "none",
