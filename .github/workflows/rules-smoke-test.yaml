@@ -26,8 +26,8 @@ jobs:
           if git ls-remote --exit-code --heads https://github.com/js-recon/js-recon-rules.git "$BRANCH" > /dev/null 2>&1; then
             echo "Using js-recon-rules branch: $BRANCH"
           else
-            echo "js-recon-rules has no '$BRANCH' branch, falling back to main"
-            BRANCH="main"
+            echo "js-recon-rules has no '$BRANCH' branch, falling back to dev"
+            BRANCH="dev"
           fi
           git clone --depth 1 --branch "$BRANCH" https://github.com/js-recon/js-recon-rules.git js-recon-rules
 

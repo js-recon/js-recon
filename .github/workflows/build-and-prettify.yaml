@@ -165,10 +165,15 @@ jobs:
           path: js-recon-labs
 
       - name: Checkout js-recon-rules
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: js-recon/js-recon-rules
-          path: js-recon-rules
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          if git ls-remote --exit-code --heads https://github.com/js-recon/js-recon-rules.git "$BRANCH" > /dev/null 2>&1; then
+            echo "Using js-recon-rules branch: $BRANCH"
+          else
+            echo "js-recon-rules has no '$BRANCH' branch, falling back to dev"
+            BRANCH="dev"
+          fi
+          git clone --depth 1 --branch "$BRANCH" https://github.com/js-recon/js-recon-rules.git js-recon-rules
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -242,10 +247,15 @@ jobs:
           path: js-recon-labs
 
       - name: Checkout js-recon-rules
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: js-recon/js-recon-rules
-          path: js-recon-rules
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          if git ls-remote --exit-code --heads https://github.com/js-recon/js-recon-rules.git "$BRANCH" > /dev/null 2>&1; then
+            echo "Using js-recon-rules branch: $BRANCH"
+          else
+            echo "js-recon-rules has no '$BRANCH' branch, falling back to dev"
+            BRANCH="dev"
+          fi
+          git clone --depth 1 --branch "$BRANCH" https://github.com/js-recon/js-recon-rules.git js-recon-rules
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
