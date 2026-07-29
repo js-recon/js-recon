@@ -101,3 +101,16 @@ export const shouldSkipTarget = (): boolean => skipTarget;
 export const resetSkipTarget = (): void => {
     skipTarget = false;
 };
+
+/**
+ * Programmatic equivalent of choosing "skip the current target" from the SIGINT
+ * menu — used by the web dashboard's skip button (../dashboard/server.ts) so it
+ * can cancel the in-flight target without going through the terminal prompt.
+ */
+export const requestSkipCurrentTarget = (): void => {
+    skipTarget = true;
+    if (skipStepResolver) {
+        skipStepResolver();
+        skipStepResolver = null;
+    }
+};

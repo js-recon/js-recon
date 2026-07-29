@@ -19,8 +19,10 @@ import {
     resetSkipTarget,
 } from "./interruptHandler.js";
 import { detectBundler } from "./bundler-detect.js";
-import { printMsg, MSG } from "../utility/printMsg.js";
+import { printMsg, MSG, setHeaderListener } from "../utility/printMsg.js";
 import configureProxy from "../utility/configureProxy.js";
+import { startDashboardServer } from "./dashboard/server.js";
+import * as dashboardState from "./dashboard/state.js";
 
 /**
  * Determines the directory for a Content Delivery Network (CDN) if used by the target.
@@ -774,6 +776,34 @@ const processUrl = async (
  * @param cmd - The command-line options object from commander.js
  * @returns Promise that resolves when all URL processing is complete
  */
+/**
+ * Parses a batch/single `cmd.url` into the `{ url, hostDir, dir }` entries the
+ * dashboard state store needs, mirroring the hostDir/dir resolution the batch
+ * loop and single-target path use below. Invalid URLs are dropped — they're
+ * reported (and skipped) by the existing validation further down.
+ */
+const buildDashboardTargetEntries = (cmd: any, isBatch: boolean) => {
+    const toEntry = (url: string, dir: string) => {
+        try {
+            return { url, hostDir: new URL(url).host.replace(":", "_"), dir };
+        } catch {
+            return null;
+        }
+    };
+
+    if (!isBatch) {
+        const entry = toEntry(cmd.url, cmd.output);
+        return entry ? [entry] : [];
+    }
+
+    return fs
+        .readFileSync(cmd.url, "utf-8")
+        .split("\n")
+        .filter((url) => url !== "")
+        .map((url) => toEntry(url, `${cmd.output}/${new URL(url).host.replace(":", "_")}`))
+        .filter((e): e is { url: string; hostDir: string; dir: string } => e !== null);
+};
+
 export default async (cmd: any): Promise<void> => {
     configureProxy(cmd);
     globalsUtil.setDisableCache(cmd.disableCache);
@@ -782,6 +812,14 @@ export default async (cmd: any): Promise<void> => {
 
     const isBatch = fs.existsSync(cmd.url);
     installSigintHandler(isBatch);
+
+    let dashboard: { port: number; url: string; stop: () => Promise<void> } | null = null;
+    if (cmd.webStatsDashboard) {
+        dashboardState.registerTargets(buildDashboardTargetEntries(cmd, isBatch));
+        dashboard = await startDashboardServer(Number(cmd.webStatsPort));
+        printMsg(MSG.Run, `[+] Web stats dashboard running at ${dashboard.url}`);
+        setHeaderListener((msg) => dashboardState.markStep(msg));
+    }
 
     try {
         // check if the given URL is a file
@@ -808,15 +846,25 @@ export default async (cmd: any): Promise<void> => {
                 process.exit(12);
             }
 
-            await processUrl(
-                cmd.url,
-                cmd.output,
-                ".",
-                cmd,
-                false,
-                cmd._includeMethods ?? [],
-                cmd._excludeMethods ?? []
-            );
+            if (cmd.webStatsDashboard) {
+                dashboardState.setCurrentUrl(cmd.url);
+                dashboardState.markRunning(cmd.url);
+            }
+            try {
+                await processUrl(
+                    cmd.url,
+                    cmd.output,
+                    ".",
+                    cmd,
+                    false,
+                    cmd._includeMethods ?? [],
+                    cmd._excludeMethods ?? []
+                );
+                if (cmd.webStatsDashboard) dashboardState.markCompleted(cmd.url);
+            } catch (e) {
+                if (cmd.webStatsDashboard) dashboardState.markError(cmd.url, e instanceof Error ? e.message : String(e));
+                throw e;
+            }
         } else {
             // since this is a file, we need to first load the URLs in the memory remove empty strings
             const urls = fs
@@ -849,22 +897,47 @@ export default async (cmd: any): Promise<void> => {
                         MSG.Warn,
                         `[i] For advanced users: use the individual modules separately. See docs at ${CONFIG.modulesDocs}`
                     );
+                    if (cmd.webStatsDashboard) dashboardState.markSkipped(url);
+                    continue;
+                }
+
+                if (cmd.webStatsDashboard && dashboardState.isSkipRequested(url)) {
+                    printMsg(MSG.Warn, `[!] Skipping ${url} (skipped from the web dashboard).`);
+                    dashboardState.markSkipped(url);
                     continue;
                 }
 
                 fs.mkdirSync(thisTargetDir, { recursive: true });
-                await processUrl(
-                    url,
-                    thisTargetDir,
-                    thisTargetDir,
-                    cmd,
-                    true,
-                    cmd._includeMethods ?? [],
-                    cmd._excludeMethods ?? []
-                );
+
+                if (cmd.webStatsDashboard) {
+                    dashboardState.setCurrentUrl(url);
+                    dashboardState.markRunning(url);
+                }
+                try {
+                    await processUrl(
+                        url,
+                        thisTargetDir,
+                        thisTargetDir,
+                        cmd,
+                        true,
+                        cmd._includeMethods ?? [],
+                        cmd._excludeMethods ?? []
+                    );
+                    if (cmd.webStatsDashboard) {
+                        if (shouldSkipTarget()) dashboardState.markSkipped(url);
+                        else dashboardState.markCompleted(url);
+                    }
+                } catch (e) {
+                    if (cmd.webStatsDashboard) dashboardState.markError(url, e instanceof Error ? e.message : String(e));
+                    throw e;
+                }
             }
         }
     } finally {
+        if (dashboard) {
+            setHeaderListener(null);
+            await dashboard.stop();
+        }
         removeSigintHandler();
         process.exit(process.exitCode ?? 0);
     }

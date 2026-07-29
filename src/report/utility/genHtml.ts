@@ -20,7 +20,7 @@ declare global {
  *
  * @returns An object containing the DataTables JavaScript and CSS, or null if not found
  */
-const getLocalDataTablesAssets = () => {
+export const getLocalDataTablesAssets = () => {
     try {
         const require = createRequire(import.meta.url);
         const dtJsPath = require.resolve("datatables.net/js/dataTables.min.js");
@@ -39,7 +39,7 @@ const getLocalDataTablesAssets = () => {
  *
  * @returns The jQuery JavaScript, or null if not found
  */
-const getLocalJqueryAsset = () => {
+export const getLocalJqueryAsset = () => {
     try {
         const require = createRequire(import.meta.url);
         // Try the direct subpath first (jQuery <4); if that fails (jQuery 4+ restricts
