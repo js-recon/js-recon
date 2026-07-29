@@ -111,6 +111,11 @@ program
     .option("--max-iterations <iterations>", "Maximum number of recursive crawl iterations", "10")
     .option("--max-js-size <mb>", "Maximum JS file size in MB to parse (Vue only)", "2")
     .option("--lazyload-timeout <minutes>", "Hard timeout for the lazyload module in minutes (0 = no timeout)", "30")
+    .option(
+        "--detection-timeout <seconds>",
+        "Timeout for front-end framework detection in seconds (0 = no timeout)",
+        "30"
+    )
     .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
     .option(
         "--include-methods <methods>",
@@ -199,7 +204,8 @@ program
             Number(cmd.lazyloadTimeout) * 60 * 1000,
             Number(cmd.maxPages),
             includeMethods,
-            excludeMethods
+            excludeMethods,
+            Number(cmd.detectionTimeout) * 1000
         );
     });
 
@@ -557,6 +563,11 @@ program
     .option("--max-iterations <iterations>", "Maximum number of recursive crawl iterations", "10")
     .option("--max-js-size <mb>", "Maximum JS file size in MB to parse (Vue only)", "2")
     .option("--lazyload-timeout <minutes>", "Hard timeout for each lazyload step in minutes (0 = no timeout)", "30")
+    .option(
+        "--detection-timeout <seconds>",
+        "Timeout for front-end framework detection in seconds (0 = no timeout)",
+        "30"
+    )
     .option("--max-heap <mb>", "V8 heap size cap in MB (0 = all available RAM)")
     .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
     .option(

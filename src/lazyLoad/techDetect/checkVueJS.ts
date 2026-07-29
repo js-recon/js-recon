@@ -94,8 +94,14 @@ const checkVueJS = async ($, url: string) => {
         }
     });
 
+    // Only scan same-origin assets here. Third-party widgets (analytics, tag
+    // managers, ad SDKs) are numerous and often slow/unreachable, and scanning
+    // their content for "__vue" also risks false positives on sites that don't
+    // use Vue themselves.
+    const pageOrigin = new URL(url).origin;
     for (const assetURL of assetURLs) {
         try {
+            if (new URL(assetURL).origin !== pageOrigin) continue;
             const res = await makeRequest(assetURL);
             if (!res) continue;
             const content: string = await res.text();
