@@ -87,8 +87,6 @@ describe("getFilenameFromUrl", () => {
     });
 
     it("matches a webpack-style filename containing a tilde", () => {
-        expect(getFilenameFromUrl("https://example.com/assets/js/runtime~main.a4a30ed7.js")).toBe(
-            "main.a4a30ed7.js"
-        );
+        expect(getFilenameFromUrl("https://example.com/assets/js/runtime~main.a4a30ed7.js")).toBe("main.a4a30ed7.js");
     });
 });
