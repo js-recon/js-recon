@@ -111,6 +111,11 @@ program
     .option("--max-iterations <iterations>", "Maximum number of recursive crawl iterations", "10")
     .option("--max-js-size <mb>", "Maximum JS file size in MB to parse (Vue only)", "2")
     .option("--lazyload-timeout <minutes>", "Hard timeout for the lazyload module in minutes (0 = no timeout)", "30")
+    .option(
+        "--detection-timeout <seconds>",
+        "Timeout for front-end framework detection in seconds (0 = no timeout)",
+        "30"
+    )
     .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
     .option(
         "--include-methods <methods>",
@@ -199,7 +204,8 @@ program
             Number(cmd.lazyloadTimeout) * 60 * 1000,
             Number(cmd.maxPages),
             includeMethods,
-            excludeMethods
+            excludeMethods,
+            Number(cmd.detectionTimeout) * 1000
         );
     });
 
@@ -270,8 +276,12 @@ program
     )
     .option("-c, --config <config>", "Name of the config file", ".proxy_config.json")
     .option("-l, --list", "List all the API created by this tool [aws method]", false)
-    .option("--feasibility", "Check feasibility of API Gateway [aws method]", false)
-    .option("--feasibility-url <url>", "URL to check feasibility of [aws method]")
+    .option(
+        "--feasibility",
+        "Check whether a firewall/WAF blocks the target directly and, if so, whether the proxy method (--proxy-method, or the one already configured via -i/--init) bypasses it",
+        false
+    )
+    .option("--feasibility-url <url>", "URL to check feasibility of")
     .option(
         "--proxy-method <method>",
         "Proxy method to configure with -i/--init: aws, socks, http, or oxylabs (omit for an interactive prompt)"
@@ -533,6 +543,11 @@ program
     .option("-t, --threads <threads>", "Number of threads to use", "1")
     .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` module)", ".proxy_config.json")
     .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
+    .option(
+        "--proxy-waf-fallback",
+        "Before each target, check whether the configured proxy is needed and can bypass a WAF/firewall (reuses the `proxy --feasibility` logic); skip the target if the proxy can't bypass it",
+        false
+    )
     .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
     .option("--disable-cache", "Disable response caching", false)
     .option("--cache-only", "Only use the response cache; never make network requests", false)
@@ -557,6 +572,11 @@ program
     .option("--max-iterations <iterations>", "Maximum number of recursive crawl iterations", "10")
     .option("--max-js-size <mb>", "Maximum JS file size in MB to parse (Vue only)", "2")
     .option("--lazyload-timeout <minutes>", "Hard timeout for each lazyload step in minutes (0 = no timeout)", "30")
+    .option(
+        "--detection-timeout <seconds>",
+        "Timeout for front-end framework detection in seconds (0 = no timeout)",
+        "30"
+    )
     .option("--max-heap <mb>", "V8 heap size cap in MB (0 = all available RAM)")
     .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
     .option(

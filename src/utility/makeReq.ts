@@ -4,6 +4,7 @@ import puppeteer from "./puppeteerInstance.js";
 import { getChromiumPath } from "./getChromiumPath.js";
 import * as globals from "./globals.js";
 import { get } from "../proxy/genReq.js";
+import checkFireWallBlocking from "../proxy/checkFireWallBlocking.js";
 import { parseProxyUrl } from "../proxy/genericProxy.js";
 import { buildOxylabsProxyUrl, composeOxylabsUsername } from "../proxy/oxylabsProxy.js";
 import type { ResolvedProxyConfig } from "../proxy/resolveProxyConfig.js";
@@ -456,6 +457,12 @@ const makeRequest = async (
         const get_headers = requestOptions.headers;
 
         const body = await get(url, get_headers);
+
+        // check if any firewall is there in the way
+        if (await checkFireWallBlocking(body)) {
+            progressError(chalk.magenta("[!] Please try again without API Gateway"));
+            process.exit(18);
+        }
 
         // craft a Response, and return that
         const response = new Response(body);

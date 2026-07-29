@@ -333,6 +333,13 @@ jobs:
           path: js-recon-labs
           persist-credentials: false
 
+      - name: Checkout js-recon-rules
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: js-recon/js-recon-rules
+          path: js-recon-rules
+          persist-credentials: false
+
       - name: Tap and install
         run: |
           brew tap js-recon/tap
@@ -416,7 +423,7 @@ jobs:
       - name: Run installed js-recon against the lab app
         run: |
           echo "http://localhost:3001" > /tmp/brew-smoke-urls.txt
-          "$BIN" run -u /tmp/brew-smoke-urls.txt -y -k
+          "$BIN" run -u /tmp/brew-smoke-urls.txt -r js-recon-rules -y -k
         env:
           BIN: ${{ steps.bin.outputs.bin }}
 
