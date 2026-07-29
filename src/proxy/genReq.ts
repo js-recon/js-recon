@@ -14,7 +14,6 @@ import {
 import md5 from "md5";
 import chalk from "chalk";
 import * as globals from "../utility/globals.js";
-import checkFireWallBlocking from "./checkFireWallBlocking.js";
 import { readAwsGatewayMap } from "./awsConfig.js";
 
 /**
@@ -174,9 +173,6 @@ const get = async (url: string, headers: {} = {}): Promise<string> => {
 
     const body = await testInvokeMethodResponse.body;
 
-    // check if any firewall is there in the way
-    const isFireWallBlocking = await checkFireWallBlocking(body);
-
     // delete the resource
     const deleteResourceCommand = new DeleteResourceCommand({
         restApiId: config[apiGateway].id,
@@ -186,11 +182,6 @@ const get = async (url: string, headers: {} = {}): Promise<string> => {
         await client.send(deleteResourceCommand);
     } catch (err) {
         console.error(chalk.red(`[!] Error when sending delete resource command to AWS: ${err}`));
-    }
-
-    if (isFireWallBlocking) {
-        console.error(chalk.magenta("[!] Please try again without API Gateway"));
-        process.exit(18);
     }
 
     return body;

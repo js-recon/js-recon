@@ -83,7 +83,8 @@ const lazyLoad = async (
     hardTimeoutMs: number = 30 * 60 * 1000,
     maxPageVisits: number = 200,
     includeMethods: string[] = [],
-    excludeMethods: string[] = []
+    excludeMethods: string[] = [],
+    detectionTimeoutMs: number = 30 * 1000
 ) => {
     // Hoisted so the timeout handler can stop discovery and drain downloads.
     let activeCrawler: NextJsCrawler | null = null;
@@ -134,7 +135,28 @@ const lazyLoad = async (
 
             lazyLoadGlobals.setMaxReqQueue(threads);
 
-            const tech = await frameworkDetect(url);
+            let tech: { name: string; evidence: string } | null;
+            if (detectionTimeoutMs > 0) {
+                let timedOut = false;
+                tech = await Promise.race([
+                    frameworkDetect(url),
+                    new Promise<null>((resolve) =>
+                        setTimeout(() => {
+                            timedOut = true;
+                            resolve(null);
+                        }, detectionTimeoutMs)
+                    ),
+                ]);
+                if (timedOut) {
+                    console.error(
+                        chalk.yellow(
+                            `[!] Framework detection timed out after ${detectionTimeoutMs}ms; treating as not detected`
+                        )
+                    );
+                }
+            } else {
+                tech = await frameworkDetect(url);
+            }
             globals.setTech(tech ? tech.name : "");
 
             if (tech) {

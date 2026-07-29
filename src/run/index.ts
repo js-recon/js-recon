@@ -24,6 +24,8 @@ import {
 } from "./interruptHandler.js";
 import { detectBundler } from "./bundler-detect.js";
 import configureProxy from "../utility/configureProxy.js";
+import { probeFeasibility } from "../proxy/checkFeasibility.js";
+import { getResolvedProxyConfigFromGlobals } from "../utility/makeReq.js";
 
 /**
  * Determines the directory for a Content Delivery Network (CDN) if used by the target.
@@ -90,6 +92,37 @@ const processUrl = async (
         globalsUtil.clearOpenapiOutput();
     }
 
+    if (cmd.proxyWafFallback && cmd._proxyConfigured) {
+        globalsUtil.setUseProxy(true); // reset in case a previous target's fallback check disabled it
+        const resolved = getResolvedProxyConfigFromGlobals();
+        let outcome;
+        try {
+            outcome = await probeFeasibility(resolved, url);
+        } catch (error) {
+            console.error(
+                chalk.bgRed(
+                    `[!] Proxy WAF fallback check failed: ${error}. ${isBatch ? "Skipping this target." : "Quitting."}`
+                )
+            );
+            if (isBatch) return;
+            process.exit(29);
+        }
+        console.log(outcome.code === 0 ? chalk.green(outcome.message) : chalk.yellow(outcome.message));
+        if (outcome.code === 27) {
+            // no firewall detected without a proxy - don't use it for this target
+            globalsUtil.setUseProxy(false);
+        } else if (outcome.code === 28) {
+            console.error(
+                chalk.bgRed(
+                    `[!] Proxy could not bypass the firewall for this target. ${isBatch ? "Skipping this target." : "Quitting."}`
+                )
+            );
+            if (isBatch) return;
+            process.exit(29);
+        }
+        // outcome.code === 0: firewall present, proxy bypasses it - keep using the proxy
+    }
+
     console.log(chalk.bgCyan("[1/8] Running lazyload to download JavaScript files..."));
     resetSkipStep();
     await Promise.race([
@@ -111,7 +144,8 @@ const processUrl = async (
             Number(cmd.lazyloadTimeout) * 60 * 1000,
             Number(cmd.maxPages),
             includeMethods,
-            excludeMethods
+            excludeMethods,
+            Number(cmd.detectionTimeout) * 1000
         ),
         getSkipStepPromise(),
     ]);
@@ -599,7 +633,8 @@ const processUrl = async (
             Number(cmd.lazyloadTimeout) * 60 * 1000,
             Number(cmd.maxPages),
             includeMethods,
-            excludeMethods
+            excludeMethods,
+            Number(cmd.detectionTimeout) * 1000
         ),
         getSkipStepPromise(),
     ]);
@@ -640,7 +675,8 @@ const processUrl = async (
             Number(cmd.lazyloadTimeout) * 60 * 1000,
             Number(cmd.maxPages),
             includeMethods,
-            excludeMethods
+            excludeMethods,
+            Number(cmd.detectionTimeout) * 1000
         ),
         getSkipStepPromise(),
     ]);
@@ -759,6 +795,9 @@ const processUrl = async (
  */
 export default async (cmd: any): Promise<void> => {
     configureProxy(cmd);
+    // Snapshot the originally-configured proxy state so `processUrl`'s --proxy-waf-fallback check
+    // can reset it before each target in batch mode, regardless of what a previous target left it as.
+    cmd._proxyConfigured = globalsUtil.getUseProxy();
     globalsUtil.setDisableCache(cmd.disableCache);
     globalsUtil.setRespCacheFile(cmd.cacheFile);
     globalsUtil.setYes(cmd.yes);
