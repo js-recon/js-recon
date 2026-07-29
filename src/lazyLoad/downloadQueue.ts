@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import prettier from "prettier";
 import makeRequest from "../utility/makeReq.js";
-import { getURLDirectory } from "../utility/urlUtils.js";
+import { getURLDirectory, getFilenameFromUrl } from "../utility/urlUtils.js";
 import { getScope } from "./globals.js";
 import { progressLog, progressError, progressWarn } from "../utility/progressLog.js";
 import * as globalsUtil from "../utility/globals.js";
@@ -165,20 +165,7 @@ export class DownloadQueue {
             const file =
                 url.match(/\.json/) || url.match(/\.m?js\.map/) ? rawText : `// File Source: ${url}\n${rawText}`;
 
-            let filename: string | undefined;
-            try {
-                filename = url
-                    .split("/")
-                    .pop()
-                    ?.match(/[a-zA-Z0-9\.\-_]+\.(mjs(\.map)?|js(on)?(\.map)?|vue)/)?.[0];
-            } catch {
-                for (const chunk of url.split("/")) {
-                    if (chunk.match(/\.(mjs(\.map)?|js(on)?|vue)$/)) {
-                        filename = chunk;
-                        break;
-                    }
-                }
-            }
+            const filename = getFilenameFromUrl(url);
 
             if (!filename) {
                 progressWarn(chalk.yellow(`[!] Could not determine filename for URL: ${url}. Skipping.`));

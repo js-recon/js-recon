@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getURLDirectory } from "../../utility/urlUtils.js";
+import { getURLDirectory, getFilenameFromUrl } from "../../utility/urlUtils.js";
 
 describe("getURLDirectory", () => {
     it("extracts host and directory from a standard JS URL", () => {
@@ -48,5 +48,47 @@ describe("getURLDirectory", () => {
         const result = getURLDirectory("https://example.com/static/js/app.js#hash");
         expect(result.host).toBe("example.com");
         expect(result.directory).toBe("/static/js");
+    });
+});
+
+describe("getFilenameFromUrl", () => {
+    it("extracts filename from the last path segment", () => {
+        expect(getFilenameFromUrl("https://example.com/static/js/main.js")).toBe("main.js");
+    });
+
+    it("finds filename when a cachebuster/token segment follows it", () => {
+        expect(getFilenameFromUrl("https://static.example.com/beacon.min.js/v4513226cdae34746b4dedf0")).toBe(
+            "beacon.min.js"
+        );
+    });
+
+    it("matches .json extension", () => {
+        expect(getFilenameFromUrl("https://example.com/data/config.json")).toBe("config.json");
+    });
+
+    it("matches .vue extension", () => {
+        expect(getFilenameFromUrl("https://example.com/components/App.vue")).toBe("App.vue");
+    });
+
+    it("matches .mjs extension", () => {
+        expect(getFilenameFromUrl("https://example.com/modules/entry.mjs")).toBe("entry.mjs");
+    });
+
+    it("matches .js.map extension", () => {
+        expect(getFilenameFromUrl("https://example.com/static/js/main.js.map")).toBe("main.js.map");
+    });
+
+    it("matches .mjs.map extension", () => {
+        expect(getFilenameFromUrl("https://example.com/modules/entry.mjs.map")).toBe("entry.mjs.map");
+    });
+
+    it("returns undefined when no segment matches a recognized extension", () => {
+        expect(getFilenameFromUrl("https://example.com/api/v1/resource")).toBeUndefined();
+    });
+
+    it("matches a webpack-style filename containing a tilde", () => {
+        expect(getFilenameFromUrl("https://example.com/assets/js/runtime~main.a4a30ed7.js")).toBe(
+            "main.a4a30ed7.js"
+        );
     });
 });

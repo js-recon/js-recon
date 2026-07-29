@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs";
 import prettier from "prettier";
 import makeRequest from "../utility/makeReq.js";
-import { getURLDirectory } from "../utility/urlUtils.js";
+import { getURLDirectory, getFilenameFromUrl } from "../utility/urlUtils.js";
 import { getScope, getMaxReqQueue } from "./globals.js"; // Import scope and max_req_queue functions
 import * as globalsUtil from "../utility/globals.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
@@ -72,20 +72,7 @@ const downloadFiles = async (urls: string[], output: string) => {
             const file =
                 url.match(/\.json/) || url.match(/\.m?js\.map/) ? rawText : `// File Source: ${url}\n${rawText}`;
 
-            let filename: string | undefined;
-            try {
-                filename = url
-                    .split("/")
-                    .pop()
-                    ?.match(/[a-zA-Z0-9\.\-_]+\.(mjs(\.map)?|js(on)?(\.map)?|vue)/)?.[0];
-            } catch {
-                for (const chunk of url.split("/")) {
-                    if (chunk.match(/\.(mjs(\.map)?|js(on)?|vue)$/)) {
-                        filename = chunk;
-                        break;
-                    }
-                }
-            }
+            const filename = getFilenameFromUrl(url);
 
             if (!filename) {
                 printMsg(MSG.Warn, `[!] Could not determine filename for URL: ${url}. Skipping.`);
