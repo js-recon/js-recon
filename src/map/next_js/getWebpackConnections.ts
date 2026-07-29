@@ -141,7 +141,11 @@ const getWebpackConnections = async (directory, output, formats) => {
                                     const function_code = code
                                         .slice(prop.node.start, prop.node.end)
                                         .replace(/^\s*[\w\d]+:\s*function\s*/, `function webpack_${keyValue} `)
-                                        .replace(/^\s*[\w\d]+:\s*\(/, `func_${keyValue} = (`);
+                                        // Arrow form: strip only the "id:" prefix (via lookahead) so the
+                                        // arrow's own param syntax is left untouched — this also covers
+                                        // the single-param no-parens shorthand (`e=>{...}`), which has no
+                                        // `(` to anchor on and would otherwise be missed entirely.
+                                        .replace(/^\s*[\w\d]+:\s*(?=\(|[\w$]+\s*=>)/, `func_${keyValue} = `);
                                     chunks[String(keyValue)] = {
                                         id: String(keyValue),
                                         description: "none",
