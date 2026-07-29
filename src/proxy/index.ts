@@ -3,9 +3,11 @@ import inquirer from "inquirer";
 import { APIGatewayClient, CreateRestApiCommand, DeleteRestApiCommand } from "@aws-sdk/client-api-gateway";
 import checkFeasibility from "./checkFeasibility.js";
 import { readAwsGatewayMap, writeAwsGatewayMap } from "./awsConfig.js";
-import { setActiveProxyMethod, writeMethodConfig } from "./configFile.js";
+import { readProxyConfigFile, setActiveProxyMethod, writeMethodConfig } from "./configFile.js";
 import { parseProxyUrl } from "./genericProxy.js";
 import { composeOxylabsUsername, type OxylabsConfig } from "./oxylabsProxy.js";
+import { resolveProxyConfig } from "./resolveProxyConfig.js";
+import * as globals from "../utility/globals.js";
 
 type ProxyMethod = "aws" | "socks" | "http" | "oxylabs";
 const VALID_PROXY_METHODS: ProxyMethod[] = ["aws", "socks", "http", "oxylabs"];
@@ -416,7 +418,37 @@ const proxy = async (opts: ProxyCliOptions): Promise<void> => {
             console.error(chalk.red("[!] Please provide a URL to check feasibility of"));
             return;
         }
-        await checkFeasibility(opts.feasibilityUrl);
+
+        const resolved = resolveProxyConfig({
+            cli: {
+                proxyMethod: opts.proxyMethod,
+                proxyUrl: opts.proxyUrl,
+                oxylabsUsername: opts.oxylabsUsername,
+                oxylabsPassword: opts.oxylabsPassword,
+                oxylabsCountry: opts.oxylabsCountry,
+                oxylabsCity: opts.oxylabsCity,
+                oxylabsSessionId: opts.oxylabsSessionId,
+            },
+            env: process.env,
+            ignoreEnv: false,
+            configFileParsed: readProxyConfigFile(configFile),
+        });
+
+        if (!resolved.method) {
+            console.error(
+                chalk.red(
+                    "[!] Please specify a proxy method via --proxy-method, or configure one with -i/--init first"
+                )
+            );
+            return;
+        }
+
+        globals.setProxyConfigFile(configFile);
+        globals.setProxyMethod(resolved.method);
+        globals.setProxyUrl(resolved.url);
+        globals.setOxylabsConfig(resolved.oxylabs);
+
+        await checkFeasibility(resolved, opts.feasibilityUrl);
         return;
     }
 

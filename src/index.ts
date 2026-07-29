@@ -276,8 +276,12 @@ program
     )
     .option("-c, --config <config>", "Name of the config file", ".proxy_config.json")
     .option("-l, --list", "List all the API created by this tool [aws method]", false)
-    .option("--feasibility", "Check feasibility of API Gateway [aws method]", false)
-    .option("--feasibility-url <url>", "URL to check feasibility of [aws method]")
+    .option(
+        "--feasibility",
+        "Check whether a firewall/WAF blocks the target directly and, if so, whether the proxy method (--proxy-method, or the one already configured via -i/--init) bypasses it",
+        false
+    )
+    .option("--feasibility-url <url>", "URL to check feasibility of")
     .option(
         "--proxy-method <method>",
         "Proxy method to configure with -i/--init: aws, socks, http, or oxylabs (omit for an interactive prompt)"
