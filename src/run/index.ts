@@ -815,9 +815,7 @@ export default async (cmd: any): Promise<void> => {
             // for devs: run `npm run cleanup` to prepare this directory
             if (fs.existsSync(cmd.output)) {
                 if (outputOverwrite) {
-                    console.log(
-                        chalk.yellow(`[!] Output directory ${cmd.output} already exists. Overwriting it.`)
-                    );
+                    console.log(chalk.yellow(`[!] Output directory ${cmd.output} already exists. Overwriting it.`));
                     fs.rmSync(cmd.output, { recursive: true, force: true });
                 } else {
                     console.error(
