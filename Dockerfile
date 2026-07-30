@@ -1,6 +1,10 @@
 FROM ghcr.io/puppeteer/puppeteer:24.43.1
 
 WORKDIR /home/pptruser
+# Pin HOME so path resolution (Puppeteer's Chrome cache, ~/.js-recon rules cache, etc.)
+# is consistent regardless of which OS user actually executes the process -- root
+# (docker-entrypoint.sh, or any --entrypoint override that bypasses it) or pptruser.
+ENV HOME=/home/pptruser
 
 # selectively copy the source files
 COPY ./package.json .
