@@ -74,6 +74,20 @@ To launch a quick assesment against a target, the `run` module can be used to au
 js-recon run -u https://app.example.com
 ```
 
+`run`, `lazyload`, and `fingerprint` accept one target, repeated `-u` options, a comma-separated list,
+or a text file containing one HTTP(S) URL per line:
+
+```bash
+js-recon run -u https://one.example.com -u https://two.example.com
+js-recon run -u 'https://one.example.com,https://two.example.com'
+js-recon run -u ./targets.txt
+```
+
+For `run`, an existing empty output directory is reused. If it contains files, js-recon preserves it
+and selects the next available sibling (`output-2`, `output-3`, and so on). Use
+`--output-overwrite` only when the contents of a previously created js-recon output should be
+replaced. Unowned directories are never recursively cleared.
+
 ## Configuration
 
 On first use, js-recon creates `~/.config/js-recon/config.yaml` with restrictive permissions and a key for every command option. Values resolve in this order:
@@ -87,6 +101,17 @@ Use `JS_RECON_<COMMAND>_<OPTION>` for any command option—for example, `JS_RECO
 
 ```bash
 js-recon --config ./operator.yaml run -u https://app.example.com
+```
+
+Targets may be configured as a YAML list. An environment value or one or more command-line `-u`
+flags replace the entire YAML list according to the precedence above:
+
+```yaml
+commands:
+    run:
+        url:
+            - https://one.example.com
+            - https://two.example.com
 ```
 
 See [`config.dist.yaml`](config.dist.yaml) for the complete schema. The existing `proxy --config` and `mcp --config` flags remain command-specific; place the application-level `--config` before those subcommands to avoid ambiguity.

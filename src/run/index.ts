@@ -5,7 +5,6 @@ import * as globalsUtil from "../utility/globals.js";
 import * as fs from "fs";
 import lazyLoad from "../lazyLoad/index.js";
 import chalk from "chalk";
-import CONFIG from "../globalConfig.js";
 import analyze from "../analyze/index.js";
 import report from "../report/index.js";
 import refactor from "../refactor/index.js";
@@ -27,8 +26,10 @@ import configureProxy from "../utility/configureProxy.js";
 import { getOxylabsFallbackConfiguration } from "../proxy/oxylabsFallback.js";
 import { probeFeasibility } from "../proxy/checkFeasibility.js";
 import { getResolvedProxyConfigFromGlobals } from "../utility/makeReq.js";
-import { resolveHostOutputDirectory, toOutputHost } from "../lazyLoad/outputPath.js";
+import { resolveHostOutputDirectory } from "../lazyLoad/outputPath.js";
 import { awaitCancellableStep } from "./cancellableStep.js";
+import { resolveTargetInputs } from "../utility/targetInputs.js";
+import { clearRunOutputDirectory, getBatchTargetDirectoryName, reserveRunOutputDirectory } from "./outputDirectory.js";
 
 /**
  * Determines the directory for a Content Delivery Network (CDN) if used by the target.
@@ -793,19 +794,6 @@ const processUrl = async (
 };
 
 /**
- * Removes everything inside a directory without removing the directory itself.
- *
- * Used instead of `fs.rmSync(dir, { recursive: true })` for --output-overwrite: the output
- * directory may be a Docker bind-mount point, and removing a mount point throws EBUSY
- * ("Device or resource busy") even from inside the container's own mount namespace.
- */
-const emptyDir = (dir: string): void => {
-    for (const entry of fs.readdirSync(dir)) {
-        fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
-    }
-};
-
-/**
  * Main handler for the 'run' command that executes the complete js-recon analysis pipeline.
  *
  * Sets up global configuration and determines whether to process a single URL or
@@ -816,135 +804,107 @@ const emptyDir = (dir: string): void => {
  * @returns Promise that resolves when all URL processing is complete
  */
 export default async (cmd: any): Promise<void> => {
+    const resolvedTargets = resolveTargetInputs(cmd.url);
     configureProxy(cmd);
     if (getOxylabsFallbackConfiguration().enabled) globalsUtil.setUseProxy(false);
     // Snapshot the originally-configured proxy state so `processUrl`'s --proxy-waf-fallback check
     // can reset it before each target in batch mode, regardless of what a previous target left it as.
-    cmd._proxyConfigured = globalsUtil.getUseProxy();
     globalsUtil.setDisableCache(cmd.disableCache);
     globalsUtil.setRespCacheFile(cmd.cacheFile);
     globalsUtil.setYes(cmd.yes);
 
-    const isBatch = fs.existsSync(cmd.url);
+    const outputOverwrite = cmd.outputOverwrite === true;
+    const outputReservation = reserveRunOutputDirectory(cmd.output, outputOverwrite);
+    const isBatch = resolvedTargets.isBatch;
+    const runCommand = Object.freeze({
+        ...cmd,
+        output: outputReservation.path,
+        _proxyConfigured: globalsUtil.getUseProxy(),
+    });
+    if (outputReservation.redirected) {
+        console.log(
+            chalk.yellow(
+                `[i] Output directory ${cmd.output} is already occupied; using ${outputReservation.path} instead.`
+            )
+        );
+    }
+    if (outputOverwrite && outputReservation.occupied) {
+        console.log(chalk.yellow(`[!] Output directory ${runCommand.output} already exists. Overwriting it.`));
+        clearRunOutputDirectory(runCommand.output);
+    }
+
     installSigintHandler(isBatch);
-
-    const outputOverwrite = cmd.outputOverwrite || process.env.JS_RECON_OUTPUT_OVERWRITE === "true";
-
     try {
-        // check if the given URL is a file
         if (!isBatch) {
-            // check if output directory exists. If so, ask the user to switch to other directory
-            // if not done, it might conflict this process
-            // for devs: run `npm run cleanup` to prepare this directory
-            if (fs.existsSync(cmd.output)) {
-                if (outputOverwrite) {
-                    console.log(chalk.yellow(`[!] Output directory ${cmd.output} already exists. Overwriting it.`));
-                    emptyDir(cmd.output);
-                } else {
-                    console.error(
-                        chalk.red(
-                            `[!] Output directory ${cmd.output} already exists. Please switch to other directory or it might conflict with this process.`
-                        )
-                    );
-                    console.log(
-                        chalk.yellow(
-                            `[i] For advanced users: use the individual modules separately. See docs at ${CONFIG.modulesDocs}`
-                        )
-                    );
-                    process.exit(11);
-                }
-            }
-
-            try {
-                new URL(cmd.url);
-            } catch (e) {
-                console.error(chalk.red(`[!] Invalid URL: ${cmd.url}`));
-                process.exit(12);
-            }
-
             await processUrl(
-                cmd.url,
-                cmd.output,
+                resolvedTargets.targets[0],
+                runCommand.output,
                 ".",
-                cmd,
+                runCommand,
                 false,
-                cmd._includeMethods ?? [],
-                cmd._excludeMethods ?? []
+                runCommand._includeMethods ?? [],
+                runCommand._excludeMethods ?? []
             );
         } else {
-            // since this is a file, we need to first load the URLs in the memory remove empty strings
-            const urls = fs
-                .readFileSync(cmd.url, "utf-8")
-                .split("\n")
-                .filter((url) => url !== "");
-
-            if (!fs.existsSync(cmd.output)) {
-                fs.mkdirSync(cmd.output, { recursive: true });
-            }
-
-            const globalDbPath = `${cmd.output}/js-recon.db`;
+            const globalDbPath = `${runCommand.output}/js-recon.db`;
             await initGlobalReportDb(globalDbPath);
+            const targetHosts = resolvedTargets.targets.map((target) => new URL(target).host);
+            const hostFrequencies = targetHosts.reduce<Map<string, number>>(
+                (frequencies, host) => new Map(frequencies).set(host, (frequencies.get(host) ?? 0) + 1),
+                new Map()
+            );
 
-            for (const url of urls) {
+            for (const url of resolvedTargets.targets) {
                 resetSkipTarget();
 
-                // Validate URL only
-                let urlObj;
-                try {
-                    urlObj = new URL(url);
-                } catch {
-                    console.error(chalk.bgRed(`[!] Invalid URL: ${url}`));
-                    continue;
-                }
-
-                const hostDir = toOutputHost(urlObj.host);
-                const thisTargetDir = `${cmd.output}/${hostDir}`;
-
-                if (fs.existsSync(thisTargetDir) && outputOverwrite) {
+                const urlObj = new URL(url);
+                let hostDir = getBatchTargetDirectoryName(url, (hostFrequencies.get(urlObj.host) ?? 0) > 1);
+                const requestedTargetDir = path.join(runCommand.output, hostDir);
+                const targetReservation = reserveRunOutputDirectory(requestedTargetDir, outputOverwrite);
+                const thisTargetDir = targetReservation.path;
+                hostDir = path.basename(thisTargetDir);
+                if (outputOverwrite && targetReservation.occupied) {
                     console.log(chalk.yellow(`[!] Output directory ${thisTargetDir} already exists. Overwriting it.`));
-                    emptyDir(thisTargetDir);
-                } else if (fs.existsSync(thisTargetDir)) {
-                    console.error(chalk.red(`[!] Output directory ${thisTargetDir} already exists. Skipping ${url}.`));
-                    console.log(
-                        chalk.yellow(
-                            `[i] For advanced users: use the individual modules separately. See docs at ${CONFIG.modulesDocs}`
-                        )
-                    );
-                    continue;
+                    clearRunOutputDirectory(thisTargetDir);
+                } else if (targetReservation.redirected) {
+                    console.log(chalk.yellow(`[i] Target output already exists; using ${thisTargetDir} for ${url}.`));
                 }
 
-                fs.mkdirSync(thisTargetDir, { recursive: true });
                 try {
-                    await processUrl(
-                        url,
-                        thisTargetDir,
-                        thisTargetDir,
-                        cmd,
-                        true,
-                        cmd._includeMethods ?? [],
-                        cmd._excludeMethods ?? []
-                    );
-                } catch (error) {
-                    console.error(chalk.bgRed(`[!] Unhandled error while processing ${url}: ${error}`));
-                    process.exitCode = 1;
-                    continue;
-                }
-
-                const domainDbPath = `${thisTargetDir}/js-recon.db`;
-                if (fs.existsSync(domainDbPath)) {
                     try {
-                        mergeDomainIntoGlobalDb(globalDbPath, domainDbPath, hostDir);
+                        await processUrl(
+                            url,
+                            thisTargetDir,
+                            thisTargetDir,
+                            runCommand,
+                            true,
+                            runCommand._includeMethods ?? [],
+                            runCommand._excludeMethods ?? []
+                        );
                     } catch (error) {
-                        console.error(
-                            chalk.yellow(`[!] Failed to merge ${hostDir} into the global js-recon.db: ${error}`)
+                        console.error(chalk.bgRed(`[!] Unhandled error while processing ${url}: ${error}`));
+                        process.exitCode = 1;
+                        continue;
+                    }
+
+                    const domainDbPath = `${thisTargetDir}/js-recon.db`;
+                    if (fs.existsSync(domainDbPath)) {
+                        try {
+                            mergeDomainIntoGlobalDb(globalDbPath, domainDbPath, hostDir);
+                        } catch (error) {
+                            console.error(
+                                chalk.yellow(`[!] Failed to merge ${hostDir} into the global js-recon.db: ${error}`)
+                            );
+                        }
+                    } else {
+                        console.log(
+                            chalk.yellow(
+                                `[i] No js-recon.db found for ${hostDir}, skipping merge into the global database.`
+                            )
                         );
                     }
-                } else {
-                    console.log(
-                        chalk.yellow(
-                            `[i] No js-recon.db found for ${hostDir}, skipping merge into the global database.`
-                        )
-                    );
+                } finally {
+                    targetReservation.release();
                 }
             }
         }
@@ -952,8 +912,12 @@ export default async (cmd: any): Promise<void> => {
         console.error(chalk.bgRed(`[!] Unhandled error: ${error}`));
         process.exitCode = 1;
     } finally {
-        await waitForPendingInterrupt();
-        removeSigintHandler();
+        try {
+            await waitForPendingInterrupt();
+        } finally {
+            removeSigintHandler();
+            outputReservation.release();
+        }
         process.exit(process.exitCode ?? 0);
     }
 };

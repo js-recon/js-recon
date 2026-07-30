@@ -56,6 +56,7 @@ import DownloadProgress from "../utility/downloadProgress.js";
 import { progressLog, progressWarn } from "../utility/progressLog.js";
 import { resolveHostOutputDirectory } from "./outputPath.js";
 import { withRequestSignal } from "../utility/makeReq.js";
+import { resolveTargetInputs, type TargetInput } from "../utility/targetInputs.js";
 
 /**
  * Downloads the required JavaScript files for a given URL
@@ -70,10 +71,10 @@ import { withRequestSignal } from "../utility/makeReq.js";
  * @returns {Promise<void>} A Promise that resolves when the download is complete
  */
 const lazyLoad = async (
-    url: string,
+    url: TargetInput,
     output: string,
     strictScope: boolean,
-    inputScope: [],
+    inputScope: string[],
     threads: number,
     subsequentRequestsFlag: boolean,
     urlsFile: string,
@@ -91,6 +92,7 @@ const lazyLoad = async (
     detectionTimeoutMs: number = 30 * 1000,
     cancellationSignal?: AbortSignal
 ) => {
+    const resolvedTargets = resolveTargetInputs(url);
     // Hoisted so the timeout handler can stop discovery and drain downloads.
     let activeCrawler: NextJsCrawler | null = null;
     let activeQueue: DownloadQueue | null = null;
@@ -139,36 +141,22 @@ const lazyLoad = async (
             }
         }
 
-        let urls: string[];
-
-        // check if the url is file or a URL
-        if (fs.existsSync(url)) {
-            urls = fs.readFileSync(url, "utf8").split("\n");
-            // remove the empty lines
-            urls = urls.filter((url) => url.trim() !== "");
-        } else {
-            try {
-                const parsed = new URL(url);
-                if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
-                    throw new Error("unsupported protocol");
-                urls = [url];
-            } catch {
-                console.error(chalk.red("[!] Invalid URL or file path"));
-                process.exit(3);
-            }
-        }
-
-        for (const url of urls) {
+        for (const url of resolvedTargets.targets) {
             if (hardTimeoutReached) break;
             console.log(chalk.cyan(`[i] Processing ${url}`));
 
+            lazyLoadGlobals.clearJsUrls();
+            lazyLoadGlobals.clearJsonUrls();
+            lazyLoadGlobals.clearCrawledUrls();
+
             if (strictScope) {
-                lazyLoadGlobals.pushToScope(new URL(url).host);
+                lazyLoadGlobals.setScope([new URL(url).host]);
             } else {
-                lazyLoadGlobals.setScope(inputScope);
+                lazyLoadGlobals.setScope([...inputScope]);
             }
 
             lazyLoadGlobals.setMaxReqQueue(threads);
+            globals.setTech("");
 
             let tech: { name: string; evidence: string } | null;
             const detectionController = new AbortController();

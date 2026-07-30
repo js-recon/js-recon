@@ -11,6 +11,7 @@ import {
     getLoadedApplicationConfig,
     prepareProgramConfiguration,
 } from "../../config/applicationConfig.js";
+import { collectTargetInput } from "../../utility/targetInputs.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -219,7 +220,10 @@ describe("application YAML configuration", () => {
 
         prepareProgramConfiguration(program, {
             argv,
-            env: { JS_RECON_OUTPUT_OVERWRITE: "false" },
+            env: {
+                JS_RECON_RUN_OUTPUT_OVERWRITE: "false",
+                JS_RECON_OUTPUT_OVERWRITE: "true",
+            },
             defaultConfigPath: path.join(root, "default.yaml"),
         });
         program.parse(argv);
@@ -272,6 +276,116 @@ describe("application YAML configuration", () => {
         program.parse(argv);
 
         expect(captured?.command).toEqual(["one", "two"]);
+    });
+
+    it("accepts YAML target lists while repeated CLI and environment targets replace them", () => {
+        const root = makeTemporaryDirectory();
+        const configPath = path.join(root, "operator.yaml");
+        fs.writeFileSync(
+            configPath,
+            [
+                "version: 1",
+                "commands:",
+                "  run:",
+                "    url:",
+                "      - https://yaml-one.example.test",
+                "      - https://yaml-two.example.test",
+                "",
+            ].join("\n")
+        );
+
+        const makeTargetProgram = (capture: (options: Record<string, unknown>) => void): Command => {
+            const targetProgram = new Command().exitOverride().option("--config <file>");
+            targetProgram
+                .command("run")
+                .option("-u, --url <url/file>", "Target input", collectTargetInput)
+                .action(capture);
+            return targetProgram;
+        };
+
+        let yamlOptions: Record<string, unknown> | undefined;
+        const yamlProgram = makeTargetProgram((options) => {
+            yamlOptions = options;
+        });
+        const yamlArgv = ["node", "js-recon", "--config", configPath, "run"];
+        prepareProgramConfiguration(yamlProgram, {
+            argv: yamlArgv,
+            env: {},
+            defaultConfigPath: path.join(root, "unused.yaml"),
+        });
+        yamlProgram.parse(yamlArgv);
+        expect(yamlOptions?.url).toEqual(["https://yaml-one.example.test", "https://yaml-two.example.test"]);
+
+        let cliOptions: Record<string, unknown> | undefined;
+        const cliProgram = makeTargetProgram((options) => {
+            cliOptions = options;
+        });
+        const cliArgv = [
+            "node",
+            "js-recon",
+            "--config",
+            configPath,
+            "run",
+            "-u",
+            "https://cli-one.example.test",
+            "-u",
+            "https://cli-two.example.test",
+        ];
+        prepareProgramConfiguration(cliProgram, {
+            argv: cliArgv,
+            env: {},
+            defaultConfigPath: path.join(root, "unused.yaml"),
+        });
+        cliProgram.parse(cliArgv);
+        expect(cliOptions?.url).toEqual(["https://cli-one.example.test", "https://cli-two.example.test"]);
+
+        let envOptions: Record<string, unknown> | undefined;
+        const envProgram = makeTargetProgram((options) => {
+            envOptions = options;
+        });
+        prepareProgramConfiguration(envProgram, {
+            argv: cliArgv,
+            env: { JS_RECON_RUN_URL: "https://env-one.example.test,https://env-two.example.test" },
+            defaultConfigPath: path.join(root, "unused.yaml"),
+        });
+        envProgram.parse(cliArgv);
+        expect(envOptions?.url).toEqual(["https://env-one.example.test,https://env-two.example.test"]);
+    });
+
+    it("applies a YAML target list before action-time fingerprint validation", () => {
+        const root = makeTemporaryDirectory();
+        const configPath = path.join(root, "operator.yaml");
+        fs.writeFileSync(
+            configPath,
+            [
+                "version: 1",
+                "commands:",
+                "  fingerprint:",
+                "    url:",
+                "      - https://one.example.test",
+                "      - https://two.example.test",
+                "",
+            ].join("\n")
+        );
+        let captured: Record<string, unknown> | undefined;
+        const program = new Command().exitOverride().option("--config <file>");
+        program
+            .command("fingerprint")
+            .option("-u, --url <url/list/file>", "Target input", collectTargetInput)
+            .action((options) => {
+                if (!options.url) throw new Error("missing action-time target");
+                captured = options;
+            });
+        const argv = ["node", "js-recon", "--config", configPath, "fingerprint"];
+
+        prepareProgramConfiguration(program, {
+            argv,
+            env: {},
+            defaultConfigPath: path.join(root, "unused.yaml"),
+        });
+        program.parse(argv);
+
+        expect(captured?.url).toEqual(["https://one.example.test", "https://two.example.test"]);
     });
 
     it("does not require or create the default config for explicit or informational invocations", () => {

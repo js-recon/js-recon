@@ -19,6 +19,10 @@ oxylabs:
 
 commands:
     lazyload:
+        # May also be a YAML list of HTTP(S) URLs:
+        # url:
+        #     - https://one.example.com
+        #     - https://two.example.com
         url: null
         output: output
         strictScope: false
@@ -148,6 +152,11 @@ commands:
         output: report
 
     run:
+        # May also be a YAML list. Repeated -u flags and comma-separated URLs
+        # are supported on the command line; a target-file path is also valid.
+        # url:
+        #     - https://one.example.com
+        #     - https://two.example.com
         url: null
         rules: null
         disableRulesVersionCheck: false
@@ -203,6 +212,7 @@ commands:
         cacheFile: .resp_cache.json
 
     fingerprint:
+        # May also be a YAML list of HTTP(S) URLs.
         url: null
         output: null
         format: text

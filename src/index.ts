@@ -34,6 +34,8 @@ import {
     OxylabsFallbackConfigurationError,
     resolveOxylabsFallback,
 } from "./proxy/oxylabsFallback.js";
+import { collectTargetInput, TargetInputError } from "./utility/targetInputs.js";
+import { RunOutputDirectoryError } from "./run/outputDirectory.js";
 
 const args = process.argv.slice(2);
 const isVersionFlag = args.length === 1 && (args[0] === "-V" || args[0] === "--version");
@@ -105,7 +107,11 @@ function validateAndSetTimeout(timeoutValue: string): void {
 program
     .command("lazyload")
     .description("Run lazy load module")
-    .option("-u, --url <url/file>", "Target URL or a file containing a list of URLs (one per line)")
+    .option(
+        "-u, --url <url/list/file>",
+        "Target URL, comma-separated URLs, or target file; may be repeated",
+        collectTargetInput
+    )
     .option("-o, --output <directory>", "Output directory", "output")
     .option("--strict-scope", "Download JS files from only the input URL domain", false)
     .option("-s, --scope <scope>", "Download JS files from specific domains (comma-separated)", "*")
@@ -197,8 +203,8 @@ program
             process.exit(22);
         }
 
-        if (!cmd.url) {
-            console.error(chalk.red("[!] Missing required option: -u, --url <url/file>"));
+        if (!cmd.url || (Array.isArray(cmd.url) && cmd.url.length === 0)) {
+            console.error(chalk.red("[!] Missing required option: -u, --url <url/list/file>"));
             process.exit(1);
         }
 
@@ -550,7 +556,11 @@ program
 program
     .command("run")
     .description("Run all modules")
-    .option("-u, --url <url/file>", "Target URL or a file containing a list of URLs (one per line)")
+    .option(
+        "-u, --url <url/list/file>",
+        "Target URL, comma-separated URLs, or target file; may be repeated",
+        collectTargetInput
+    )
     .option("-r, --rules <file/dir>", "Rules file or directory (passed to analyze module)")
     .option(
         "--disable-rules-version-check",
@@ -566,7 +576,7 @@ program
     .option("-o, --output <directory>", "Output directory", "output")
     .option(
         "--output-overwrite",
-        "Overwrite the output directory if it already exists instead of erroring out. Can also be set via the JS_RECON_OUTPUT_OVERWRITE=true environment variable.",
+        "Replace an occupied js-recon-owned output instead of selecting output-2, output-3, etc. Can also be set via JS_RECON_OUTPUT_OVERWRITE=true.",
         false
     )
     .option("--strict-scope", "Download JS files from only the input URL domain", false)
@@ -680,8 +690,8 @@ program
         cmd._includeMethods = includeMethods;
         cmd._excludeMethods = excludeMethods;
 
-        if (!cmd.url) {
-            console.error(chalk.red("[!] Missing required option: -u, --url <url/file>"));
+        if (!cmd.url || (Array.isArray(cmd.url) && cmd.url.length === 0)) {
+            console.error(chalk.red("[!] Missing required option: -u, --url <url/list/file>"));
             process.exit(1);
         }
 
@@ -727,7 +737,11 @@ program
 program
     .command("fingerprint")
     .description("Detect front-end frameworks across one or more URLs")
-    .requiredOption("-u, --url <url/file>", "Target URL or a file containing a list of URLs (one per line)")
+    .option(
+        "-u, --url <url/list/file>",
+        "Target URL, comma-separated URLs, or target file; may be repeated",
+        collectTargetInput
+    )
     .option("-o, --output <file>", "Output file to write results")
     .option("-f, --format <formats>", "Output format(s): text, csv, json, jsonl (comma-separated)", "text")
     .option("-t, --threads <threads>", "Number of concurrent detection workers", "5")
@@ -735,6 +749,10 @@ program
     .option("-k, --insecure", "Disable SSL certificate verification", false)
     .option("--no-sandbox", "Disable browser sandbox")
     .action(async (cmd) => {
+        if (!cmd.url || (Array.isArray(cmd.url) && cmd.url.length === 0)) {
+            console.error(chalk.red("[!] Missing required option: -u, --url <url/list/file>"));
+            process.exit(1);
+        }
         validateAndSetTimeout(cmd.timeout);
         globalsUtil.setDisableCache(true);
         globalsUtil.setYes(true);
@@ -856,7 +874,12 @@ try {
     });
     await (async () => program.parseAsync(process.argv))();
 } catch (error) {
-    if (error instanceof ApplicationConfigError || error instanceof OxylabsFallbackConfigurationError) {
+    if (
+        error instanceof ApplicationConfigError ||
+        error instanceof OxylabsFallbackConfigurationError ||
+        error instanceof TargetInputError ||
+        error instanceof RunOutputDirectoryError
+    ) {
         console.error(chalk.red(`[!] ${error.message}`));
         process.exitCode = 1;
     } else {

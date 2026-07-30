@@ -116,3 +116,8 @@ export const addCrawledUrl = (url: string | string[]): void => {
         }
     }
 };
+
+/** Clears the per-target crawl history before processing another target. */
+export const clearCrawledUrls = (): void => {
+    crawled_urls = [];
+};

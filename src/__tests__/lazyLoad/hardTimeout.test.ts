@@ -138,6 +138,7 @@ describe("lazyLoad hard timeout", () => {
     });
 
     it("aborts and awaits framework detection when its timeout expires", async () => {
+        globals.setTech("react");
         let capturedSignal: AbortSignal | undefined;
         let detectorSettled = false;
         harness.frameworkDetect.mockImplementationOnce((_url: string, signal?: AbortSignal) => {
@@ -178,6 +179,41 @@ describe("lazyLoad hard timeout", () => {
 
         expect(capturedSignal?.aborted).toBe(true);
         expect(detectorSettled).toBe(true);
+        expect(globals.getTech()).toBe("");
+    });
+
+    it("clears a previous target's technology when the module timeout interrupts detection", async () => {
+        globals.setTech("react");
+        harness.frameworkDetect.mockImplementationOnce(
+            (_url: string, signal?: AbortSignal) =>
+                new Promise<null>((resolve) => {
+                    signal?.addEventListener("abort", () => resolve(null), { once: true });
+                })
+        );
+
+        await lazyLoad(
+            "https://timeout.example.test",
+            "/tmp/js-recon-stale-tech-timeout-test",
+            true,
+            [],
+            1,
+            false,
+            "",
+            false,
+            false,
+            "sourcemaps",
+            false,
+            "research.json",
+            1,
+            2,
+            10,
+            200,
+            [],
+            [],
+            0
+        );
+
+        expect(globals.getTech()).toBe("");
     });
 
     it("requests cancellation but does not resolve while framework discovery is still running", async () => {
