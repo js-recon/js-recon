@@ -48,15 +48,14 @@ export const clearJsUrls = (): void => {
  * Adds a JavaScript URL to the global array.
  * @param url - JavaScript URL to add
  */
-export const pushToJsUrls = (url: string | string[]): void => {
-    if (Array.isArray(url)) {
-        js_urls.push(...url);
-    } else {
-        js_urls.push(url);
-    }
+export const pushToJsUrls = (url: string | string[]): number => {
+    const beforeCount = js_urls.length;
+    const urlsToAdd = Array.isArray(url) ? url : [url];
+    js_urls.push(...urlsToAdd);
 
     // Remove duplicates
     js_urls = [...new Set(js_urls)];
+    return js_urls.length - beforeCount;
 };
 
 /**
