@@ -1,5 +1,5 @@
 import { get } from "./genReq.js";
-import { buildUndiciDispatcher, type FetchOptsWithDispatcher } from "../utility/makeReq.js";
+import { buildUndiciDispatcher, withManagedDispatcher } from "../utility/makeReq.js";
 import type { ResolvedProxyConfig } from "./resolveProxyConfig.js";
 
 /**
@@ -16,7 +16,8 @@ export const proxyFeasibilityRequest = async (resolved: ResolvedProxyConfig, url
         return await get(url);
     }
     const dispatcher = buildUndiciDispatcher(resolved);
-    const opts: FetchOptsWithDispatcher = dispatcher ? { dispatcher } : {};
-    const res = await fetch(url, opts);
-    return await res.text();
+    return await withManagedDispatcher(dispatcher, async (options) => {
+        const response = await fetch(url, options);
+        return await response.text();
+    });
 };

@@ -23,6 +23,17 @@ import csMast from "./cs_mast/index.js";
 import sourcemaps from "./sourcemaps/index.js";
 import { printBanner } from "./utility/banner.js";
 import completion from "./completion/index.js";
+import {
+    ApplicationConfigError,
+    getLoadedApplicationConfig,
+    prepareProgramConfiguration,
+} from "./config/applicationConfig.js";
+import {
+    configureOxylabsFallback,
+    getOxylabsFallbackConfiguration,
+    OxylabsFallbackConfigurationError,
+    resolveOxylabsFallback,
+} from "./proxy/oxylabsFallback.js";
 
 const args = process.argv.slice(2);
 const isVersionFlag = args.length === 1 && (args[0] === "-V" || args[0] === "--version");
@@ -35,7 +46,13 @@ if (!isVersionFlag && !isCompletionCmd) {
  * Main CLI application entry point for js-recon tool.
  * Sets up command-line interface with various modules for JavaScript reconnaissance.
  */
-program.version(CONFIG.version).description(CONFIG.toolDesc);
+program
+    .version(CONFIG.version)
+    .description(CONFIG.toolDesc)
+    .option(
+        "--config <file>",
+        "Application YAML config (default: ~/.config/js-recon/config.yaml; JS_RECON_CONFIG takes precedence)"
+    );
 
 program.configureHelp({
     styleTitle: (str) => chalk.bold.cyan(str),
@@ -97,6 +114,14 @@ program
     .option("--urls-file <file>", "Input JSON file containing URLs", "extracted_urls.json")
     .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` module)", ".proxy_config.json")
     .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
+    .option(
+        "--oxylabs-waf-fallback",
+        "Retry strongly identified CDN/WAF blocks through configured Oxylabs; direct requests remain the default",
+        false
+    )
+    .option("--oxylabs-fallback-max-requests <count>", "Maximum paid Oxylabs fallback requests per origin", "10")
+    .option("--oxylabs-fallback-max-total <count>", "Maximum paid Oxylabs fallback requests per run", "100")
+    .option("--oxylabs-fallback-max-origins <count>", "Maximum distinct fallback origins per run", "25")
     .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
     .option("--disable-cache", "Disable response caching", false)
     .option("--cache-only", "Only use the response cache; never make network requests", false)
@@ -178,6 +203,7 @@ program
         }
 
         configureProxy(cmd);
+        if (getOxylabsFallbackConfiguration().enabled) globalsUtil.setUseProxy(false);
         globalsUtil.setDisableCache(cmd.disableCache);
         globalsUtil.setRespCacheFile(cmd.cacheFile);
         globalsUtil.setCacheOnly(cmd.cacheOnly);
@@ -553,6 +579,14 @@ program
         "Before each target, check whether the configured proxy is needed and can bypass a WAF/firewall (reuses the `proxy --feasibility` logic); skip the target if the proxy can't bypass it",
         false
     )
+    .option(
+        "--oxylabs-waf-fallback",
+        "Retry strongly identified CDN/WAF blocks through configured Oxylabs; direct requests remain the default",
+        false
+    )
+    .option("--oxylabs-fallback-max-requests <count>", "Maximum paid Oxylabs fallback requests per origin", "10")
+    .option("--oxylabs-fallback-max-total <count>", "Maximum paid Oxylabs fallback requests per run", "100")
+    .option("--oxylabs-fallback-max-origins <count>", "Maximum distinct fallback origins per run", "25")
     .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
     .option("--disable-cache", "Disable response caching", false)
     .option("--cache-only", "Only use the response cache; never make network requests", false)
@@ -799,4 +833,33 @@ Examples:
         completion(shell);
     });
 
-program.parse(process.argv);
+try {
+    prepareProgramConfiguration(program);
+    program.hook("preAction", (_rootCommand, actionCommand) => {
+        const commandOptions = actionCommand.opts();
+        if (commandOptions.oxylabsWafFallback && commandOptions.proxyWafFallback) {
+            throw new OxylabsFallbackConfigurationError(
+                "--oxylabs-waf-fallback cannot be combined with --proxy-waf-fallback"
+            );
+        }
+        configureOxylabsFallback(
+            resolveOxylabsFallback({
+                enabled: commandOptions.oxylabsWafFallback === true,
+                maxRequestsPerOrigin: commandOptions.oxylabsFallbackMaxRequests ?? "10",
+                maxTotalRequests: commandOptions.oxylabsFallbackMaxTotal ?? "100",
+                maxOrigins: commandOptions.oxylabsFallbackMaxOrigins ?? "25",
+                loadedConfig: getLoadedApplicationConfig(),
+                env: process.env,
+                ignoreEnvironment: commandOptions.ignoreProxyEnv === true,
+            })
+        );
+    });
+    await (async () => program.parseAsync(process.argv))();
+} catch (error) {
+    if (error instanceof ApplicationConfigError || error instanceof OxylabsFallbackConfigurationError) {
+        console.error(chalk.red(`[!] ${error.message}`));
+        process.exitCode = 1;
+    } else {
+        throw error;
+    }
+}

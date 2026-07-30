@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import * as cheerio from "cheerio";
-import makeRequest, { buildPuppeteerProxyArgs, getResolvedProxyConfigFromGlobals } from "../../utility/makeReq.js";
+import makeRequest, { getActivePuppeteerProxyArgs } from "../../utility/makeReq.js";
 import puppeteer from "../../utility/puppeteerInstance.js";
 import * as globalsUtil from "../../utility/globals.js";
 import { getChromiumPath } from "../../utility/getChromiumPath.js";
@@ -62,7 +62,7 @@ const frameworkDetect = async (
     const responseEvidence = new Map<string, { status: number; contentType: string | null; body: string }>();
     if (!globalsUtil.getCacheOnly()) {
         const chromiumPath = getChromiumPath();
-        const proxyArgs = buildPuppeteerProxyArgs(getResolvedProxyConfigFromGlobals());
+        const proxyArgs = getActivePuppeteerProxyArgs();
         const browser = await puppeteer.launch({
             executablePath: chromiumPath,
             args: [

@@ -6,7 +6,7 @@ import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import inquirer from "inquirer";
 import cliProgress from "cli-progress";
-import makeRequest, { buildPuppeteerProxyArgs, getResolvedProxyConfigFromGlobals } from "../../utility/makeReq.js";
+import makeRequest, { getActivePuppeteerProxyArgs } from "../../utility/makeReq.js";
 import execFunc from "../../utility/runSandboxed.js";
 import { getJsonUrls, getJsUrls, pushToJsonUrls, pushToJsUrls } from "../globals.js";
 import * as globals from "../../utility/globals.js";
@@ -42,7 +42,7 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
     const sandboxArgs = globals.getDisableSandbox()
         ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
         : [];
-    const proxyArgs = buildPuppeteerProxyArgs(getResolvedProxyConfigFromGlobals());
+    const proxyArgs = getActivePuppeteerProxyArgs();
     const browser = await puppeteer.launch({
         headless: true,
         executablePath: chromiumPath,

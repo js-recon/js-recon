@@ -24,6 +24,7 @@ import {
 } from "./interruptHandler.js";
 import { detectBundler } from "./bundler-detect.js";
 import configureProxy from "../utility/configureProxy.js";
+import { getOxylabsFallbackConfiguration } from "../proxy/oxylabsFallback.js";
 import { probeFeasibility } from "../proxy/checkFeasibility.js";
 import { getResolvedProxyConfigFromGlobals } from "../utility/makeReq.js";
 import { resolveHostOutputDirectory, toOutputHost } from "../lazyLoad/outputPath.js";
@@ -816,6 +817,7 @@ const emptyDir = (dir: string): void => {
  */
 export default async (cmd: any): Promise<void> => {
     configureProxy(cmd);
+    if (getOxylabsFallbackConfiguration().enabled) globalsUtil.setUseProxy(false);
     // Snapshot the originally-configured proxy state so `processUrl`'s --proxy-waf-fallback check
     // can reset it before each target in batch mode, regardless of what a previous target left it as.
     cmd._proxyConfigured = globalsUtil.getUseProxy();

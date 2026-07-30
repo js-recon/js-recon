@@ -33,6 +33,10 @@ const FLAGS: Record<string, string[]> = {
         "--urls-file",
         "--proxy-config",
         "--ignore-proxy-env",
+        "--oxylabs-waf-fallback",
+        "--oxylabs-fallback-max-requests",
+        "--oxylabs-fallback-max-total",
+        "--oxylabs-fallback-max-origins",
         "--cache-file",
         "--disable-cache",
         "--cache-only",
@@ -49,6 +53,7 @@ const FLAGS: Record<string, string[]> = {
         "--max-iterations",
         "--max-js-size",
         "--lazyload-timeout",
+        "--detection-timeout",
         "--max-pages",
         "--include-methods",
         "--exclude-methods",
@@ -161,6 +166,7 @@ const FLAGS: Record<string, string[]> = {
     analyze: [
         "-r",
         "--rules",
+        "--disable-rules-version-check",
         "-m",
         "--mapped-json",
         "-t",
@@ -191,10 +197,12 @@ const FLAGS: Record<string, string[]> = {
         "--url",
         "-r",
         "--rules",
+        "--disable-rules-version-check",
         "-c",
         "--command",
         "-o",
         "--output",
+        "--output-overwrite",
         "--strict-scope",
         "-s",
         "--scope",
@@ -202,6 +210,11 @@ const FLAGS: Record<string, string[]> = {
         "--threads",
         "--proxy-config",
         "--ignore-proxy-env",
+        "--proxy-waf-fallback",
+        "--oxylabs-waf-fallback",
+        "--oxylabs-fallback-max-requests",
+        "--oxylabs-fallback-max-total",
+        "--oxylabs-fallback-max-origins",
         "--cache-file",
         "--disable-cache",
         "--cache-only",
@@ -228,6 +241,7 @@ const FLAGS: Record<string, string[]> = {
         "--max-iterations",
         "--max-js-size",
         "--lazyload-timeout",
+        "--detection-timeout",
         "--max-heap",
         "--max-pages",
         "--include-methods",
@@ -285,6 +299,7 @@ const FLAGS: Record<string, string[]> = {
 
 function generateBashCompletion(): string {
     const cmdList = COMMANDS.join(" ");
+    const cmdPattern = COMMANDS.join("|");
     const caseBranches = Object.entries(FLAGS)
         .map(([cmd, flags]) => `        ${cmd})\n            opts="${flags.join(" ")}"\n            ;;`)
         .join("\n");
@@ -299,12 +314,23 @@ _js_recon_completion() {
     words=("\${COMP_WORDS[@]}")
     cword=\${COMP_CWORD}
 
-    if [[ \${cword} -eq 1 ]]; then
-        COMPREPLY=( \$(compgen -W "${cmdList}" -- "\${cur}") )
+    if [[ \${prev} == "--config" ]]; then
+        COMPREPLY=( \$(compgen -f -- "\${cur}") )
         return 0
     fi
 
-    local cmd="\${words[1]}"
+    local cmd=""
+    local word
+    for word in "\${words[@]}"; do
+        case "\${word}" in
+            ${cmdPattern}) cmd="\${word}"; break ;;
+        esac
+    done
+    if [[ -z \${cmd} ]]; then
+        COMPREPLY=( \$(compgen -W "--config ${cmdList}" -- "\${cur}") )
+        return 0
+    fi
+
     opts=""
     case "\${cmd}" in
 ${caseBranches}
@@ -355,6 +381,7 @@ _js_recon() {
     _arguments -C \\
         '(-h --help)'{-h,--help}'[Show help]' \\
         '(-V --version)'{-V,--version}'[Show version]' \\
+        '--config[Application YAML config]:file:_files' \\
         '1: :->command' \\
         '*: :->args'
 
@@ -404,7 +431,19 @@ function generateFishCompletion(): string {
 function __fish_use_subcommand
     set -l cmd (commandline -poc)
     set -e cmd[1]
+    set -l skip_next 0
     for c in $cmd
+        if test $skip_next -eq 1
+            set skip_next 0
+            continue
+        end
+        if test "$c" = "--config"
+            set skip_next 1
+            continue
+        end
+        if string match -q -- '--config=*' "$c"
+            continue
+        end
         if string match -qr '^[^-]' -- $c
             return 1
         end
@@ -424,6 +463,8 @@ function __fish_seen_subcommand_from
 end
 
 ${cmdCompletions}
+
+complete -c js-recon -l config -r -F
 
 ${flagCompletions}
 `;
