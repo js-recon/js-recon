@@ -11,7 +11,7 @@ COPY ./src ./src
 USER root
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    unzip \
+    unzip gosu \
     libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxkbcommon0 \
     libasound2 libpangocairo-1.0-0 libxfixes3 libxi6 libxinerama1 \
@@ -30,7 +30,11 @@ RUN ./node_modules/.bin/puppeteer browsers install chrome && \
     done
 RUN mkdir -p output
 
+USER root
+COPY ./docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 ENV IS_DOCKER=true
 ENV NODE_OPTIONS="--max-http-header-size=99999999"
 ENV JS_RECON_OUTPUT_OVERWRITE=true
-ENTRYPOINT ["node", "build/index.js"]
+ENTRYPOINT ["/docker-entrypoint.sh", "node", "build/index.js"]
