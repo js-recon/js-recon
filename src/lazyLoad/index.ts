@@ -52,6 +52,10 @@ import { extractSourceMaps } from "../sourcemaps/index.js";
 import * as lazyLoadGlobals from "./globals.js";
 import * as globals from "../utility/globals.js";
 import { shouldRunMethod } from "./methodFilter.js";
+import DownloadProgress from "../utility/downloadProgress.js";
+import { progressLog, progressWarn } from "../utility/progressLog.js";
+import { resolveHostOutputDirectory } from "./outputPath.js";
+import { withRequestSignal } from "../utility/makeReq.js";
 
 /**
  * Downloads the required JavaScript files for a given URL
@@ -84,11 +88,36 @@ const lazyLoad = async (
     maxPageVisits: number = 200,
     includeMethods: string[] = [],
     excludeMethods: string[] = [],
-    detectionTimeoutMs: number = 30 * 1000
+    detectionTimeoutMs: number = 30 * 1000,
+    cancellationSignal?: AbortSignal
 ) => {
     // Hoisted so the timeout handler can stop discovery and drain downloads.
     let activeCrawler: NextJsCrawler | null = null;
     let activeQueue: DownloadQueue | null = null;
+    let activeDownloadProgress: DownloadProgress | null = null;
+    let activeDetectionController: AbortController | null = null;
+    let hardTimeoutReached = false;
+    const workController = new AbortController();
+
+    const requestCancellation = (): void => {
+        hardTimeoutReached = true;
+        workController.abort();
+        activeDetectionController?.abort();
+        activeCrawler?.stop();
+        activeDownloadProgress?.stop();
+        activeDownloadProgress = null;
+    };
+    const enqueue = (queue: DownloadQueue, urls: string[]): void => {
+        if (!hardTimeoutReached) queue.push(urls);
+    };
+    const handleExternalCancellation = (): void => requestCancellation();
+    const cleanupActiveWork = async (): Promise<void> => {
+        activeDownloadProgress?.stop();
+        activeDownloadProgress = null;
+        if (hardTimeoutReached) await activeQueue?.drain().catch(() => undefined);
+    };
+    cancellationSignal?.addEventListener("abort", handleExternalCancellation, { once: true });
+    if (cancellationSignal?.aborted) requestCancellation();
 
     const work = async () => {
         console.log(chalk.cyan("[i] Loading 'Lazy Load' module"));
@@ -110,21 +139,27 @@ const lazyLoad = async (
             }
         }
 
-        let urls;
+        let urls: string[];
 
         // check if the url is file or a URL
         if (fs.existsSync(url)) {
             urls = fs.readFileSync(url, "utf8").split("\n");
             // remove the empty lines
             urls = urls.filter((url) => url.trim() !== "");
-        } else if (url.match(/https?:\/\/[a-zA-Z0-9\-_\.:]+/)) {
-            urls = [url];
         } else {
-            console.error(chalk.red("[!] Invalid URL or file path"));
-            process.exit(3);
+            try {
+                const parsed = new URL(url);
+                if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+                    throw new Error("unsupported protocol");
+                urls = [url];
+            } catch {
+                console.error(chalk.red("[!] Invalid URL or file path"));
+                process.exit(3);
+            }
         }
 
         for (const url of urls) {
+            if (hardTimeoutReached) break;
             console.log(chalk.cyan(`[i] Processing ${url}`));
 
             if (strictScope) {
@@ -136,27 +171,30 @@ const lazyLoad = async (
             lazyLoadGlobals.setMaxReqQueue(threads);
 
             let tech: { name: string; evidence: string } | null;
-            if (detectionTimeoutMs > 0) {
-                let timedOut = false;
-                tech = await Promise.race([
-                    frameworkDetect(url),
-                    new Promise<null>((resolve) =>
-                        setTimeout(() => {
-                            timedOut = true;
-                            resolve(null);
-                        }, detectionTimeoutMs)
-                    ),
-                ]);
-                if (timedOut) {
-                    console.error(
-                        chalk.yellow(
-                            `[!] Framework detection timed out after ${detectionTimeoutMs}ms; treating as not detected`
-                        )
-                    );
-                }
-            } else {
-                tech = await frameworkDetect(url);
+            const detectionController = new AbortController();
+            activeDetectionController = detectionController;
+            let detectionTimedOut = false;
+            const detectionTimeoutHandle =
+                detectionTimeoutMs > 0
+                    ? setTimeout(() => {
+                          detectionTimedOut = true;
+                          detectionController.abort();
+                      }, detectionTimeoutMs)
+                    : undefined;
+            try {
+                tech = await frameworkDetect(url, detectionController.signal);
+            } finally {
+                if (detectionTimeoutHandle !== undefined) clearTimeout(detectionTimeoutHandle);
+                if (activeDetectionController === detectionController) activeDetectionController = null;
             }
+            if (detectionTimedOut) {
+                console.error(
+                    chalk.yellow(
+                        `[!] Framework detection timed out after ${detectionTimeoutMs}ms; treating as not detected`
+                    )
+                );
+            }
+            if (hardTimeoutReached) break;
             globals.setTech(tech ? tech.name : "");
 
             if (tech) {
@@ -174,32 +212,34 @@ const lazyLoad = async (
                         research,
                         maxIterations,
                         maxPageVisits,
-                        onUrlsDiscovered: (urls) => activeQueue!.push(urls),
+                        onUrlsDiscovered: (urls) => enqueue(activeQueue!, urls),
                         includeMethods,
                         excludeMethods,
                     });
                     activeCrawler = crawler;
 
-                    await crawler.crawl();
-                    activeCrawler = null; // done — prevent timeout handler from calling stop()
+                    try {
+                        await crawler.crawl();
+                    } finally {
+                        activeCrawler = null; // done — prevent timeout handler from calling stop()
+                    }
+                    if (hardTimeoutReached) return;
                     await activeQueue.drain();
+                    if (hardTimeoutReached) return;
                     activeQueue.printSummary();
                     activeQueue = null;
 
                     if (buildId) {
                         // get the buildId
                         // the directory is the output <output>/<host.replace(":", "_")>/___subsequent_requests
-                        const buildId = await next_buildId_RSC(
-                            output + "/" + new URL(url).host.replace(":", "_") + "/___subsequent_requests"
-                        );
+                        const targetOutputDir = resolveHostOutputDirectory(output, new URL(url).host);
+                        const buildId = await next_buildId_RSC(path.join(targetOutputDir, "___subsequent_requests"));
+                        if (hardTimeoutReached) return;
 
                         if (buildId) {
                             console.log(chalk.cyan("[+] Found buildId: " + buildId));
                             // now, write it to a file
-                            fs.writeFileSync(
-                                path.join(output, new URL(url).host.replace(":", "_") + "/BUILD_ID"),
-                                buildId
-                            );
+                            fs.writeFileSync(path.join(targetOutputDir, "BUILD_ID"), buildId);
                         }
                     }
 
@@ -220,7 +260,7 @@ const lazyLoad = async (
 
                     activeQueue = new DownloadQueue(output, threads);
                     const queue = activeQueue;
-                    const onFilesDiscovered = (files: string[]) => queue.push(files);
+                    const onFilesDiscovered = (files: string[]) => enqueue(queue, files);
 
                     // run the full discovery pipeline against the entry URL
                     const { clientSidePaths } = await vue_discoverJsFiles(
@@ -231,6 +271,7 @@ const lazyLoad = async (
                         excludeMethods,
                         threads
                     );
+                    if (hardTimeoutReached) return;
 
                     // recurse the same pipeline through every client-side path we found
                     await vue_recursiveClientSidePathDownload(
@@ -241,8 +282,10 @@ const lazyLoad = async (
                         includeMethods,
                         excludeMethods
                     );
+                    if (hardTimeoutReached) return;
 
                     await queue.drain();
+                    if (hardTimeoutReached) return;
                     queue.printSummary();
 
                     // extract the source maps
@@ -262,7 +305,7 @@ const lazyLoad = async (
                     )
                         ? await nuxt_getFromPageSource(url)
                         : [];
-                    queue.push(jsFilesFromPageSource);
+                    enqueue(queue, jsFilesFromPageSource);
 
                     const jsFilesFromStringAnalysis = shouldRunMethod(
                         "nuxt_stringAnalysisJSFiles",
@@ -271,7 +314,7 @@ const lazyLoad = async (
                     )
                         ? await nuxt_stringAnalysisJSFiles(url, threads)
                         : [];
-                    queue.push(jsFilesFromStringAnalysis);
+                    enqueue(queue, jsFilesFromStringAnalysis);
 
                     const firstBatch = [...new Set([...jsFilesFromPageSource, ...jsFilesFromStringAnalysis])];
 
@@ -282,8 +325,8 @@ const lazyLoad = async (
                             jsFilesFromAST.push(...(await nuxt_astParse(jsFile)));
                         }
                     }
-                    queue.push(jsFilesFromAST);
-                    queue.push(lazyLoadGlobals.getJsUrls());
+                    enqueue(queue, jsFilesFromAST);
+                    enqueue(queue, lazyLoadGlobals.getJsUrls());
 
                     const buildsManifestFiles = shouldRunMethod(
                         "nuxt_getBuildsManifest",
@@ -292,9 +335,10 @@ const lazyLoad = async (
                     )
                         ? await nuxt_getBuildsManifest(url)
                         : [];
-                    queue.push(buildsManifestFiles);
+                    enqueue(queue, buildsManifestFiles);
 
                     await queue.drain();
+                    if (hardTimeoutReached) return;
                     queue.printSummary();
                 } else if (tech.name === "svelte") {
                     console.log(chalk.green("[✓] Svelte detected"));
@@ -311,7 +355,7 @@ const lazyLoad = async (
                     )
                         ? await svelte_getFromPageSource(url)
                         : [];
-                    queue.push(jsFilesFromPageSource);
+                    enqueue(queue, jsFilesFromPageSource);
 
                     // probe /<appDir>/version.json — SvelteKit serves this for the `updated` store
                     // but never references it from HTML or JS, so it is invisible to all other steps
@@ -328,7 +372,7 @@ const lazyLoad = async (
                         ? await svelte_getVersionJson(url, appDir)
                         : [];
                     if (versionJsonFiles.length > 0) {
-                        queue.push(versionJsonFiles);
+                        enqueue(queue, versionJsonFiles);
                     }
 
                     // analyze the strings now
@@ -338,9 +382,9 @@ const lazyLoad = async (
                         const result = await svelte_stringAnalysisJSFiles(url, threads);
                         jsFilesFromStringAnalysis = result.jsFiles;
                         mapFilesFromStringAnalysis = result.mapFiles;
-                        queue.push(jsFilesFromStringAnalysis);
+                        enqueue(queue, jsFilesFromStringAnalysis);
                         if (mapFilesFromStringAnalysis.length > 0) {
-                            queue.push(mapFilesFromStringAnalysis);
+                            enqueue(queue, mapFilesFromStringAnalysis);
                         }
                     }
 
@@ -351,7 +395,7 @@ const lazyLoad = async (
                         const newFiles = await react_followImports(toFollow, maxJsSizeMb, url, visited, threads);
                         if (newFiles.length === 0) break;
                         console.log(chalk.green(`[✓] Discovered ${newFiles.length} more JS file(s) via imports`));
-                        queue.push(newFiles);
+                        enqueue(queue, newFiles);
                         toFollow = newFiles;
                     }
 
@@ -362,7 +406,7 @@ const lazyLoad = async (
                         includeMethods,
                         excludeMethods
                     )
-                        ? await svelte_recursivePageCrawl(url, maxJsSizeMb, (files) => queue.push(files))
+                        ? await svelte_recursivePageCrawl(url, maxJsSizeMb, (files) => enqueue(queue, files))
                         : [];
 
                     // Svelte/Astro apps use client-side routing — the home page rarely has
@@ -378,7 +422,7 @@ const lazyLoad = async (
                         ? await svelte_discoverPagesFromJs(url, threads)
                         : [];
                     if (jsFilesFromPathScan.length > 0) {
-                        queue.push(jsFilesFromPathScan);
+                        enqueue(queue, jsFilesFromPathScan);
                     }
 
                     // run string analysis once more to catch JS files discovered during page crawl
@@ -388,13 +432,14 @@ const lazyLoad = async (
                     ) {
                         const { jsFiles: jsFilesFromStringAnalysis2, mapFiles: mapFilesFromStringAnalysis2 } =
                             await svelte_stringAnalysisJSFiles(url, threads);
-                        queue.push(jsFilesFromStringAnalysis2);
+                        enqueue(queue, jsFilesFromStringAnalysis2);
                         if (mapFilesFromStringAnalysis2.length > 0) {
-                            queue.push(mapFilesFromStringAnalysis2);
+                            enqueue(queue, mapFilesFromStringAnalysis2);
                         }
                     }
 
                     await queue.drain();
+                    if (hardTimeoutReached) return;
                     queue.printSummary();
 
                     await extractSourceMaps(output, join(output, sourcemapDir));
@@ -413,7 +458,7 @@ const lazyLoad = async (
                     )
                         ? await angular_getFromPageSource(url)
                         : [];
-                    queue.push(jsFilesFromPageSource);
+                    enqueue(queue, jsFilesFromPageSource);
 
                     // files using the main.js
                     if (shouldRunMethod("angular_getFromMainJs", includeMethods, excludeMethods)) {
@@ -427,7 +472,7 @@ const lazyLoad = async (
 
                         if (mainJsUrl) {
                             const jsFilesFromMainJs = await angular_getFromMainJs(mainJsUrl);
-                            queue.push(jsFilesFromMainJs);
+                            enqueue(queue, jsFilesFromMainJs);
 
                             // recursively follow chunk-to-chunk imports beyond the first hop
                             if (shouldRunMethod("angular_recursiveChunkImports", includeMethods, excludeMethods)) {
@@ -435,62 +480,91 @@ const lazyLoad = async (
                                     jsFilesFromMainJs,
                                     threads
                                 );
-                                queue.push(transitiveChunks);
+                                enqueue(queue, transitiveChunks);
                             }
                         }
                     }
 
                     await queue.drain();
+                    if (hardTimeoutReached) return;
                     queue.printSummary();
                 } else if (tech.name === "react") {
                     console.log(chalk.green("[✓] React detected"));
                     console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
 
-                    const queue = new DownloadQueue(output, threads);
+                    const queue = new DownloadQueue(output, threads, {
+                        compactOutput: true,
+                        onProgress: (progress) => activeDownloadProgress?.update(progress),
+                    });
                     activeQueue = queue;
 
                     // Seed: <script src> tags + <link rel="modulepreload"> (Vite vendor chunks)
                     const jsFilesFromPageSource = shouldRunMethod("react_getScriptTags", includeMethods, excludeMethods)
                         ? await react_getScriptTags(url, maxJsSizeMb, output)
                         : [];
-                    queue.push(jsFilesFromPageSource);
+                    if (hardTimeoutReached) return;
+                    enqueue(queue, jsFilesFromPageSource);
 
                     // webpack-style chunk path builders (CRA / custom webpack configs)
                     const webpackChunkPaths = shouldRunMethod("react_webpackChunkPaths", includeMethods, excludeMethods)
                         ? await react_webpackChunkPaths(url, maxJsSizeMb, jsFilesFromPageSource, threads)
                         : [];
-                    queue.push(webpackChunkPaths);
+                    if (hardTimeoutReached) return;
+                    activeDownloadProgress = new DownloadProgress();
+                    activeDownloadProgress.update(queue.progress);
 
-                    // Recursively follow ESM imports and Vite __vite_mapDeps references.
-                    // visited starts empty so the seed files are fetched and parsed in the first round.
-                    const visited = new Set<string>();
-                    if (shouldRunMethod("react_followImports", includeMethods, excludeMethods)) {
-                        let toFollow = [...new Set([...jsFilesFromPageSource, ...webpackChunkPaths])];
-                        while (toFollow.length > 0) {
-                            const newFiles = await react_followImports(toFollow, maxJsSizeMb, url, visited, threads);
-                            if (newFiles.length === 0) break;
-                            console.log(chalk.green(`[✓] Discovered ${newFiles.length} more JS file(s) via imports`));
-                            queue.push(newFiles);
-                            toFollow = newFiles;
+                    try {
+                        enqueue(queue, webpackChunkPaths);
+
+                        // Recursively follow ESM imports and Vite __vite_mapDeps references.
+                        // visited starts empty so the seed files are fetched and parsed in the first round.
+                        const visited = new Set<string>();
+                        if (shouldRunMethod("react_followImports", includeMethods, excludeMethods)) {
+                            let toFollow = [...new Set([...jsFilesFromPageSource, ...webpackChunkPaths])];
+                            while (toFollow.length > 0 && !hardTimeoutReached) {
+                                const newFiles = await react_followImports(
+                                    toFollow,
+                                    maxJsSizeMb,
+                                    url,
+                                    visited,
+                                    threads,
+                                    true
+                                );
+                                if (hardTimeoutReached) break;
+                                if (newFiles.length === 0) break;
+                                progressLog(
+                                    chalk.green(`[✓] Discovered ${newFiles.length} more JS file(s) via imports`)
+                                );
+                                enqueue(queue, newFiles);
+                                toFollow = newFiles;
+                            }
                         }
-                    }
 
-                    // Sourcemaps for everything discovered
-                    if (shouldRunMethod("react_sourcemapUrls", includeMethods, excludeMethods)) {
-                        const sourcemapUrls = await react_sourcemapUrls([...visited], threads);
-                        queue.push(sourcemapUrls);
-                    }
+                        // Sourcemaps for everything discovered
+                        if (
+                            !hardTimeoutReached &&
+                            shouldRunMethod("react_sourcemapUrls", includeMethods, excludeMethods)
+                        ) {
+                            const sourcemapUrls = await react_sourcemapUrls([...visited], threads);
+                            enqueue(queue, sourcemapUrls);
+                        }
 
-                    await queue.drain();
+                        await queue.drain();
+                    } finally {
+                        activeDownloadProgress?.stop();
+                        activeDownloadProgress = null;
+                    }
+                    if (hardTimeoutReached) return;
                     queue.printSummary();
 
-                    extractSourceMaps(output, join(output, sourcemapDir));
+                    await extractSourceMaps(output, join(output, sourcemapDir));
                 }
             } else {
                 console.error(chalk.red("[!] Framework not detected :("));
                 console.log(chalk.magenta(CONFIG.notFoundMessage));
                 console.log(chalk.yellow("[i] Trying to download loaded JS files"));
                 const js_urls = await downloadLoadedJs(url);
+                if (hardTimeoutReached) return;
                 if (js_urls && js_urls.length > 0) {
                     console.log(chalk.green(`[✓] Found ${js_urls.length} JS chunks`));
 
@@ -526,8 +600,9 @@ const lazyLoad = async (
                     }
 
                     const queue = new DownloadQueue(output, threads);
-                    queue.push(js_urls);
+                    enqueue(queue, js_urls);
                     await queue.drain();
+                    if (hardTimeoutReached) return;
                     queue.printSummary();
                 }
             }
@@ -535,42 +610,35 @@ const lazyLoad = async (
     };
 
     if (hardTimeoutMs === 0) {
-        await work();
-        return;
+        try {
+            await withRequestSignal(workController.signal, work);
+            return;
+        } finally {
+            cancellationSignal?.removeEventListener("abort", handleExternalCancellation);
+            await cleanupActiveWork();
+        }
     }
 
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timeoutHandle = setTimeout(() => {
+        requestCancellation();
+        const timeoutLabel = hardTimeoutMs >= 60_000 ? `${hardTimeoutMs / 60_000} min` : `${hardTimeoutMs}ms`;
+        progressWarn(
+            chalk.yellow(
+                `[!] Lazyload hard timeout reached (${timeoutLabel}). Stopping discovery and waiting for in-flight work...`
+            )
+        );
+    }, hardTimeoutMs);
 
-    await Promise.race([
-        work().finally(() => {
-            // work() finished before the timeout — cancel the timer so it never
-            // fires orphaned and doesn't hold the event loop open.
-            if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
-        }),
-        new Promise<void>((resolve) => {
-            timeoutHandle = setTimeout(() => {
-                console.error(
-                    chalk.yellow(
-                        `[!] Lazyload hard timeout reached (${hardTimeoutMs / 60000} min). Draining discovered files before moving on...`
-                    )
-                );
-                // Signal the crawler to stop at its next iteration boundary.
-                activeCrawler?.stop();
-                const q = activeQueue;
-                if (q) {
-                    // Wait for already-queued downloads to finish, then move on.
-                    q.drain()
-                        .then(() => {
-                            q.printSummary();
-                            resolve();
-                        })
-                        .catch(() => resolve());
-                } else {
-                    resolve();
-                }
-            }, hardTimeoutMs);
-        }),
-    ]);
+    try {
+        // Never return while work() can still mutate files, globals, or terminal
+        // state. The timeout requests cooperative cancellation, then this await
+        // provides the lifecycle boundary for all in-flight framework work.
+        await withRequestSignal(workController.signal, work);
+    } finally {
+        clearTimeout(timeoutHandle);
+        cancellationSignal?.removeEventListener("abort", handleExternalCancellation);
+        await cleanupActiveWork();
+    }
 };
 
 export default lazyLoad;

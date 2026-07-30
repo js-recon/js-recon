@@ -7,6 +7,8 @@ import { runWithConcurrency } from "../../utility/concurrency.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
+export const deduplicateWebpackChunkPaths = (paths: readonly string[]): string[] => [...new Set(paths)];
+
 /**
  * Pure parser: extracts `[chunkId, chunkName]` entries from webpack's
  * FunctionExpression object-map pattern:
@@ -211,12 +213,14 @@ const react_webpackChunkPaths = async (
                             let output = execFunc(urlBuilderFunc, parseInt(i));
                             if (typeof output !== "string" || output.includes("undefined")) continue;
 
-                            if (!(
-                                output.startsWith("/") ||
-                                output.startsWith("http") ||
-                                output.startsWith("./") ||
-                                output.startsWith("../")
-                            )) {
+                            if (
+                                !(
+                                    output.startsWith("/") ||
+                                    output.startsWith("http") ||
+                                    output.startsWith("./") ||
+                                    output.startsWith("../")
+                                )
+                            ) {
                                 output = "../" + output;
                             }
                             const finalUrl = new URL(output, jsFile).href;
@@ -232,11 +236,11 @@ const react_webpackChunkPaths = async (
         }
     });
 
+    toReturn = deduplicateWebpackChunkPaths(toReturn);
     if (toReturn.length > 0) {
         console.log(chalk.green(`[✓] Found ${toReturn.length} webpack chunk JS files`));
     }
 
-    toReturn = [...new Set(toReturn)];
     return toReturn;
 };
 

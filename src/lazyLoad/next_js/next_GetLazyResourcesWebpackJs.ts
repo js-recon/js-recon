@@ -10,7 +10,7 @@ import makeRequest, { buildPuppeteerProxyArgs, getResolvedProxyConfigFromGlobals
 import execFunc from "../../utility/runSandboxed.js";
 import { getJsonUrls, getJsUrls, pushToJsonUrls, pushToJsUrls } from "../globals.js";
 import * as globals from "../../utility/globals.js";
-import { setActiveBarLogger, computeBarSize, watchBarResize } from "../../utility/progressLog.js";
+import { activateBarLogger, computeBarSize, watchBarResize, withProgressResources } from "../../utility/progressLog.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
 
@@ -133,86 +133,93 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
     );
 
     bar.start(jsUrls.length, 0);
-    setActiveBarLogger(bar as any);
     const stopResize = watchBarResize(bar, overhead);
+    const releaseBarLogger = activateBarLogger(
+        {
+            log: (message: string) => process.stdout.write("\r\x1b[K" + message),
+        },
+        process.stdout.isTTY === true
+    );
 
     const matched: MatchedFunction[] = [];
     let processed = 0;
 
-    await runWithConcurrency(jsUrls, threads, async (jsUrl) => {
-        try {
-            const res = await makeRequest(jsUrl, {});
-            if (!res || res.status !== 200) {
+    await withProgressResources(
+        () =>
+            runWithConcurrency(jsUrls, threads, async (jsUrl) => {
+                try {
+                    const res = await makeRequest(jsUrl, {});
+                    if (!res || res.status !== 200) {
+                        processed++;
+                        bar.update(processed);
+                        return;
+                    }
+
+                    const jsContent = await res.text();
+
+                    // Fast path: skip files that cannot possibly contain the pattern
+                    if (!jsContent.includes('".js"')) {
+                        processed++;
+                        bar.update(processed);
+                        return;
+                    }
+
+                    let ast;
+                    try {
+                        ast = parser.parse(jsContent, {
+                            sourceType: "unambiguous",
+                            plugins: ["jsx", "typescript"],
+                            errorRecovery: true,
+                        });
+                    } catch {
+                        processed++;
+                        bar.update(processed);
+                        return;
+                    }
+
+                    traverse(ast, {
+                        FunctionDeclaration(p) {
+                            const start = p.node.start ?? 0;
+                            const end = p.node.end ?? jsContent.length;
+                            const source = jsContent.slice(start, end);
+                            if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
+                        },
+                        FunctionExpression(p) {
+                            const start = p.node.start ?? 0;
+                            const end = p.node.end ?? jsContent.length;
+                            const source = jsContent.slice(start, end);
+                            if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
+                        },
+                        ArrowFunctionExpression(p) {
+                            const start = p.node.start ?? 0;
+                            const end = p.node.end ?? jsContent.length;
+                            const source = jsContent.slice(start, end);
+                            if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
+                        },
+                        ObjectMethod(p) {
+                            const start = p.node.start ?? 0;
+                            const end = p.node.end ?? jsContent.length;
+                            const source = jsContent.slice(start, end);
+                            if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
+                        },
+                        ClassMethod(p) {
+                            const start = p.node.start ?? 0;
+                            const end = p.node.end ?? jsContent.length;
+                            const source = jsContent.slice(start, end);
+                            if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
+                        },
+                    });
+                } catch {
+                    // skip files with fetch/parse errors
+                }
+
                 processed++;
                 bar.update(processed);
-                return;
-            }
-
-            const jsContent = await res.text();
-
-            // Fast path: skip files that cannot possibly contain the pattern
-            if (!jsContent.includes('".js"')) {
-                processed++;
-                bar.update(processed);
-                return;
-            }
-
-            let ast;
-            try {
-                ast = parser.parse(jsContent, {
-                    sourceType: "unambiguous",
-                    plugins: ["jsx", "typescript"],
-                    errorRecovery: true,
-                });
-            } catch {
-                processed++;
-                bar.update(processed);
-                return;
-            }
-
-            traverse(ast, {
-                FunctionDeclaration(p) {
-                    const start = p.node.start ?? 0;
-                    const end = p.node.end ?? jsContent.length;
-                    const source = jsContent.slice(start, end);
-                    if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
-                },
-                FunctionExpression(p) {
-                    const start = p.node.start ?? 0;
-                    const end = p.node.end ?? jsContent.length;
-                    const source = jsContent.slice(start, end);
-                    if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
-                },
-                ArrowFunctionExpression(p) {
-                    const start = p.node.start ?? 0;
-                    const end = p.node.end ?? jsContent.length;
-                    const source = jsContent.slice(start, end);
-                    if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
-                },
-                ObjectMethod(p) {
-                    const start = p.node.start ?? 0;
-                    const end = p.node.end ?? jsContent.length;
-                    const source = jsContent.slice(start, end);
-                    if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
-                },
-                ClassMethod(p) {
-                    const start = p.node.start ?? 0;
-                    const end = p.node.end ?? jsContent.length;
-                    const source = jsContent.slice(start, end);
-                    if (source.match(/"\.js".{0,15}$/)) matched.push({ source, jsUrl, jsContent });
-                },
-            });
-        } catch {
-            // skip files with fetch/parse errors
-        }
-
-        processed++;
-        bar.update(processed);
-    });
-
-    bar.stop();
-    setActiveBarLogger(null);
-    stopResize();
+            }),
+        () => bar.stop(),
+        stopResize,
+        releaseBarLogger
+    );
 
     if (matched.length === 0) {
         console.error(chalk.yellow("[!] No chunk URL builder functions found in discovered JS files"));

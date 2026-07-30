@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import cliProgress from "cli-progress";
 import makeRequest from "../../utility/makeReq.js";
-import { setActiveBarLogger, computeBarSize, watchBarResize } from "../../utility/progressLog.js";
+import { activateBarLogger, computeBarSize, watchBarResize, withProgressResources } from "../../utility/progressLog.js";
 import parser from "@babel/parser";
 import { extractStrings } from "../../strings/index.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
@@ -113,32 +113,37 @@ const fetchAndExtractJsStrings = async (url: string, maxJsSizeMb: number): Promi
 const vue_stringJsFiles = async (
     knownJsFiles: string[],
     maxJsSizeMb: number = 2,
-    threads: number = 1
+    threads: number = 1,
+    showProgress: boolean = true
 ): Promise<string[]> => {
     const allFound = new Set<string>();
     const crawled = new Set<string>(knownJsFiles);
 
-    const bar = new cliProgress.SingleBar(
-        {
-            format:
-                chalk.cyan("[i] Scanning JS string refs ") +
-                "[{bar}] {percentage}% | {value}/{total} files | {refs} refs found",
-            barCompleteChar: "█",
-            barIncompleteChar: "░",
-            barsize: computeBarSize(72),
-            hideCursor: false,
-            clearOnComplete: false,
-            stopOnComplete: false,
-        },
-        cliProgress.Presets.shades_classic
-    );
+    const bar = showProgress
+        ? new cliProgress.SingleBar(
+              {
+                  format:
+                      chalk.cyan("[i] Scanning JS string refs ") +
+                      "[{bar}] {percentage}% | {value}/{total} files | {refs} refs found",
+                  barCompleteChar: "█",
+                  barIncompleteChar: "░",
+                  barsize: computeBarSize(72),
+                  hideCursor: false,
+                  clearOnComplete: false,
+                  stopOnComplete: false,
+              },
+              cliProgress.Presets.shades_classic
+          )
+        : null;
 
     let processed = 0;
     let totalKnown = knownJsFiles.length;
 
-    bar.start(totalKnown, 0, { refs: 0 });
-    const stopBarWatcher = watchBarResize(bar, 72);
-    setActiveBarLogger({ log: (s: string) => process.stdout.write("\r\x1b[K" + s) });
+    bar?.start(totalKnown, 0, { refs: 0 });
+    const stopBarWatcher = bar ? watchBarResize(bar, 72) : () => undefined;
+    const releaseBarLogger = bar
+        ? activateBarLogger({ log: (s: string) => process.stdout.write("\r\x1b[K" + s) }, process.stdout.isTTY === true)
+        : () => undefined;
 
     const processFile = async (url: string, newFiles: string[]) => {
         const discovered = await fetchAndExtractJsStrings(url, maxJsSizeMb);
@@ -148,25 +153,28 @@ const vue_stringJsFiles = async (
                 crawled.add(u);
                 newFiles.push(u);
                 totalKnown++;
-                bar.setTotal(totalKnown);
+                bar?.setTotal(totalKnown);
             }
         }
         processed++;
-        bar.update(processed, { refs: allFound.size });
+        bar?.update(processed, { refs: allFound.size });
     };
 
     // Fixpoint discovery, processed in rounds: each round's batch is fetched
     // concurrently, and any newly-discovered files seed the next round.
     let currentBatch = [...knownJsFiles];
-    while (currentBatch.length > 0) {
-        const newFiles: string[] = [];
-        await runWithConcurrency(currentBatch, threads, (url) => processFile(url, newFiles));
-        currentBatch = newFiles;
-    }
-
-    bar.stop();
-    stopBarWatcher();
-    setActiveBarLogger(null);
+    await withProgressResources(
+        async () => {
+            while (currentBatch.length > 0) {
+                const newFiles: string[] = [];
+                await runWithConcurrency(currentBatch, threads, (url) => processFile(url, newFiles));
+                currentBatch = newFiles;
+            }
+        },
+        () => bar?.stop(),
+        stopBarWatcher,
+        releaseBarLogger
+    );
 
     return [...allFound];
 };

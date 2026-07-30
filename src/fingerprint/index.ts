@@ -3,7 +3,13 @@ import fs from "fs";
 import path from "path";
 import * as cliProgress from "cli-progress";
 import frameworkDetect from "../lazyLoad/techDetect/index.js";
-import { computeBarSize, watchBarResize, setActiveBarLogger, progressLog } from "../utility/progressLog.js";
+import {
+    activateBarLogger,
+    computeBarSize,
+    progressLog,
+    watchBarResize,
+    withProgressResources,
+} from "../utility/progressLog.js";
 import * as globalsUtil from "../utility/globals.js";
 
 type OutputFormat = "text" | "csv" | "json" | "jsonl";
@@ -118,9 +124,7 @@ const fingerprint = async (
 
     const bar = multiBar.create(urls.length, 0, { url: "" });
     const stopWatcher = watchBarResize(bar, overhead);
-    setActiveBarLogger(multiBar);
-
-    globalsUtil.setQuiet(true);
+    const releaseBarLogger = activateBarLogger(multiBar, process.stdout.isTTY === true);
 
     let nextIdx = 0;
 
@@ -157,12 +161,16 @@ const fingerprint = async (
         }
     };
 
-    await Promise.all(Array.from({ length: Math.min(concurrency, urls.length) }, worker));
-
-    globalsUtil.setQuiet(false);
-    multiBar.stop();
-    setActiveBarLogger(null);
-    stopWatcher();
+    await withProgressResources(
+        async () => {
+            globalsUtil.setQuiet(true);
+            await Promise.all(Array.from({ length: Math.min(concurrency, urls.length) }, worker));
+        },
+        () => globalsUtil.setQuiet(false),
+        () => multiBar.stop(),
+        stopWatcher,
+        releaseBarLogger
+    );
 
     const detected = results.filter((r) => r.framework !== null).length;
     console.log(chalk.cyan(`\n[i] ${detected}/${results.length} URLs fingerprinted`));

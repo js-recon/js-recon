@@ -10,6 +10,8 @@ import { buildOxylabsProxyUrl, composeOxylabsUsername } from "../proxy/oxylabsPr
 import type { ResolvedProxyConfig } from "../proxy/resolveProxyConfig.js";
 import fs from "fs";
 import { EventEmitter } from "events";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash, randomUUID } from "node:crypto";
 import { progressError, progressLog } from "./progressLog.js";
 import { isSigintHandlerActive } from "../run/interruptHandler.js";
 
@@ -65,6 +67,15 @@ export interface PuppeteerProxyArgs {
     authenticate?: { username: string; password: string };
 }
 
+const requestSignalContext = new AsyncLocalStorage<AbortSignal>();
+
+/** Supplies cancellation to every makeRequest call in the async work scope. */
+export const withRequestSignal = <T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> =>
+    requestSignalContext.run(signal, work);
+
+/** True when the current async request scope has been cancelled. */
+export const isRequestCancelled = (): boolean => requestSignalContext.getStore()?.aborted === true;
+
 /**
  * Builds the Puppeteer `--proxy-server=` launch arg plus optional `page.authenticate()` credentials.
  * `aws` never applies here (Puppeteer never went through API Gateway).
@@ -92,11 +103,7 @@ export const buildPuppeteerProxyArgs = (resolved: ResolvedProxyConfig): Puppetee
     return { arg: null };
 };
 
-const reportedFailures = new Set<string>();
-
 const reportFailure = (url: string, err: unknown): void => {
-    if (reportedFailures.has(url)) return;
-    reportedFailures.add(url);
     if (globals.getCacheOnly()) {
         progressError(chalk.dim(`[!] Cache miss (cache-only mode): ${url}`));
         return;
@@ -107,10 +114,40 @@ const reportFailure = (url: string, err: unknown): void => {
     }
 };
 
+const reportTimeout = (url: string, requestTimeout: number): void => {
+    progressError(chalk.red(`[!] Request to ${url} timed out after ${requestTimeout}ms`));
+};
+
+const reportInvalidUrl = (url: string): void => {
+    progressError(chalk.red(`[!] Invalid request URL: ${url}`));
+};
+
 // random user agents
 const UAs = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
 ];
+
+interface CacheEntry {
+    readonly identityDigest: string;
+    readonly status: number;
+    readonly statusText: string;
+    readonly bodyBase64: string;
+    readonly responseHeaders: Readonly<Record<string, string>>;
+}
+
+const getCacheIdentityDigest = (url: string, headers: {}): string => {
+    const normalizedHeaders = [...new Headers(headers as HeadersInit).entries()].sort(([left], [right]) =>
+        left.localeCompare(right)
+    );
+    return createHash("sha256")
+        .update(JSON.stringify([url, normalizedHeaders]))
+        .digest("hex");
+};
+
+const getCacheEntryPath = (url: string, headers: {}): string => {
+    const digest = getCacheIdentityDigest(url, headers);
+    return `${globals.getRespCacheFile()}.entries/${digest}.json`;
+};
 
 /**
  * Reads response data from cache for future requests.
@@ -127,6 +164,23 @@ const UAs = [
  * @returns A Promise that resolves to a Response object if the cache is found, or null if not
  */
 const readCache = async (url: string, headers: {}): Promise<Response | null> => {
+    const identityDigest = getCacheIdentityDigest(url, headers);
+    const entryPath = getCacheEntryPath(url, headers);
+    if (fs.existsSync(entryPath)) {
+        try {
+            const entry = JSON.parse(fs.readFileSync(entryPath, "utf-8")) as CacheEntry;
+            if (entry.identityDigest === identityDigest) {
+                return new Response(Buffer.from(entry.bodyBase64, "base64"), {
+                    status: entry.status,
+                    statusText: entry.statusText,
+                    headers: entry.responseHeaders,
+                });
+            }
+        } catch {
+            // Ignore corrupt sidecar entries and fall back to the legacy cache.
+        }
+    }
+
     // first, check if the file exists or not
     if (!fs.existsSync(globals.getRespCacheFile())) {
         return null;
@@ -143,8 +197,6 @@ const readCache = async (url: string, headers: {}): Promise<Response | null> => 
     if (cache[url]) {
         // check if the response contains the specific request headers
         // iterate through cache[url] and build a Response
-
-        let headersMatch = true;
 
         // first check if the essential headers match
         const rscEnabled = headers["RSC"] ? true : false;
@@ -170,94 +222,58 @@ const readCache = async (url: string, headers: {}): Promise<Response | null> => 
 /**
  * Writes response data to cache for future requests.
  *
- * Stores response body, status, and headers in cache file, handling special
- * cases like RSC (React Server Components) headers separately.
+ * Stores one atomic sidecar entry per URL/request-header identity. The legacy
+ * JSON cache remains readable, but new writes avoid whole-cache rewrites.
  *
  * @param url - The URL to cache the response for
  * @param headers - Request headers that were used
  * @param response - The Response object to cache
  * @returns Promise that resolves when caching is complete
  */
-const writeCache = async (url: string, headers: {}, response: Response): Promise<void> => {
+const writeCache = async (
+    url: string,
+    headers: {},
+    response: Response,
+    reportErrors: boolean = true,
+    signal?: AbortSignal
+): Promise<void> => {
+    if (signal?.aborted) return;
     try {
-        await writeCacheUnsafe(url, headers, response);
+        await writeCacheUnsafe(url, headers, response, signal);
     } catch (err) {
         // Caching must never break a request. Log and move on.
-        progressError(chalk.yellow(`[!] Failed to write response cache for ${url}: ${err?.message || err}`));
+        if (reportErrors) {
+            progressError(chalk.yellow(`[!] Failed to write response cache for ${url}: ${err?.message || err}`));
+        }
     }
 };
 
-const writeCacheUnsafe = async (url: string, headers: {}, response: Response): Promise<void> => {
-    // clone the response
+const writeCacheUnsafe = async (url: string, headers: {}, response: Response, signal?: AbortSignal): Promise<void> => {
+    if (signal?.aborted) return;
+    const identityDigest = getCacheIdentityDigest(url, headers);
+    const entryPath = getCacheEntryPath(url, headers);
+    if (fs.existsSync(entryPath)) return;
+
     const clonedResponse = response.clone();
-
-    // if cache exists, return
-    if ((await readCache(url, headers)) !== null) {
-        // console.log("cache already exists for ", url);
-        return;
-    }
-
-    // open the cache file, and write the response based on the special headers
-    let cache: Record<string, any>;
-    try {
-        cache = JSON.parse(fs.readFileSync(globals.getRespCacheFile(), "utf-8"));
-    } catch {
-        cache = {};
-    }
-    if (!cache[url]) {
-        cache[url] = {};
-    }
-
     const bodyBuffer = Buffer.from(await clonedResponse.arrayBuffer());
-    const body = bodyBuffer.toString("base64");
-    const status = clonedResponse.status;
-    const resp_headers = clonedResponse.headers;
-    if (headers["RSC"]) {
-        cache[url].rsc = {
-            req_headers: headers,
-            status: status,
-            body_b64: body,
-            resp_headers: resp_headers,
-        };
-        // console.log("rsc", url);
-    } else {
-        cache[url].normal = {
-            req_headers: headers,
-            status: status,
-            body_b64: body,
-            resp_headers: resp_headers,
-        };
-        // console.log("normal", url);
-    }
-    let serialized: string;
+    if (signal?.aborted) return;
+    const entry: CacheEntry = Object.freeze({
+        identityDigest,
+        status: clonedResponse.status,
+        statusText: clonedResponse.statusText,
+        bodyBase64: bodyBuffer.toString("base64"),
+        responseHeaders: Object.freeze(Object.fromEntries(clonedResponse.headers.entries())),
+    });
+    const entryDirectory = `${globals.getRespCacheFile()}.entries`;
+    fs.mkdirSync(entryDirectory, { recursive: true });
+    const temporaryPath = `${entryPath}.${process.pid}.${randomUUID()}.tmp`;
     try {
-        // so, the cache is the response body for the URL
-        serialized = JSON.stringify(cache);
-    } catch (err) {
-        if (err instanceof RangeError) {
-            // console.log(
-            //     chalk.yellow(
-            //         `[!] Response cache too large to serialize; dropping entry for ${url} and skipping cache write`
-            //     )
-            // );
-            // // Roll back the entry we just added so future writes don't keep retrying.
-            // if (headers["RSC"]) {
-            //     delete cache[url].rsc;
-            // } else {
-            //     delete cache[url].normal;
-            // }
-            // if (!cache[url].rsc && !cache[url].normal) {
-            //     delete cache[url];
-            // }
-            // return;
-
-            progressError(chalk.yellow(`[!] Cache too big... Emptying cache`));
-            serialized = JSON.stringify({}); // empty cache
-        }
-        // throw err;
+        fs.writeFileSync(temporaryPath, JSON.stringify(entry));
+        if (signal?.aborted) return;
+        fs.renameSync(temporaryPath, entryPath);
+    } finally {
+        if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
     }
-    fs.writeFileSync(globals.getRespCacheFile(), serialized);
-    // console.log("wrote cache for ", url);
 };
 
 /**
@@ -271,14 +287,28 @@ const writeCacheUnsafe = async (url: string, headers: {}, response: Response): P
 const singleFetch = async (
     url: string,
     requestOptions: RequestInit,
-    requestTimeout: number
+    requestTimeout: number,
+    reportErrors: boolean = true
 ): Promise<Response | null> => {
     let res: Response;
     let counter = 0;
 
     while (true) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, requestTimeout);
+        const upstreamSignal = requestOptions.signal;
+        const abortFromUpstream = () => controller.abort();
+        if (upstreamSignal?.aborted) {
+            controller.abort();
+            clearTimeout(timeoutId);
+            return null;
+        } else {
+            upstreamSignal?.addEventListener("abort", abortFromUpstream, { once: true });
+        }
         const currentRequestOptions = withProxyDispatcher({
             ...requestOptions,
             signal: controller.signal,
@@ -288,11 +318,13 @@ const singleFetch = async (
             EventEmitter.defaultMaxListeners = 20;
             res = await fetch(url, currentRequestOptions);
             clearTimeout(timeoutId);
+            upstreamSignal?.removeEventListener("abort", abortFromUpstream);
             if (res) {
                 break;
             }
         } catch (err) {
             clearTimeout(timeoutId);
+            upstreamSignal?.removeEventListener("abort", abortFromUpstream);
             counter++;
             // BUG: https://github.com/nodejs/node/issues/47246
             if (err.cause && err.cause.code === "UND_ERR_HEADERS_OVERFLOW") {
@@ -304,11 +336,11 @@ const singleFetch = async (
                 process.exit(21);
             }
             if (err.name === "AbortError") {
-                progressError(chalk.red(`[!] Request to ${url} timed out after ${requestTimeout}ms`));
+                if (reportErrors && (timedOut || !upstreamSignal?.aborted)) reportTimeout(url, requestTimeout);
                 return null;
             }
             if (counter > 10) {
-                reportFailure(url, err);
+                if (reportErrors) reportFailure(url, err);
                 return null;
             }
             // sleep 0.5 s before retrying
@@ -326,57 +358,64 @@ const singleFetch = async (
  * @param resp_text - The response text to check for firewall signatures
  * @returns A Promise that resolves to Response content if firewall detected, or null if not
  */
-const handleFirewall = async (url: string, resp_text: string): Promise<string | null> => {
-    if (resp_text.includes("/?bm-verify=") || resp_text.includes("<title>Just a moment...</title>")) {
-        progressError(chalk.yellow(`[!] CF Firewall detected. Trying to bypass with headless browser`));
-        const chromiumPath = getChromiumPath();
-        const proxyArgs = buildPuppeteerProxyArgs(getResolvedProxyConfigFromGlobals());
-        const browser = await puppeteer.launch({
-            headless: true,
-            executablePath: chromiumPath,
-            args: [
-                ...(globals.getDisableSandbox()
-                    ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-                    : []),
-                ...(proxyArgs.arg ? [proxyArgs.arg] : []),
-            ],
-            handleSIGINT: !isSigintHandlerActive(),
-        });
-        const page = await browser.newPage();
-        if (proxyArgs.authenticate) {
-            await page.authenticate(proxyArgs.authenticate);
-        }
-        await page.goto(url);
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const content = await page.content();
-        await browser.close();
-        return content;
-    } else if (resp_text.includes("403 ERROR") && resp_text.includes("Generated by cloudfront")) {
-        progressError(chalk.yellow(`[!] Cloudfront Firewall detected. Trying to bypass with headless browser`));
-        const chromiumPath2 = getChromiumPath();
-        const proxyArgs = buildPuppeteerProxyArgs(getResolvedProxyConfigFromGlobals());
-        const browser = await puppeteer.launch({
-            headless: true,
-            executablePath: chromiumPath2,
-            args: [
-                ...(globals.getDisableSandbox()
-                    ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-                    : []),
-                ...(proxyArgs.arg ? [proxyArgs.arg] : []),
-            ],
-            handleSIGINT: !isSigintHandlerActive(),
-        });
-        const page = await browser.newPage();
-        if (proxyArgs.authenticate) {
-            await page.authenticate(proxyArgs.authenticate);
-        }
-        await page.goto(url);
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const content = await page.content();
-        await browser.close();
-        return content;
+const handleFirewall = async (
+    url: string,
+    responseText: string,
+    signal?: AbortSignal,
+    reportErrors: boolean = true
+): Promise<string | null> => {
+    const firewall =
+        responseText.includes("/?bm-verify=") || responseText.includes("<title>Just a moment...</title>")
+            ? "CF"
+            : responseText.includes("403 ERROR") && responseText.includes("Generated by cloudfront")
+              ? "Cloudfront"
+              : null;
+    if (!firewall || signal?.aborted) return null;
+
+    if (reportErrors) {
+        progressError(chalk.yellow(`[!] ${firewall} Firewall detected. Trying to bypass with headless browser`));
     }
-    return null;
+    const chromiumPath = getChromiumPath();
+    const proxyArgs = buildPuppeteerProxyArgs(getResolvedProxyConfigFromGlobals());
+    const browser = await puppeteer.launch({
+        headless: true,
+        executablePath: chromiumPath,
+        args: [
+            ...(globals.getDisableSandbox()
+                ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+                : []),
+            ...(proxyArgs.arg ? [proxyArgs.arg] : []),
+        ],
+        handleSIGINT: !isSigintHandlerActive(),
+    });
+    const abortBrowser = () => {
+        void browser.close().catch(() => undefined);
+    };
+    signal?.addEventListener("abort", abortBrowser, { once: true });
+
+    try {
+        if (signal?.aborted) return null;
+        const page = await browser.newPage();
+        if (proxyArgs.authenticate) await page.authenticate(proxyArgs.authenticate);
+        await page.goto(url);
+        if (signal?.aborted) return null;
+        await new Promise<void>((resolve) => {
+            const finish = () => {
+                clearTimeout(timeout);
+                signal?.removeEventListener("abort", finish);
+                resolve();
+            };
+            const timeout = setTimeout(finish, 5000);
+            signal?.addEventListener("abort", finish, { once: true });
+        });
+        return signal?.aborted ? null : await page.content();
+    } catch (err) {
+        if (signal?.aborted) return null;
+        throw err;
+    } finally {
+        signal?.removeEventListener("abort", abortBrowser);
+        await browser.close().catch(() => undefined);
+    }
 };
 
 /**
@@ -398,15 +437,22 @@ const handleFirewall = async (url: string, resp_text: string): Promise<string | 
  */
 const makeRequest = async (
     url: string,
-    args?: Omit<RequestInit, "timeout"> & { timeout?: number }
+    args?: Omit<RequestInit, "timeout"> & { timeout?: number; reportErrors?: boolean }
 ): Promise<Response | null> => {
     if (url.startsWith("//")) {
         url = "https:" + url;
     }
-    const { timeout, ...restArgs } = args || {};
-    const requestOptions: RequestInit = restArgs;
+    const { timeout, reportErrors = true, ...restArgs } = args || {};
+    const contextualSignal = requestSignalContext.getStore();
+    const explicitSignal = restArgs.signal ?? undefined;
+    const effectiveSignal =
+        contextualSignal && explicitSignal && contextualSignal !== explicitSignal
+            ? AbortSignal.any([contextualSignal, explicitSignal])
+            : (explicitSignal ?? contextualSignal);
+    const isCancelled = (): boolean => effectiveSignal?.aborted === true;
+    if (isCancelled()) return null;
     const requestTimeout = timeout || globals.getRequestTimeout();
-    const usingDefaultHeaders = !requestOptions.headers;
+    const usingDefaultHeaders = !restArgs.headers;
 
     // Build default headers if not provided
     const baseHeaders = {
@@ -422,41 +468,78 @@ const makeRequest = async (
     try {
         parsedOrigin = new URL(url).origin;
     } catch {
+        if (reportErrors) reportInvalidUrl(url);
         return null;
     }
-    if (!requestOptions.headers) {
-        requestOptions.headers = {
-            ...baseHeaders,
-            Referer: parsedOrigin,
-            Origin: parsedOrigin,
-        };
-    }
+    const requestOptions: RequestInit = {
+        ...restArgs,
+        ...(effectiveSignal ? { signal: effectiveSignal } : {}),
+        headers:
+            restArgs.headers ??
+            ({
+                ...baseHeaders,
+                Referer: parsedOrigin,
+                Origin: parsedOrigin,
+            } satisfies HeadersInit),
+    };
+
+    // A successful default-header request may have used the no-Referer fallback.
+    // Probe both request identities so that response remains reusable on later
+    // runs, including cache-only runs that cannot repeat the network fallback.
+    const cacheHeaderCandidates: readonly HeadersInit[] = usingDefaultHeaders
+        ? [requestOptions.headers || {}, baseHeaders]
+        : [requestOptions.headers || {}];
 
     // if cache is enabled, read the cache and return if cache is present. else, continue
     if (!globals.getDisableCache()) {
-        const cachedResponse = await readCache(url, requestOptions.headers || {});
+        let cachedEntry: Readonly<{ response: Response; headers: HeadersInit }> | null = null;
+        for (const candidateHeaders of cacheHeaderCandidates) {
+            const response = await readCache(url, candidateHeaders);
+            if (response !== null) {
+                cachedEntry = Object.freeze({ response, headers: candidateHeaders });
+                break;
+            }
+        }
+        if (isCancelled()) return null;
 
         // if the response if cached, then check if contains any signatures of firewall
-        if (cachedResponse !== null) {
-            const cachedText = await cachedResponse.clone().text();
-            const firewallContent = await handleFirewall(url, cachedText);
+        if (cachedEntry !== null) {
+            const cachedText = await cachedEntry.response.clone().text();
+            if (isCancelled()) return null;
+            const firewallContent = await handleFirewall(url, cachedText, effectiveSignal, reportErrors);
+            if (isCancelled()) return null;
             if (firewallContent) {
-                await writeCache(url, requestOptions.headers || {}, new Response(firewallContent));
+                await writeCache(
+                    url,
+                    cachedEntry.headers,
+                    new Response(firewallContent),
+                    reportErrors,
+                    effectiveSignal
+                );
+                if (isCancelled()) return null;
                 return new Response(firewallContent);
             }
-            return cachedResponse;
+            return cachedEntry.response;
         }
     }
 
     if (globals.getCacheOnly()) {
-        reportFailure(url, "cache miss in cache-only mode");
+        if (reportErrors) reportFailure(url, "cache miss in cache-only mode");
         return null;
     }
 
     if (globals.getUseProxy() && globals.getProxyMethod() === "aws") {
-        const get_headers = requestOptions.headers;
+        const getHeaders = Object.fromEntries(new Headers(requestOptions.headers).entries());
 
-        const body = await get(url, get_headers);
+        let body: string;
+        try {
+            body = await get(url, getHeaders, effectiveSignal);
+        } catch (err) {
+            if (isCancelled()) return null;
+            if (reportErrors) reportFailure(url, err);
+            return null;
+        }
+        if (isCancelled()) return null;
 
         // check if any firewall is there in the way
         if (await checkFireWallBlocking(body)) {
@@ -469,8 +552,9 @@ const makeRequest = async (
 
         // if cache is enabled, write the response to the cache
         if (!globals.getDisableCache()) {
-            await writeCache(url, get_headers, response);
+            await writeCache(url, getHeaders, response, reportErrors, effectiveSignal);
         }
+        if (isCancelled()) return null;
         return response;
     } else {
         // Helper to read response once and store data for reuse.
@@ -480,8 +564,9 @@ const makeRequest = async (
         const consumeResponse = async (
             res: Response | null
         ): Promise<{ body: Buffer; status: number; headers: Headers; ok: boolean; text: string } | null> => {
-            if (!res) return null;
+            if (!res || isCancelled()) return null;
             const ab = await res.arrayBuffer();
+            if (isCancelled()) return null;
             const body = Buffer.alloc(ab.byteLength);
             body.set(new Uint8Array(ab));
             const text = body.toString("utf-8");
@@ -520,24 +605,41 @@ const makeRequest = async (
             const resWithReferer = await singleFetch(
                 url,
                 { ...requestOptions, headers: headersWithReferer },
-                requestTimeout
+                requestTimeout,
+                false
             );
             const dataWithReferer = await consumeResponse(resWithReferer);
+            if (isCancelled()) return null;
 
             if (dataWithReferer && dataWithReferer.ok) {
                 // Check for firewall
-                const firewallContent = await handleFirewall(url, dataWithReferer.text);
+                const firewallContent = await handleFirewall(url, dataWithReferer.text, effectiveSignal, reportErrors);
+                if (isCancelled()) return null;
                 if (firewallContent) {
                     if (!globals.getDisableCache()) {
-                        await writeCache(url, headersWithReferer, new Response(firewallContent));
+                        await writeCache(
+                            url,
+                            headersWithReferer,
+                            new Response(firewallContent),
+                            reportErrors,
+                            effectiveSignal
+                        );
                     }
+                    if (isCancelled()) return null;
                     return new Response(firewallContent);
                 }
 
                 // Cache and return successful response
                 if (!globals.getDisableCache()) {
-                    await writeCache(url, headersWithReferer, createResponse(dataWithReferer));
+                    await writeCache(
+                        url,
+                        headersWithReferer,
+                        createResponse(dataWithReferer),
+                        reportErrors,
+                        effectiveSignal
+                    );
                 }
+                if (isCancelled()) return null;
                 return createResponse(dataWithReferer);
             }
 
@@ -546,24 +648,46 @@ const makeRequest = async (
             const resWithoutReferer = await singleFetch(
                 url,
                 { ...requestOptions, headers: headersWithoutReferer },
-                requestTimeout
+                requestTimeout,
+                reportErrors && !dataWithReferer
             );
             const dataWithoutReferer = await consumeResponse(resWithoutReferer);
+            if (isCancelled()) return null;
 
             if (dataWithoutReferer && dataWithoutReferer.ok) {
                 // Check for firewall
-                const firewallContent = await handleFirewall(url, dataWithoutReferer.text);
+                const firewallContent = await handleFirewall(
+                    url,
+                    dataWithoutReferer.text,
+                    effectiveSignal,
+                    reportErrors
+                );
+                if (isCancelled()) return null;
                 if (firewallContent) {
                     if (!globals.getDisableCache()) {
-                        await writeCache(url, headersWithoutReferer, new Response(firewallContent));
+                        await writeCache(
+                            url,
+                            headersWithoutReferer,
+                            new Response(firewallContent),
+                            reportErrors,
+                            effectiveSignal
+                        );
                     }
+                    if (isCancelled()) return null;
                     return new Response(firewallContent);
                 }
 
                 // Cache and return successful response
                 if (!globals.getDisableCache()) {
-                    await writeCache(url, headersWithoutReferer, createResponse(dataWithoutReferer));
+                    await writeCache(
+                        url,
+                        headersWithoutReferer,
+                        createResponse(dataWithoutReferer),
+                        reportErrors,
+                        effectiveSignal
+                    );
                 }
+                if (isCancelled()) return null;
                 return createResponse(dataWithoutReferer);
             }
 
@@ -571,30 +695,46 @@ const makeRequest = async (
             const finalData = dataWithReferer || dataWithoutReferer;
             if (finalData) {
                 if (!globals.getDisableCache()) {
-                    await writeCache(url, headersWithReferer, createResponse(finalData));
+                    await writeCache(url, headersWithReferer, createResponse(finalData), reportErrors, effectiveSignal);
                 }
+                if (isCancelled()) return null;
                 return createResponse(finalData);
             }
             return null;
         } else {
             // Custom headers provided, use them directly
-            const res = await singleFetch(url, requestOptions, requestTimeout);
+            const res = await singleFetch(url, requestOptions, requestTimeout, reportErrors);
             const data = await consumeResponse(res);
-            if (!data) return null;
+            if (!data || isCancelled()) return null;
 
             // Check for firewall
-            const firewallContent = await handleFirewall(url, data.text);
+            const firewallContent = await handleFirewall(url, data.text, effectiveSignal, reportErrors);
+            if (isCancelled()) return null;
             if (firewallContent) {
                 if (!globals.getDisableCache()) {
-                    await writeCache(url, requestOptions.headers || {}, new Response(firewallContent));
+                    await writeCache(
+                        url,
+                        requestOptions.headers || {},
+                        new Response(firewallContent),
+                        reportErrors,
+                        effectiveSignal
+                    );
                 }
+                if (isCancelled()) return null;
                 return new Response(firewallContent);
             }
 
             // Cache and return
             if (!globals.getDisableCache()) {
-                await writeCache(url, requestOptions.headers || {}, createResponse(data));
+                await writeCache(
+                    url,
+                    requestOptions.headers || {},
+                    createResponse(data),
+                    reportErrors,
+                    effectiveSignal
+                );
             }
+            if (isCancelled()) return null;
             return createResponse(data);
         }
     }

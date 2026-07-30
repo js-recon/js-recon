@@ -26,6 +26,8 @@ import { detectBundler } from "./bundler-detect.js";
 import configureProxy from "../utility/configureProxy.js";
 import { probeFeasibility } from "../proxy/checkFeasibility.js";
 import { getResolvedProxyConfigFromGlobals } from "../utility/makeReq.js";
+import { resolveHostOutputDirectory, toOutputHost } from "../lazyLoad/outputPath.js";
+import { awaitCancellableStep } from "./cancellableStep.js";
 
 /**
  * Determines the directory for a Content Delivery Network (CDN) if used by the target.
@@ -43,11 +45,10 @@ const getCdnDir = async (host: string, outputDir: string): Promise<string | unde
     for (const url of getJsUrls()) {
         if (url.includes("_next/static/chunks")) {
             // check if the host and url.host match
-            const urlHostDir = new URL(url).host.replace(":", "_"); // e.g. example.com_8443
             const urlHost = new URL(url).host; // e.g. example.com:8443
             const initialHost = new URL(host).host; // e.g. example.com:443
             if (urlHost !== initialHost) {
-                cdnDir = path.join(outputDir, urlHostDir);
+                cdnDir = resolveHostOutputDirectory(outputDir, urlHost);
                 break;
             }
         }
@@ -82,7 +83,7 @@ const processUrl = async (
     includeMethods: string[] = [],
     excludeMethods: string[] = []
 ): Promise<void> => {
-    const targetHost = new URL(url).host.replace(":", "_");
+    const targetHost = new URL(url).host;
 
     console.log(chalk.bgGreenBright(`[+] Starting analysis for ${url}...`));
 
@@ -125,30 +126,32 @@ const processUrl = async (
 
     console.log(chalk.bgCyan("[1/8] Running lazyload to download JavaScript files..."));
     resetSkipStep();
-    await Promise.race([
-        lazyLoad(
-            url,
-            outputDir,
-            cmd.strictScope,
-            cmd.scope.split(","),
-            cmd.threads,
-            false,
-            "",
-            cmd.insecure,
-            false,
-            cmd.sourcemapDir,
-            cmd.research,
-            cmd.researchOutput,
-            Number(cmd.maxIterations),
-            Number(cmd.maxJsSize),
-            Number(cmd.lazyloadTimeout) * 60 * 1000,
-            Number(cmd.maxPages),
-            includeMethods,
-            excludeMethods,
-            Number(cmd.detectionTimeout) * 1000
-        ),
-        getSkipStepPromise(),
-    ]);
+    await awaitCancellableStep(
+        (signal) =>
+            lazyLoad(
+                url,
+                outputDir,
+                cmd.strictScope,
+                cmd.scope.split(","),
+                cmd.threads,
+                false,
+                "",
+                cmd.insecure,
+                false,
+                cmd.sourcemapDir,
+                cmd.research,
+                cmd.researchOutput,
+                Number(cmd.maxIterations),
+                Number(cmd.maxJsSize),
+                Number(cmd.lazyloadTimeout) * 60 * 1000,
+                Number(cmd.maxPages),
+                includeMethods,
+                excludeMethods,
+                Number(cmd.detectionTimeout) * 1000,
+                signal
+            ),
+        getSkipStepPromise()
+    );
     console.log(chalk.bgGreen("[+] Lazyload complete."));
     if (shouldSkipTarget()) return;
 
@@ -249,7 +252,7 @@ const processUrl = async (
                 // of always assuming targetHost, mirroring getCdnDir's approach for the map step.
                 let reactAssetsHostDir = targetHost;
                 for (const jsUrl of getJsUrls()) {
-                    const jsUrlHost = new URL(jsUrl).host.replace(":", "_");
+                    const jsUrlHost = new URL(jsUrl).host;
                     if (jsUrlHost !== targetHost) {
                         reactAssetsHostDir = jsUrlHost;
                         break;
@@ -264,7 +267,7 @@ const processUrl = async (
                         false,
                         undefined,
                         undefined,
-                        `${outputDir}/${reactAssetsHostDir}/assets`
+                        path.join(resolveHostOutputDirectory(outputDir, reactAssetsHostDir), "assets")
                     ),
                     getSkipStepPromise(),
                 ]);
@@ -533,7 +536,7 @@ const processUrl = async (
         const reportFile = isBatch ? `${workingDir}/report` : "report";
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
-        const angularHostDir = `${outputDir}/${targetHost}`;
+        const angularHostDir = resolveHostOutputDirectory(outputDir, targetHost);
 
         console.log(chalk.bgCyan("[2/4] Running map to find functions and API calls..."));
         globalsUtil.setOpenapi(true);
@@ -601,7 +604,7 @@ const processUrl = async (
     // So, if the target was found to be using a CDN, scan the CDN directory rather than the outputDir/host
     // One IMPORTANT thing: this is only meant for modules that rely on just the code (map)
     const cdnDir = await getCdnDir(url, outputDir);
-    const cdnOutputDir = cdnDir ? cdnDir : outputDir + "/" + targetHost;
+    const cdnOutputDir = cdnDir ? cdnDir : resolveHostOutputDirectory(outputDir, targetHost);
 
     console.log(chalk.bgCyan("[2/8] Running strings to extract endpoints..."));
     resetSkipStep();
@@ -614,30 +617,32 @@ const processUrl = async (
 
     console.log(chalk.bgCyan("[3/8] Running lazyload with subsequent requests to download JavaScript files..."));
     resetSkipStep();
-    await Promise.race([
-        lazyLoad(
-            url,
-            outputDir,
-            cmd.strictScope,
-            cmd.scope.split(","),
-            cmd.threads,
-            true,
-            `${extractedUrlsFile}.json`,
-            cmd.insecure,
-            true,
-            cmd.sourcemapDir,
-            cmd.research,
-            cmd.researchOutput,
-            Number(cmd.maxIterations),
-            Number(cmd.maxJsSize),
-            Number(cmd.lazyloadTimeout) * 60 * 1000,
-            Number(cmd.maxPages),
-            includeMethods,
-            excludeMethods,
-            Number(cmd.detectionTimeout) * 1000
-        ),
-        getSkipStepPromise(),
-    ]);
+    await awaitCancellableStep(
+        (signal) =>
+            lazyLoad(
+                url,
+                outputDir,
+                cmd.strictScope,
+                cmd.scope.split(","),
+                cmd.threads,
+                true,
+                `${extractedUrlsFile}.json`,
+                cmd.insecure,
+                true,
+                cmd.sourcemapDir,
+                cmd.research,
+                cmd.researchOutput,
+                Number(cmd.maxIterations),
+                Number(cmd.maxJsSize),
+                Number(cmd.lazyloadTimeout) * 60 * 1000,
+                Number(cmd.maxPages),
+                includeMethods,
+                excludeMethods,
+                Number(cmd.detectionTimeout) * 1000,
+                signal
+            ),
+        getSkipStepPromise()
+    );
     console.log(chalk.bgGreen("[+] Lazyload with subsequent requests complete."));
     if (shouldSkipTarget()) return;
 
@@ -656,30 +661,32 @@ const processUrl = async (
     // updated paths picks up chunks for those dynamic routes (e.g. the post page).
     console.log(chalk.bgCyan("[4.5/8] Re-running lazyload with subsequent requests for newly discovered paths..."));
     resetSkipStep();
-    await Promise.race([
-        lazyLoad(
-            url,
-            outputDir,
-            cmd.strictScope,
-            cmd.scope.split(","),
-            cmd.threads,
-            true,
-            `${extractedUrlsFile}.json`,
-            cmd.insecure,
-            false,
-            cmd.sourcemapDir,
-            cmd.research,
-            cmd.researchOutput,
-            Number(cmd.maxIterations),
-            Number(cmd.maxJsSize),
-            Number(cmd.lazyloadTimeout) * 60 * 1000,
-            Number(cmd.maxPages),
-            includeMethods,
-            excludeMethods,
-            Number(cmd.detectionTimeout) * 1000
-        ),
-        getSkipStepPromise(),
-    ]);
+    await awaitCancellableStep(
+        (signal) =>
+            lazyLoad(
+                url,
+                outputDir,
+                cmd.strictScope,
+                cmd.scope.split(","),
+                cmd.threads,
+                true,
+                `${extractedUrlsFile}.json`,
+                cmd.insecure,
+                false,
+                cmd.sourcemapDir,
+                cmd.research,
+                cmd.researchOutput,
+                Number(cmd.maxIterations),
+                Number(cmd.maxJsSize),
+                Number(cmd.lazyloadTimeout) * 60 * 1000,
+                Number(cmd.maxPages),
+                includeMethods,
+                excludeMethods,
+                Number(cmd.detectionTimeout) * 1000,
+                signal
+            ),
+        getSkipStepPromise()
+    );
     console.log(chalk.bgGreen("[+] Lazyload re-pass complete."));
     if (shouldSkipTarget()) return;
 
@@ -714,9 +721,10 @@ const processUrl = async (
 
     console.log(chalk.bgCyan("[6/8] Running endpoints to extract endpoints..."));
     resetSkipStep();
-    if (fs.existsSync(`${outputDir}/${targetHost}/___subsequent_requests`)) {
+    const targetOutputDir = resolveHostOutputDirectory(outputDir, targetHost);
+    if (fs.existsSync(path.join(targetOutputDir, "___subsequent_requests"))) {
         await Promise.race([
-            endpoints(url, `${outputDir}/${targetHost}/`, endpointsFile, ["json"], "next", false, mappedJsonFile),
+            endpoints(url, targetOutputDir, endpointsFile, ["json"], "next", false, mappedJsonFile),
             getSkipStepPromise(),
         ]);
     } else {
@@ -887,7 +895,7 @@ export default async (cmd: any): Promise<void> => {
                     continue;
                 }
 
-                const hostDir = urlObj.host.replace(":", "_");
+                const hostDir = toOutputHost(urlObj.host);
                 const thisTargetDir = `${cmd.output}/${hostDir}`;
 
                 if (fs.existsSync(thisTargetDir) && outputOverwrite) {

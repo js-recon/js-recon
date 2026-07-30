@@ -1,6 +1,7 @@
 import makeRequest from "../../utility/makeReq.js";
 import chalk from "chalk";
 import * as cheerio from "cheerio";
+import { progressError } from "../../utility/progressLog.js";
 
 const vue_pageSrc = async (url: string) => {
     let toReturn: string[] = [];
@@ -8,7 +9,7 @@ const vue_pageSrc = async (url: string) => {
     // first, get the contents of the homepage
     const req = await makeRequest(url);
     if (req == null) {
-        console.error(chalk.red(`Failed to fetch ${url}`));
+        progressError(chalk.red(`Failed to fetch ${url}`));
         return toReturn;
     }
     const homepageContent = await req.text();

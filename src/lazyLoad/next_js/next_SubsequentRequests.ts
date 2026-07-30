@@ -5,7 +5,8 @@ import path from "path";
 import { getURLDirectory } from "../../utility/urlUtils.js";
 import makeRequest from "../../utility/makeReq.js";
 import * as cheerio from "cheerio";
-import { setActiveBarLogger, computeBarSize, watchBarResize } from "../../utility/progressLog.js";
+import { activateBarLogger, computeBarSize, watchBarResize, withProgressResources } from "../../utility/progressLog.js";
+import { resolveHostOutputDirectory } from "../outputPath.js";
 
 let queue = 0;
 let max_queue;
@@ -86,127 +87,134 @@ const subsequentRequests = async (url, urlsFile, threads, output, js_urls): Prom
     );
     const progressBar = multiBar.create(endpoints.length * 2, 0, { phase: "RSC" });
     const stopBarWatcher = watchBarResize(progressBar, 73);
-    setActiveBarLogger(multiBar);
+    const releaseBarLogger = activateBarLogger(multiBar, process.stdout.isTTY === true);
 
     let js_contents = {};
-
-    // make requests to all of them with the special header
-    const reqPromises = endpoints.map(async (endpoint) => {
-        const reqUrl = new URL(endpoint, url).href;
-        try {
-            // delay in case over the thread count
-            while (queue >= max_queue) {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-            }
-            queue++;
-
-            const res = await makeRequest(reqUrl, {
-                headers: {
-                    RSC: "1",
-                },
-            });
-
-            if (res && res.status === 200 && res.headers.get("content-type")?.includes("text/x-component")) {
-                const text = await res.text();
-                js_contents[endpoint] = text;
-
-                const { host, directory } = getURLDirectory(reqUrl);
-
-                // save the contents to "___subsequent_requests/"
-                // make the subsequent_requests directory if it doesn't exist
-
-                const output_path = path.join(output, host, "___subsequent_requests", directory);
-                if (!fs.existsSync(output_path)) {
-                    fs.mkdirSync(output_path, { recursive: true });
-                }
-                fs.writeFileSync(path.join(output_path, "index.js"), text);
-
-                // find the static ones from the JS resp
-                const staticFiles = await findStaticFiles(text);
-
-                // go through each file and get the absolute path of those
-                const absolutePaths = staticFiles.map((file) => {
-                    // go through existing JS URLs found
-                    let js_path_dir;
-                    for (const js_url of js_urls) {
-                        if (
-                            !js_path_dir &&
-                            new URL(js_url).host === new URL(url).host &&
-                            new URL(js_url).pathname.includes("static/chunks/")
-                        ) {
-                            js_path_dir = js_url.replace(/\/[^\/]+\.js.*$/, "");
-                        }
-                    }
-                    return js_path_dir.replace("static/chunks", "") + file;
-                });
-
-                // Filter out paths that are already in js_urls before pushing to staticJSURLs
-                const newPaths = absolutePaths.filter((path) => !js_urls.includes(path));
-                if (newPaths.length > 0) {
-                    staticJSURLs.push(...newPaths);
-                }
-            }
-
-            queue--;
-        } catch (e) {
-            queue--;
-            multiBar.log(chalk.red(`[!] Error fetching ${reqUrl}: ${e}\n`));
-        }
-        progressBar.increment(1, { phase: "RSC" });
-    });
-
-    await Promise.all(reqPromises);
-
-    staticJSURLs = [...new Set(staticJSURLs)];
-
-    // in addition to the RSC:1 method, the script tags on the webpage of valid client-side paths also have the JS files
-    // since we found the possible paths in the previous iteration, we can use that to find the JS files on those pages
-    // as well
-
     let jsFilesFromPageHtml: string[] = [];
-    const htmlPromises = endpoints.map(async (endpoint) => {
-        const reqUrl = new URL(endpoint, url).href;
 
-        while (queue >= max_queue) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-        queue++;
+    await withProgressResources(
+        async () => {
+            // make requests to all of them with the special header
+            const reqPromises = endpoints.map(async (endpoint) => {
+                const reqUrl = new URL(endpoint, url).href;
+                try {
+                    // delay in case over the thread count
+                    while (queue >= max_queue) {
+                        await new Promise((resolve) => setTimeout(resolve, 100));
+                    }
+                    queue++;
 
-        try {
-            const req = await makeRequest(reqUrl);
-            if (!req) {
-                progressBar.increment(1, { phase: "HTML" });
-                return;
-            }
-            const resText = await req.text();
-            const $ = cheerio.load(resText);
+                    const res = await makeRequest(reqUrl, {
+                        headers: {
+                            RSC: "1",
+                        },
+                    });
 
-            const extract_regex = /static\/chunks\/[a-zA-Z0-9_\-~.]+\.js/g;
+                    if (res && res.status === 200 && res.headers.get("content-type")?.includes("text/x-component")) {
+                        const text = await res.text();
+                        js_contents[endpoint] = text;
 
-            $("script").each((_, script) => {
-                if (!$(script).attr("src")) {
-                    const scriptContent = $(script).html();
-                    if (scriptContent) {
-                        const matches = scriptContent.matchAll(extract_regex);
-                        for (const match of matches) {
-                            jsFilesFromPageHtml.push(match[0]);
+                        const { rawHost, directory } = getURLDirectory(reqUrl);
+
+                        // save the contents to "___subsequent_requests/"
+                        // make the subsequent_requests directory if it doesn't exist
+
+                        const output_path = path.join(
+                            resolveHostOutputDirectory(output, rawHost),
+                            "___subsequent_requests",
+                            directory
+                        );
+                        if (!fs.existsSync(output_path)) {
+                            fs.mkdirSync(output_path, { recursive: true });
+                        }
+                        fs.writeFileSync(path.join(output_path, "index.js"), text);
+
+                        // find the static ones from the JS resp
+                        const staticFiles = await findStaticFiles(text);
+
+                        // go through each file and get the absolute path of those
+                        const absolutePaths = staticFiles.map((file) => {
+                            // go through existing JS URLs found
+                            let js_path_dir;
+                            for (const js_url of js_urls) {
+                                if (
+                                    !js_path_dir &&
+                                    new URL(js_url).host === new URL(url).host &&
+                                    new URL(js_url).pathname.includes("static/chunks/")
+                                ) {
+                                    js_path_dir = js_url.replace(/\/[^\/]+\.js.*$/, "");
+                                }
+                            }
+                            return js_path_dir.replace("static/chunks", "") + file;
+                        });
+
+                        // Filter out paths that are already in js_urls before pushing to staticJSURLs
+                        const newPaths = absolutePaths.filter((path) => !js_urls.includes(path));
+                        if (newPaths.length > 0) {
+                            staticJSURLs.push(...newPaths);
                         }
                     }
+
+                    queue--;
+                } catch (e) {
+                    queue--;
+                    multiBar.log(chalk.red(`[!] Error fetching ${reqUrl}: ${e}\n`));
                 }
+                progressBar.increment(1, { phase: "RSC" });
             });
-        } catch (e) {
-            multiBar.log(chalk.red(`[!] Error fetching HTML for ${reqUrl}: ${e}\n`));
-        } finally {
-            queue--;
-        }
-        progressBar.increment(1, { phase: "HTML" });
-    });
 
-    await Promise.all(htmlPromises);
+            await Promise.all(reqPromises);
 
-    multiBar.stop();
-    stopBarWatcher();
-    setActiveBarLogger(null);
+            staticJSURLs = [...new Set(staticJSURLs)];
+
+            // in addition to the RSC:1 method, the script tags on the webpage of valid client-side paths also have the JS files
+            // since we found the possible paths in the previous iteration, we can use that to find the JS files on those pages
+            // as well
+
+            const htmlPromises = endpoints.map(async (endpoint) => {
+                const reqUrl = new URL(endpoint, url).href;
+
+                while (queue >= max_queue) {
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                }
+                queue++;
+
+                try {
+                    const req = await makeRequest(reqUrl);
+                    if (!req) {
+                        progressBar.increment(1, { phase: "HTML" });
+                        return;
+                    }
+                    const resText = await req.text();
+                    const $ = cheerio.load(resText);
+
+                    const extract_regex = /static\/chunks\/[a-zA-Z0-9_\-~.]+\.js/g;
+
+                    $("script").each((_, script) => {
+                        if (!$(script).attr("src")) {
+                            const scriptContent = $(script).html();
+                            if (scriptContent) {
+                                const matches = scriptContent.matchAll(extract_regex);
+                                for (const match of matches) {
+                                    jsFilesFromPageHtml.push(match[0]);
+                                }
+                            }
+                        }
+                    });
+                } catch (e) {
+                    multiBar.log(chalk.red(`[!] Error fetching HTML for ${reqUrl}: ${e}\n`));
+                } finally {
+                    queue--;
+                }
+                progressBar.increment(1, { phase: "HTML" });
+            });
+
+            await Promise.all(htmlPromises);
+        },
+        () => multiBar.stop(),
+        stopBarWatcher,
+        releaseBarLogger
+    );
 
     // build the full URL from path
     jsFilesFromPageHtml = jsFilesFromPageHtml.map((file) => {

@@ -3,30 +3,33 @@ import * as cheerio from "cheerio";
 import fs from "fs";
 import path from "path";
 import chalk from "chalk";
+import { resolveHostOutputDirectory } from "../outputPath.js";
+import { isRequestCancelled } from "../../utility/makeReq.js";
 
 const react_getScriptTags = async (url: string, maxJsSizeMb: number, outputDir?: string): Promise<string[]> => {
     let toReturn: string[] = [];
 
     const req = await makeRequest(url);
+    if (!req || isRequestCancelled()) return [];
     const pageSource = await req.text();
 
     const $ = cheerio.load(pageSource);
-    const host = new URL(url).host.replace(":", "_");
+    const hostOutputDir = outputDir ? resolveHostOutputDirectory(outputDir, new URL(url).host) : undefined;
     let inlineIndex = 0;
 
     $("script").each((_, elem) => {
         const src = $(elem).attr("src");
         if (src) {
             toReturn.push(new URL(src, url).href);
-        } else if (outputDir) {
+        } else if (hostOutputDir) {
+            if (isRequestCancelled()) return;
             // Inline script — save to disk so downstream modules can analyze it
             const content = $(elem).text().trim();
             if (!content) return;
 
-            const hostDir = path.join(outputDir, host);
-            fs.mkdirSync(hostDir, { recursive: true });
+            fs.mkdirSync(hostOutputDir, { recursive: true });
             const filename = `inline-${inlineIndex++}.js`;
-            const filePath = path.join(hostDir, filename);
+            const filePath = path.join(hostOutputDir, filename);
             fs.writeFileSync(filePath, `// File Source: ${url} (inline script #${inlineIndex - 1})\n${content}`);
             console.log(chalk.green(`[✓] Saved inline script to ${filePath}`));
         }
