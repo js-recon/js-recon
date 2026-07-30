@@ -784,6 +784,19 @@ const processUrl = async (
 };
 
 /**
+ * Removes everything inside a directory without removing the directory itself.
+ *
+ * Used instead of `fs.rmSync(dir, { recursive: true })` for --output-overwrite: the output
+ * directory may be a Docker bind-mount point, and removing a mount point throws EBUSY
+ * ("Device or resource busy") even from inside the container's own mount namespace.
+ */
+const emptyDir = (dir: string): void => {
+    for (const entry of fs.readdirSync(dir)) {
+        fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
+    }
+};
+
+/**
  * Main handler for the 'run' command that executes the complete js-recon analysis pipeline.
  *
  * Sets up global configuration and determines whether to process a single URL or
@@ -816,7 +829,7 @@ export default async (cmd: any): Promise<void> => {
             if (fs.existsSync(cmd.output)) {
                 if (outputOverwrite) {
                     console.log(chalk.yellow(`[!] Output directory ${cmd.output} already exists. Overwriting it.`));
-                    fs.rmSync(cmd.output, { recursive: true, force: true });
+                    emptyDir(cmd.output);
                 } else {
                     console.error(
                         chalk.red(
@@ -879,7 +892,7 @@ export default async (cmd: any): Promise<void> => {
 
                 if (fs.existsSync(thisTargetDir) && outputOverwrite) {
                     console.log(chalk.yellow(`[!] Output directory ${thisTargetDir} already exists. Overwriting it.`));
-                    fs.rmSync(thisTargetDir, { recursive: true, force: true });
+                    emptyDir(thisTargetDir);
                 } else if (fs.existsSync(thisTargetDir)) {
                     console.error(chalk.red(`[!] Output directory ${thisTargetDir} already exists. Skipping ${url}.`));
                     console.log(
