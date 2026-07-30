@@ -538,6 +538,11 @@ program
         [] as string[]
     )
     .option("-o, --output <directory>", "Output directory", "output")
+    .option(
+        "--output-overwrite",
+        "Overwrite the output directory if it already exists instead of erroring out. Can also be set via the JS_RECON_OUTPUT_OVERWRITE=true environment variable.",
+        false
+    )
     .option("--strict-scope", "Download JS files from only the input URL domain", false)
     .option("-s, --scope <scope>", "Download JS files from specific domains (comma-separated)", "*")
     .option("-t, --threads <threads>", "Number of threads to use", "1")

@@ -805,6 +805,8 @@ export default async (cmd: any): Promise<void> => {
     const isBatch = fs.existsSync(cmd.url);
     installSigintHandler(isBatch);
 
+    const outputOverwrite = cmd.outputOverwrite || process.env.JS_RECON_OUTPUT_OVERWRITE === "true";
+
     try {
         // check if the given URL is a file
         if (!isBatch) {
@@ -812,17 +814,24 @@ export default async (cmd: any): Promise<void> => {
             // if not done, it might conflict this process
             // for devs: run `npm run cleanup` to prepare this directory
             if (fs.existsSync(cmd.output)) {
-                console.error(
-                    chalk.red(
-                        `[!] Output directory ${cmd.output} already exists. Please switch to other directory or it might conflict with this process.`
-                    )
-                );
-                console.log(
-                    chalk.yellow(
-                        `[i] For advanced users: use the individual modules separately. See docs at ${CONFIG.modulesDocs}`
-                    )
-                );
-                process.exit(11);
+                if (outputOverwrite) {
+                    console.log(
+                        chalk.yellow(`[!] Output directory ${cmd.output} already exists. Overwriting it.`)
+                    );
+                    fs.rmSync(cmd.output, { recursive: true, force: true });
+                } else {
+                    console.error(
+                        chalk.red(
+                            `[!] Output directory ${cmd.output} already exists. Please switch to other directory or it might conflict with this process.`
+                        )
+                    );
+                    console.log(
+                        chalk.yellow(
+                            `[i] For advanced users: use the individual modules separately. See docs at ${CONFIG.modulesDocs}`
+                        )
+                    );
+                    process.exit(11);
+                }
             }
 
             try {
@@ -870,7 +879,10 @@ export default async (cmd: any): Promise<void> => {
                 const hostDir = urlObj.host.replace(":", "_");
                 const thisTargetDir = `${cmd.output}/${hostDir}`;
 
-                if (fs.existsSync(thisTargetDir)) {
+                if (fs.existsSync(thisTargetDir) && outputOverwrite) {
+                    console.log(chalk.yellow(`[!] Output directory ${thisTargetDir} already exists. Overwriting it.`));
+                    fs.rmSync(thisTargetDir, { recursive: true, force: true });
+                } else if (fs.existsSync(thisTargetDir)) {
                     console.error(chalk.red(`[!] Output directory ${thisTargetDir} already exists. Skipping ${url}.`));
                     console.log(
                         chalk.yellow(

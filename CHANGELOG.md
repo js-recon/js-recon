@@ -1,5 +1,11 @@
 # Change Log
 
+## 1.4.3 - (unreleased)
+
+### Added
+
+- `run`: added an `--output-overwrite` flag (also settable via the `JS_RECON_OUTPUT_OVERWRITE=true` environment variable) that overwrites the output directory instead of erroring out when it already exists, in both single-URL and batch mode. This was needed for Docker usage: a bind-mounted `output/` directory always pre-exists from the mount itself, so `run` inside a container previously failed immediately. Both `Dockerfile` and `Dockerfile.release` now set `JS_RECON_OUTPUT_OVERWRITE=true` and pre-create `output/` by default. (`run`, `docker`)
+
 ## 1.4.2 - 2026-07-29
 
 ### Fixed

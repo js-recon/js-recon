@@ -28,7 +28,9 @@ RUN ./node_modules/.bin/puppeteer browsers install chrome && \
         dest="/home/pptruser/.cache/puppeteer/chrome/linux-${version}"; \
         unzip -o "$zip" -d "${dest}/" && chmod +x "${dest}/chrome-linux64/chrome"; \
     done
+RUN mkdir -p output
 
 ENV IS_DOCKER=true
 ENV NODE_OPTIONS="--max-http-header-size=99999999"
+ENV JS_RECON_OUTPUT_OVERWRITE=true
 ENTRYPOINT ["node", "build/index.js"]
