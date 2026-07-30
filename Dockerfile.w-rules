@@ -8,6 +8,5 @@ RUN rm -rf /home/pptruser/.js-recon/rules/.github && \
         mv /home/pptruser/.js-recon/rules/skills /home/pptruser/.js-recon/skills; \
     fi && \
     chown -R pptruser:pptruser /home/pptruser/.js-recon
-USER pptruser
 
 ENV JS_RECON_DISABLE_RULES_VERSION_CHECK=true
