@@ -10,6 +10,7 @@ ENV HOME=/home/pptruser
 COPY ./package.json .
 COPY ./package-lock.json .
 COPY ./tsconfig.json .
+COPY ./patches ./patches
 COPY ./src ./src
 
 USER root
