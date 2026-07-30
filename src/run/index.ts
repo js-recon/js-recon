@@ -938,6 +938,9 @@ export default async (cmd: any): Promise<void> => {
                 }
             }
         }
+    } catch (error) {
+        console.error(chalk.bgRed(`[!] Unhandled error: ${error}`));
+        process.exitCode = 1;
     } finally {
         await waitForPendingInterrupt();
         removeSigintHandler();
