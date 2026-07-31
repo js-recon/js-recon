@@ -68,12 +68,12 @@ jobs:
           PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
 
       - name: Verify all rules fired
-        run: node scripts/smoke-test.js
+        run: node scripts/smoke-test.js "$(find output -name analyze.json | head -n1)"
 
       - name: Upload analyze.json on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: analyze-json
-          path: output/localhost_3001/analyze.json
+          path: output/**/analyze.json
           if-no-files-found: ignore
