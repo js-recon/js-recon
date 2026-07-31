@@ -90,18 +90,37 @@ describe("target input resolution", () => {
         });
     });
 
-    it("rejects directories, empty files, invalid URLs, and non-HTTP protocols", () => {
+    it("rejects directories, empty files, and non-HTTP protocols", () => {
         const root = makeTemporaryDirectory();
         const emptyPath = path.join(root, "empty.txt");
-        const invalidPath = path.join(root, "invalid.txt");
         fs.writeFileSync(emptyPath, " \n\r\n");
-        fs.writeFileSync(invalidPath, "https://valid.example.test\nnot-a-url\n");
 
         expect(() => resolveTargetInputs(root)).toThrow(/regular file/);
         expect(() => resolveTargetInputs(emptyPath)).toThrow(/does not contain any targets/);
-        expect(() => resolveTargetInputs(invalidPath)).toThrow(/invalid\.txt:2/);
         expect(() => resolveTargetInputs("ftp://files.example.test/archive")).toThrow(TargetInputError);
         expect(() => resolveTargetInputs("not-a-url")).toThrow(/Invalid target/);
+    });
+
+    it("skips a malformed line in a target file instead of aborting the whole batch", () => {
+        const root = makeTemporaryDirectory();
+        const targetsPath = path.join(root, "targets.txt");
+        fs.writeFileSync(
+            targetsPath,
+            ["https://example1.invalid", "not-a-valid-target-line", "https://example2.invalid"].join("\n")
+        );
+
+        expect(resolveTargetInputs(targetsPath)).toEqual({
+            targets: ["https://example1.invalid", "https://example2.invalid"],
+            isBatch: true,
+        });
+    });
+
+    it("still fails when every line in a target file is malformed", () => {
+        const root = makeTemporaryDirectory();
+        const targetsPath = path.join(root, "all-invalid.txt");
+        fs.writeFileSync(targetsPath, "not-a-valid-target-line\nalso-not-valid\n");
+
+        expect(() => resolveTargetInputs(targetsPath)).toThrow(/does not contain any targets/);
     });
 
     it("rejects target files larger than the bounded input limit", () => {

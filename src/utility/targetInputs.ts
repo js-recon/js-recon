@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import chalk from "chalk";
 
 const MAX_TARGET_FILE_BYTES = 1024 * 1024;
 const MAX_TARGETS = 10_000;
@@ -123,10 +124,16 @@ const readTargetFile = (filePath: string): readonly string[] => {
         const trimmed = (index === 0 ? line.replace(/^\uFEFF/, "") : line).trim();
         if (trimmed === "") return [];
         const entries = splitUrlList(trimmed);
-        for (const entry of entries) {
-            requireHttpTarget(entry, `Invalid HTTP(S) target in ${filePath}:${index + 1}`);
-        }
-        return entries;
+        return entries.filter((entry) => {
+            try {
+                requireHttpTarget(entry, `Invalid HTTP(S) target in ${filePath}:${index + 1}`);
+                return true;
+            } catch (error) {
+                if (!(error instanceof TargetInputError)) throw error;
+                console.warn(chalk.yellow(`[!] ${error.message} \u2014 skipping this target.`));
+                return false;
+            }
+        });
     });
     if (targets.length === 0) {
         throw new TargetInputError(`Target file ${filePath} does not contain any targets`);

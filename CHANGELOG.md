@@ -1,5 +1,11 @@
 # Change Log
 
+## 1.4.4 (unreleased)
+
+### Fixed
+
+- `run`: batch mode (`-u <target-file>`) aborted the entire run if any single line in the target file was malformed, even when other lines were valid targets that appeared before it — no output was produced at all. A malformed line is now logged with a `[!]` warning and skipped; the rest of the file's valid targets are still processed. The run only fails outright if the target file contains zero valid targets. (`run`)
+
 ## 1.4.3 - 2026-07-30
 
 ### Added
