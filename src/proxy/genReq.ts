@@ -106,14 +106,25 @@ const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
         signal?.addEventListener("abort", cancel, { once: true });
     });
 
+export interface AwsGatewayResponse {
+    readonly body: string;
+    readonly status?: number;
+    readonly headers?: Record<string, string>;
+}
+
 /**
- * Given a URL, generates a new API Gateway for it and returns the response of the URL.
+ * Given a URL, generates a new API Gateway for it and returns the response of the URL,
+ * along with the real HTTP status/headers so callers can corroborate WAF/CDN block detection.
  * @param {string} url The URL to generate an API Gateway for.
  * @param {object} [headers] The headers to include in the request.
  * @param {AbortSignal} [signal] Cancels pending AWS operations and retry delays.
- * @returns {Promise<string>} The response of the URL.
+ * @returns {Promise<AwsGatewayResponse>} The response of the URL, with status/headers.
  */
-const get = async (url: string, headers: Record<string, string> = {}, signal?: AbortSignal): Promise<string> => {
+const getWithMetadata = async (
+    url: string,
+    headers: Record<string, string> = {},
+    signal?: AbortSignal
+): Promise<AwsGatewayResponse> => {
     if (signal?.aborted) throw signal.reason;
 
     // read the aws gateway map from the proxy config file
@@ -573,7 +584,7 @@ const get = async (url: string, headers: Record<string, string> = {}, signal?: A
                 sendOptions
             );
             await sleep(100, operationSignal);
-            return invoked.body ?? "";
+            return { body: invoked.body ?? "", status: invoked.status, headers: invoked.headers };
         } finally {
             if (resource.cleanupRecord && (await deleteResource(resource.id))) {
                 retireCleanupRecord(resource.cleanupRecord);
@@ -585,4 +596,14 @@ const get = async (url: string, headers: Record<string, string> = {}, signal?: A
     }
 };
 
-export { get };
+/**
+ * Given a URL, generates a new API Gateway for it and returns the response body as text.
+ * @param {string} url The URL to generate an API Gateway for.
+ * @param {object} [headers] The headers to include in the request.
+ * @param {AbortSignal} [signal] Cancels pending AWS operations and retry delays.
+ * @returns {Promise<string>} The response body of the URL.
+ */
+const get = async (url: string, headers: Record<string, string> = {}, signal?: AbortSignal): Promise<string> =>
+    (await getWithMetadata(url, headers, signal)).body;
+
+export { get, getWithMetadata };

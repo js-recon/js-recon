@@ -19,7 +19,7 @@ const requestHarness = vi.hoisted(() => ({
 let temporaryCacheDirectory: string | undefined;
 
 vi.mock("../../proxy/genReq.js", () => ({
-    get: requestHarness.awsGet,
+    getWithMetadata: requestHarness.awsGet,
 }));
 
 beforeEach(() => {

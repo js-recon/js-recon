@@ -3,7 +3,7 @@ import { ProxyAgent, Socks5ProxyAgent, type Dispatcher } from "undici";
 import puppeteer from "./puppeteerInstance.js";
 import { getChromiumPath } from "./getChromiumPath.js";
 import * as globals from "./globals.js";
-import { get } from "../proxy/genReq.js";
+import { getWithMetadata } from "../proxy/genReq.js";
 import checkFireWallBlocking from "../proxy/checkFireWallBlocking.js";
 import { parseProxyUrl } from "../proxy/genericProxy.js";
 import { buildOxylabsProxyUrl, composeOxylabsUsername } from "../proxy/oxylabsProxy.js";
@@ -626,9 +626,9 @@ const makeRequest = async (
     if (globals.getUseProxy() && globals.getProxyMethod() === "aws") {
         const getHeaders = Object.fromEntries(new Headers(requestOptions.headers).entries());
 
-        let body: string;
+        let awsResponse: Awaited<ReturnType<typeof getWithMetadata>>;
         try {
-            body = await get(url, getHeaders, effectiveSignal);
+            awsResponse = await getWithMetadata(url, getHeaders, effectiveSignal);
         } catch (err) {
             if (isCancelled()) return null;
             if (reportErrors) reportFailure(url, err);
@@ -637,13 +637,13 @@ const makeRequest = async (
         if (isCancelled()) return null;
 
         // check if any firewall is there in the way
-        if (await checkFireWallBlocking(body)) {
+        if (await checkFireWallBlocking(awsResponse.body, { status: awsResponse.status, headers: awsResponse.headers })) {
             progressError(chalk.magenta("[!] Please try again without API Gateway"));
             process.exit(18);
         }
 
         // craft a Response, and return that
-        const response = new Response(body);
+        const response = new Response(awsResponse.body);
 
         // if cache is enabled, write the response to the cache
         if (!globals.getDisableCache()) {
