@@ -645,7 +645,10 @@ const makeRequest = async (
         }
 
         // craft a Response, and return that
-        const response = new Response(awsResponse.body);
+        const response = new Response(awsResponse.body, {
+            status: awsResponse.status ?? 200,
+            headers: awsResponse.headers ?? {},
+        });
 
         // if cache is enabled, write the response to the cache
         if (!globals.getDisableCache()) {

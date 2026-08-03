@@ -296,8 +296,20 @@ const getWithMetadata = async (
     const listCleanupResources = async (
         cleanupClient: APIGatewayClient = client,
         restApiId: string = gateway.id
-    ): Promise<readonly { readonly id?: string; readonly pathPart?: string }[]> => {
-        const items: { readonly id?: string; readonly pathPart?: string }[] = [];
+    ): Promise<
+        readonly {
+            readonly id?: string;
+            readonly pathPart?: string;
+            readonly path?: string;
+            readonly parentId?: string;
+        }[]
+    > => {
+        const items: {
+            readonly id?: string;
+            readonly pathPart?: string;
+            readonly path?: string;
+            readonly parentId?: string;
+        }[] = [];
         const seenPositions = new Set<string>();
         let position: string | undefined;
         for (let page = 0; page < AWS_CLEANUP_MAX_PAGES; page++) {
@@ -557,12 +569,8 @@ const getWithMetadata = async (
 
     try {
         await replayCleanupRecords();
-        const resourceResponse = await client.send(
-            new GetResourcesCommand({ restApiId: gateway.id, limit: 999999999 }),
-            sendOptions
-        );
+        const resources = await listCleanupResources();
         await sleep(200, operationSignal);
-        const resources = resourceResponse.items ?? [];
         const existingResource = resources.find((item) => item.pathPart === resourcePathPart);
         const rootId = resources.find((item) => item.path === "/")?.id ?? resources[0]?.parentId;
         if (!existingResource?.id && !rootId) {
