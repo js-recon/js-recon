@@ -14,7 +14,10 @@ const temporaryDirectories: string[] = [];
 const makeTemporaryDirectory = (): string => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "js-recon-output-test-"));
     temporaryDirectories.push(directory);
-    return directory;
+    // Canonicalize so callers' expected paths already match what reserveRunOutputDirectory
+    // returns for overwrite=true, which resolves through realpath internally — on macOS,
+    // os.tmpdir() paths live under /var, itself a symlink to /private/var.
+    return fs.realpathSync(directory);
 };
 
 afterEach(() => {
