@@ -85,7 +85,7 @@ describe("legacy downloadFiles", () => {
         expect(errorSpy).not.toHaveBeenCalled();
     });
 
-    it("does not duplicate the host when the output root already owns it", async () => {
+    it("nests the host even when the output root's basename already matches it", async () => {
         mockedMakeRequest.mockResolvedValue(new Response("const ok = true;", { status: 200 }));
         mockedFormat.mockResolvedValue("const ok = true;\n");
         vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -93,8 +93,8 @@ describe("legacy downloadFiles", () => {
 
         await downloadFiles(["https://example.test/assets/chunk.js"], hostOutputDir);
 
-        expect(fs.existsSync(path.join(hostOutputDir, "assets", "chunk.js"))).toBe(true);
-        expect(fs.existsSync(path.join(hostOutputDir, "example.test", "assets", "chunk.js"))).toBe(false);
+        expect(fs.existsSync(path.join(hostOutputDir, "assets", "chunk.js"))).toBe(false);
+        expect(fs.existsSync(path.join(hostOutputDir, "example.test", "assets", "chunk.js"))).toBe(true);
     });
 
     it("uses the Vue parser for SFC URLs with a query string", async () => {

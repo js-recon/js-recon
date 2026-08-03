@@ -6,7 +6,12 @@ import chalk from "chalk";
 import { resolveHostOutputDirectory } from "../outputPath.js";
 import { isRequestCancelled } from "../../utility/makeReq.js";
 
-const react_getScriptTags = async (url: string, maxJsSizeMb: number, outputDir?: string): Promise<string[]> => {
+const react_getScriptTags = async (
+    url: string,
+    maxJsSizeMb: number,
+    outputDir?: string,
+    isBatch: boolean = false
+): Promise<string[]> => {
     let toReturn: string[] = [];
 
     const req = await makeRequest(url);
@@ -14,7 +19,7 @@ const react_getScriptTags = async (url: string, maxJsSizeMb: number, outputDir?:
     const pageSource = await req.text();
 
     const $ = cheerio.load(pageSource);
-    const hostOutputDir = outputDir ? resolveHostOutputDirectory(outputDir, new URL(url).host) : undefined;
+    const hostOutputDir = outputDir ? resolveHostOutputDirectory(outputDir, new URL(url).host, isBatch) : undefined;
     let inlineIndex = 0;
 
     $("script").each((_, elem) => {

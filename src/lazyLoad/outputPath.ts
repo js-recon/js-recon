@@ -74,13 +74,22 @@ export const getSanitizedAssetFilename = (resourceUrl: string): string | undefin
 };
 
 /**
- * Returns the directory that owns a mirrored host. Batch target roots already
- * end in their target host, so appending that same host again is unnecessary.
+ * Returns the directory that owns a mirrored host. By default, always nests the
+ * host under the output root. Pass `isBatchTargetRoot: true` only when the caller
+ * knows `outputRoot` is itself a batch per-target root that may already end in its
+ * target host — in that case a matching basename is treated as already-owned and
+ * is not nested again.
  */
-export const resolveHostOutputDirectory = (outputRoot: string, host: string): string => {
+export const resolveHostOutputDirectory = (
+    outputRoot: string,
+    host: string,
+    isBatchTargetRoot: boolean = false
+): string => {
     const outputHost = toOutputHost(host);
     const candidate =
-        path.basename(path.resolve(outputRoot)) === outputHost ? outputRoot : path.join(outputRoot, outputHost);
+        isBatchTargetRoot && path.basename(path.resolve(outputRoot)) === outputHost
+            ? outputRoot
+            : path.join(outputRoot, outputHost);
     const relative = path.relative(path.resolve(outputRoot), path.resolve(candidate));
     if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
         throw new Error(`Refusing to resolve host outside output root: ${host}`);
@@ -89,11 +98,15 @@ export const resolveHostOutputDirectory = (outputRoot: string, host: string): st
 };
 
 /** Mirrors a URL pathname below its host-owned output directory. */
-export const resolveAssetOutputDirectory = (outputRoot: string, resourceUrl: string): string => {
+export const resolveAssetOutputDirectory = (
+    outputRoot: string,
+    resourceUrl: string,
+    isBatchTargetRoot: boolean = false
+): string => {
     const { rawHost, directory } = getURLDirectory(resourceUrl);
     const safeSegments = directory
         .split(/[\\/]+/)
         .filter((segment) => segment.length > 0)
         .map((segment) => sanitizeOutputPathSegment(segment));
-    return path.join(resolveHostOutputDirectory(outputRoot, rawHost), ...safeSegments);
+    return path.join(resolveHostOutputDirectory(outputRoot, rawHost, isBatchTargetRoot), ...safeSegments);
 };

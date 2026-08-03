@@ -14,6 +14,8 @@ export interface DownloadQueueOptions {
     onProgress?: (progress: DownloadProgressSnapshot) => void;
     /** Replace per-file errors with aggregate progress and summary counts. */
     compactOutput?: boolean;
+    /** True when `output` is a batch per-target root that may already end in its target host. */
+    alreadyBatchTargetRoot?: boolean;
 }
 
 export interface DownloadProgressSnapshot {
@@ -79,6 +81,7 @@ export class DownloadQueue {
 
     private readonly onProgress?: DownloadQueueOptions["onProgress"];
     private readonly compactOutput: boolean;
+    private readonly alreadyBatchTargetRoot: boolean;
     private progressObserverActive: boolean;
 
     constructor(output: string, concurrency: number, options: DownloadQueueOptions = {}) {
@@ -86,6 +89,7 @@ export class DownloadQueue {
         this.concurrency = Math.max(1, concurrency);
         this.onProgress = options.onProgress;
         this.compactOutput = options.compactOutput ?? false;
+        this.alreadyBatchTargetRoot = options.alreadyBatchTargetRoot ?? false;
         this.progressObserverActive = Boolean(options.onProgress);
         fs.mkdirSync(output, { recursive: true });
     }
@@ -292,7 +296,7 @@ export class DownloadQueue {
                 return;
             }
 
-            const childDir = resolveAssetOutputDirectory(this.output, url);
+            const childDir = resolveAssetOutputDirectory(this.output, url, this.alreadyBatchTargetRoot);
             const filePath = path.join(childDir, filename);
             let formatted: string;
             try {

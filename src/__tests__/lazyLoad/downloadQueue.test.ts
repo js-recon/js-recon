@@ -251,11 +251,24 @@ describe("DownloadQueue progress", () => {
         expect(queue.progress.processed).toBe(1);
     });
 
-    it("does not duplicate the host when the output root already owns it", async () => {
+    it("nests the host by default, even when the output root already owns it", async () => {
         mockedMakeRequest.mockResolvedValue(new Response("const ok = true;", { status: 200 }));
         mockedFormat.mockResolvedValue("const ok = true;\n");
         const hostOutputDir = path.join(outputDir, "example.test");
         const queue = new DownloadQueue(hostOutputDir, 1, { compactOutput: true });
+
+        queue.push(["https://example.test/assets/chunk.js"]);
+        await queue.drain();
+
+        expect(fs.existsSync(path.join(hostOutputDir, "assets", "chunk.js"))).toBe(false);
+        expect(fs.existsSync(path.join(hostOutputDir, "example.test", "assets", "chunk.js"))).toBe(true);
+    });
+
+    it("does not duplicate the host when alreadyBatchTargetRoot is set and the output root already owns it", async () => {
+        mockedMakeRequest.mockResolvedValue(new Response("const ok = true;", { status: 200 }));
+        mockedFormat.mockResolvedValue("const ok = true;\n");
+        const hostOutputDir = path.join(outputDir, "example.test");
+        const queue = new DownloadQueue(hostOutputDir, 1, { compactOutput: true, alreadyBatchTargetRoot: true });
 
         queue.push(["https://example.test/assets/chunk.js"]);
         await queue.drain();

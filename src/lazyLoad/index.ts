@@ -90,7 +90,8 @@ const lazyLoad = async (
     includeMethods: string[] = [],
     excludeMethods: string[] = [],
     detectionTimeoutMs: number = 30 * 1000,
-    cancellationSignal?: AbortSignal
+    cancellationSignal?: AbortSignal,
+    isBatch: boolean = false
 ) => {
     const resolvedTargets = resolveTargetInputs(url);
     // Hoisted so the timeout handler can stop discovery and drain downloads.
@@ -190,7 +191,7 @@ const lazyLoad = async (
                     console.log(chalk.green("[✓] Next.js detected"));
                     console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
 
-                    activeQueue = new DownloadQueue(output, threads);
+                    activeQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
                     const crawler = new NextJsCrawler({
                         url,
                         output,
@@ -203,6 +204,7 @@ const lazyLoad = async (
                         onUrlsDiscovered: (urls) => enqueue(activeQueue!, urls),
                         includeMethods,
                         excludeMethods,
+                        isBatch,
                     });
                     activeCrawler = crawler;
 
@@ -220,7 +222,7 @@ const lazyLoad = async (
                     if (buildId) {
                         // get the buildId
                         // the directory is the output <output>/<host.replace(":", "_")>/___subsequent_requests
-                        const targetOutputDir = resolveHostOutputDirectory(output, new URL(url).host);
+                        const targetOutputDir = resolveHostOutputDirectory(output, new URL(url).host, isBatch);
                         const buildId = await next_buildId_RSC(path.join(targetOutputDir, "___subsequent_requests"));
                         if (hardTimeoutReached) return;
 
@@ -246,7 +248,7 @@ const lazyLoad = async (
                     console.log(chalk.green("[✓] Vue.js detected"));
                     console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
 
-                    activeQueue = new DownloadQueue(output, threads);
+                    activeQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
                     const queue = activeQueue;
                     const onFilesDiscovered = (files: string[]) => enqueue(queue, files);
 
@@ -282,7 +284,7 @@ const lazyLoad = async (
                     console.log(chalk.green("[✓] Nuxt.js detected"));
                     console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
 
-                    const queue = new DownloadQueue(output, threads);
+                    const queue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
                     activeQueue = queue;
 
                     // find the files from the page source
@@ -332,7 +334,7 @@ const lazyLoad = async (
                     console.log(chalk.green("[✓] Svelte detected"));
                     console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
 
-                    const queue = new DownloadQueue(output, threads);
+                    const queue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
                     activeQueue = queue;
 
                     // find the files from the page source
@@ -435,7 +437,7 @@ const lazyLoad = async (
                     console.log(chalk.green("[✓] Angular detected"));
                     console.log(chalk.yellow(`Evidence: ${tech.evidence}`));
 
-                    const queue = new DownloadQueue(output, threads);
+                    const queue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
                     activeQueue = queue;
 
                     // find the files from the page source
@@ -483,12 +485,13 @@ const lazyLoad = async (
                     const queue = new DownloadQueue(output, threads, {
                         compactOutput: true,
                         onProgress: (progress) => activeDownloadProgress?.update(progress),
+                        alreadyBatchTargetRoot: isBatch,
                     });
                     activeQueue = queue;
 
                     // Seed: <script src> tags + <link rel="modulepreload"> (Vite vendor chunks)
                     const jsFilesFromPageSource = shouldRunMethod("react_getScriptTags", includeMethods, excludeMethods)
-                        ? await react_getScriptTags(url, maxJsSizeMb, output)
+                        ? await react_getScriptTags(url, maxJsSizeMb, output, isBatch)
                         : [];
                     if (hardTimeoutReached) return;
                     enqueue(queue, jsFilesFromPageSource);
@@ -587,7 +590,7 @@ const lazyLoad = async (
                         globals.setTech(secondChanceTech);
                     }
 
-                    const queue = new DownloadQueue(output, threads);
+                    const queue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
                     enqueue(queue, js_urls);
                     await queue.drain();
                     if (hardTimeoutReached) return;

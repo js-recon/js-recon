@@ -30,6 +30,8 @@ interface NextJsCrawlerOptions {
     includeMethods?: string[];
     /** Blacklist of method names to skip (empty = skip none). */
     excludeMethods?: string[];
+    /** True when `output` is a batch per-target root that may already end in its target host. */
+    isBatch?: boolean;
 }
 
 /**
@@ -79,6 +81,7 @@ class NextJsCrawler {
 
     private readonly includeMethods: string[];
     private readonly excludeMethods: string[];
+    private readonly isBatch: boolean;
 
     constructor(options: NextJsCrawlerOptions) {
         if (
@@ -99,6 +102,7 @@ class NextJsCrawler {
         this.onUrlsDiscovered = options.onUrlsDiscovered;
         this.includeMethods = options.includeMethods ?? [];
         this.excludeMethods = options.excludeMethods ?? [];
+        this.isBatch = options.isBatch ?? false;
 
         this.discoveredUrls = new Set();
         this.pageScriptFingerprints = new Map();
@@ -222,7 +226,8 @@ class NextJsCrawler {
                     this.urlsFile,
                     this.threads,
                     this.output,
-                    lazyLoadGlobals.getJsUrls()
+                    lazyLoadGlobals.getJsUrls(),
+                    this.isBatch
                 );
                 this.techniqueEfficiencyMapping["subsequentRequests"] = [...jsFromSubsequent];
                 this.emitDownloadable(this.registerUrls([...jsFromSubsequent]));

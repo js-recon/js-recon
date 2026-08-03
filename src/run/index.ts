@@ -41,7 +41,7 @@ import { clearRunOutputDirectory, getBatchTargetDirectoryName, reserveRunOutputD
  * @param outputDir - The base output directory
  * @returns Promise that resolves to the path of the CDN directory or undefined if no CDN is detected
  */
-const getCdnDir = async (host: string, outputDir: string): Promise<string | undefined> => {
+const getCdnDir = async (host: string, outputDir: string, isBatch: boolean): Promise<string | undefined> => {
     // get the JS URLs
     let cdnDir: string | undefined;
     for (const url of getJsUrls()) {
@@ -50,7 +50,7 @@ const getCdnDir = async (host: string, outputDir: string): Promise<string | unde
             const urlHost = new URL(url).host; // e.g. example.com:8443
             const initialHost = new URL(host).host; // e.g. example.com:443
             if (urlHost !== initialHost) {
-                cdnDir = resolveHostOutputDirectory(outputDir, urlHost);
+                cdnDir = resolveHostOutputDirectory(outputDir, urlHost, isBatch);
                 break;
             }
         }
@@ -150,7 +150,8 @@ const processUrl = async (
                 includeMethods,
                 excludeMethods,
                 Number(cmd.detectionTimeout) * 1000,
-                signal
+                signal,
+                isBatch
             ),
         getSkipStepPromise()
     );
@@ -269,7 +270,7 @@ const processUrl = async (
                         false,
                         undefined,
                         undefined,
-                        path.join(resolveHostOutputDirectory(outputDir, reactAssetsHostDir), "assets")
+                        path.join(resolveHostOutputDirectory(outputDir, reactAssetsHostDir, isBatch), "assets")
                     ),
                     getSkipStepPromise(),
                 ]);
@@ -538,7 +539,7 @@ const processUrl = async (
         const reportFile = isBatch ? `${workingDir}/report` : "report";
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
-        const angularHostDir = resolveHostOutputDirectory(outputDir, targetHost);
+        const angularHostDir = resolveHostOutputDirectory(outputDir, targetHost, isBatch);
 
         console.log(chalk.bgCyan("[2/4] Running map to find functions and API calls..."));
         globalsUtil.setOpenapi(true);
@@ -605,8 +606,8 @@ const processUrl = async (
     // if the target is using a CDN, then just passing the outputDir/host won't work, and would throw an error.
     // So, if the target was found to be using a CDN, scan the CDN directory rather than the outputDir/host
     // One IMPORTANT thing: this is only meant for modules that rely on just the code (map)
-    const cdnDir = await getCdnDir(url, outputDir);
-    const cdnOutputDir = cdnDir ? cdnDir : resolveHostOutputDirectory(outputDir, targetHost);
+    const cdnDir = await getCdnDir(url, outputDir, isBatch);
+    const cdnOutputDir = cdnDir ? cdnDir : resolveHostOutputDirectory(outputDir, targetHost, isBatch);
 
     console.log(chalk.bgCyan("[2/8] Running strings to extract endpoints..."));
     resetSkipStep();
@@ -641,7 +642,8 @@ const processUrl = async (
                 includeMethods,
                 excludeMethods,
                 Number(cmd.detectionTimeout) * 1000,
-                signal
+                signal,
+                isBatch
             ),
         getSkipStepPromise()
     );
@@ -685,7 +687,8 @@ const processUrl = async (
                 includeMethods,
                 excludeMethods,
                 Number(cmd.detectionTimeout) * 1000,
-                signal
+                signal,
+                isBatch
             ),
         getSkipStepPromise()
     );
@@ -723,7 +726,7 @@ const processUrl = async (
 
     console.log(chalk.bgCyan("[6/8] Running endpoints to extract endpoints..."));
     resetSkipStep();
-    const targetOutputDir = resolveHostOutputDirectory(outputDir, targetHost);
+    const targetOutputDir = resolveHostOutputDirectory(outputDir, targetHost, isBatch);
     if (fs.existsSync(path.join(targetOutputDir, "___subsequent_requests"))) {
         await Promise.race([
             endpoints(url, targetOutputDir, endpointsFile, ["json"], "next", false, mappedJsonFile),

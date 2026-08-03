@@ -9,13 +9,15 @@ import {
 } from "../../lazyLoad/outputPath.js";
 
 describe("resolveHostOutputDirectory", () => {
-    it("does not append a target host already owned by the output root", () => {
+    it("always nests the host by default, even when the output root's basename matches it", () => {
+        // Regression test for internal-docs#130: a single-target `-o` value whose
+        // basename happens to equal the sanitized host must NOT collapse the layout.
         expect(resolveHostOutputDirectory("/home/pptruser/output/js-recon.io", "js-recon.io")).toBe(
-            "/home/pptruser/output/js-recon.io"
+            "/home/pptruser/output/js-recon.io/js-recon.io"
         );
     });
 
-    it("keeps a distinct CDN host inside the target output root", () => {
+    it("keeps a distinct CDN host inside the target output root by default", () => {
         expect(resolveHostOutputDirectory("/home/pptruser/output/js-recon.io", "cdn.example.test")).toBe(
             "/home/pptruser/output/js-recon.io/cdn.example.test"
         );
@@ -27,21 +29,45 @@ describe("resolveHostOutputDirectory", () => {
         );
     });
 
-    it("normalizes every IPv6 separator consistently", () => {
+    it("does not append a target host already owned by the output root when isBatchTargetRoot is set", () => {
+        expect(resolveHostOutputDirectory("/home/pptruser/output/js-recon.io", "js-recon.io", true)).toBe(
+            "/home/pptruser/output/js-recon.io"
+        );
+    });
+
+    it("still nests a distinct CDN host inside a batch target root", () => {
+        expect(resolveHostOutputDirectory("/home/pptruser/output/js-recon.io", "cdn.example.test", true)).toBe(
+            "/home/pptruser/output/js-recon.io/cdn.example.test"
+        );
+    });
+
+    it("normalizes every IPv6 separator consistently for a batch target root", () => {
         const outputHost = toOutputHost("[::1]:3000");
         expect(outputHost).not.toContain(":");
-        expect(resolveHostOutputDirectory(`/tmp/output/${outputHost}`, "[::1]:3000")).toBe(`/tmp/output/${outputHost}`);
+        expect(resolveHostOutputDirectory(`/tmp/output/${outputHost}`, "[::1]:3000", true)).toBe(
+            `/tmp/output/${outputHost}`
+        );
     });
 });
 
 describe("resolveAssetOutputDirectory", () => {
-    it("preserves the URL directory without duplicating an owned host", () => {
+    it("preserves the URL directory without duplicating an owned host inside a batch target root", () => {
+        expect(
+            resolveAssetOutputDirectory(
+                "/home/pptruser/output/js-recon.io",
+                "https://js-recon.io/assets/assets/js/119794d4.c34b46d3.js",
+                true
+            )
+        ).toBe("/home/pptruser/output/js-recon.io/assets/assets/js");
+    });
+
+    it("nests the host by default, even when the output root's basename matches it", () => {
         expect(
             resolveAssetOutputDirectory(
                 "/home/pptruser/output/js-recon.io",
                 "https://js-recon.io/assets/assets/js/119794d4.c34b46d3.js"
             )
-        ).toBe("/home/pptruser/output/js-recon.io/assets/assets/js");
+        ).toBe("/home/pptruser/output/js-recon.io/js-recon.io/assets/assets/js");
     });
 
     it("mirrors host and path below a generic output root", () => {

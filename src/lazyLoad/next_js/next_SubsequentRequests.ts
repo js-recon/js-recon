@@ -41,7 +41,7 @@ const getURLDirectoryServer = (urlString) => {
     return `${url.origin}${newPath}`; // 'http://something.com/business'
 };
 
-const subsequentRequests = async (url, urlsFile, threads, output, js_urls): Promise<string[] | any> => {
+const subsequentRequests = async (url, urlsFile, threads, output, js_urls, isBatch = false): Promise<string[] | any> => {
     max_queue = threads;
     let staticJSURLs = [];
 
@@ -120,7 +120,7 @@ const subsequentRequests = async (url, urlsFile, threads, output, js_urls): Prom
                         // make the subsequent_requests directory if it doesn't exist
 
                         const output_path = path.join(
-                            resolveHostOutputDirectory(output, rawHost),
+                            resolveHostOutputDirectory(output, rawHost, isBatch),
                             "___subsequent_requests",
                             directory
                         );
