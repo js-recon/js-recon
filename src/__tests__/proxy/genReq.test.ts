@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -88,7 +89,7 @@ afterEach(() => {
 });
 
 describe("AWS API Gateway request cancellation", () => {
-    it("uses distinct ownership identities for concurrent requests to the same URL", async () => {
+    it("derives the same pathPart for repeat requests to the same URL, enabling resource reuse", async () => {
         const createdPathParts: string[] = [];
         awsHarness.send.mockImplementation(async (command) => {
             switch (commandName(command)) {
@@ -108,8 +109,43 @@ describe("AWS API Gateway request cancellation", () => {
         await vi.runAllTimersAsync();
         await requests;
 
+        // pathPart must be deterministic per URL (regression test for issue #128, where
+        // mixing a fresh randomUUID into the hash broke the existing-resource reuse lookup).
         expect(createdPathParts).toHaveLength(2);
-        expect(new Set(createdPathParts).size).toBe(2);
+        expect(new Set(createdPathParts).size).toBe(1);
+
+        // Cleanup-record ownership (recordId) still stays distinct per call.
+        const records = readCleanupRecords().map((serialized) => JSON.parse(serialized));
+        expect(new Set(records.map((record) => record.recordId)).size).toBe(records.length);
+    });
+
+    it("reuses an already-provisioned resource for a URL instead of creating a new one", async () => {
+        const expectedPathPart = createHash("sha256").update("https://example.test/reused.js").digest("hex").slice(0, 32);
+        const createResourceCalls: string[] = [];
+        awsHarness.send.mockImplementation(async (command) => {
+            switch (commandName(command)) {
+                case "GetResourcesCommand":
+                    return {
+                        items: [
+                            { id: "root-id", path: "/" },
+                            { id: "existing-resource-id", pathPart: expectedPathPart },
+                        ],
+                    };
+                case "CreateResourceCommand":
+                    createResourceCalls.push(command.input.pathPart);
+                    return { id: "resource-should-not-be-created" };
+                case "TestInvokeMethodCommand":
+                    return { body: "const proxied = true;" };
+                default:
+                    return {};
+            }
+        });
+
+        const request = get("https://example.test/reused.js");
+        await vi.runAllTimersAsync();
+        await request;
+
+        expect(createResourceCalls).toHaveLength(0);
     });
 
     it("passes the caller signal to AWS work and deletes its temporary resource", async () => {

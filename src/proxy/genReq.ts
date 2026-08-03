@@ -149,7 +149,10 @@ const get = async (url: string, headers: Record<string, string> = {}, signal?: A
     const operationSignal = signal ? AbortSignal.any([signal, operationController.signal]) : operationController.signal;
     const sendOptions = { abortSignal: operationSignal };
     const operationId = randomUUID();
-    const resourcePathPart = createHash("sha256").update(`${url}\0${operationId}`).digest("hex").slice(0, 32);
+    // Derived from the URL alone (not operationId) so repeat requests to the same
+    // URL resolve to the same pathPart, letting the existing-resource lookup below
+    // reuse an already-provisioned resource instead of creating a new one every call.
+    const resourcePathPart = createHash("sha256").update(url).digest("hex").slice(0, 32);
     const cleanupOptions = () => ({ abortSignal: AbortSignal.timeout(AWS_CLEANUP_TIMEOUT_MS) });
     const cleanupDirectory = `${globals.getProxyConfigFile()}.cleanup`;
     const cleanupRecordPath = (recordId: string): string => `${cleanupDirectory}/${recordId}.json`;
