@@ -637,7 +637,9 @@ const makeRequest = async (
         if (isCancelled()) return null;
 
         // check if any firewall is there in the way
-        if (await checkFireWallBlocking(awsResponse.body, { status: awsResponse.status, headers: awsResponse.headers })) {
+        if (
+            await checkFireWallBlocking(awsResponse.body, { status: awsResponse.status, headers: awsResponse.headers })
+        ) {
             progressError(chalk.magenta("[!] Please try again without API Gateway"));
             process.exit(18);
         }
