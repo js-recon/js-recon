@@ -213,14 +213,12 @@ const react_webpackChunkPaths = async (
                             let output = execFunc(urlBuilderFunc, parseInt(i));
                             if (typeof output !== "string" || output.includes("undefined")) continue;
 
-                            if (
-                                !(
-                                    output.startsWith("/") ||
-                                    output.startsWith("http") ||
-                                    output.startsWith("./") ||
-                                    output.startsWith("../")
-                                )
-                            ) {
+                            if (!(
+                                output.startsWith("/") ||
+                                output.startsWith("http") ||
+                                output.startsWith("./") ||
+                                output.startsWith("../")
+                            )) {
                                 output = "../" + output;
                             }
                             const finalUrl = new URL(output, jsFile).href;

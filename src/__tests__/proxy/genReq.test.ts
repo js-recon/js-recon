@@ -120,7 +120,10 @@ describe("AWS API Gateway request cancellation", () => {
     });
 
     it("reuses an already-provisioned resource for a URL instead of creating a new one", async () => {
-        const expectedPathPart = createHash("sha256").update("https://example.test/reused.js").digest("hex").slice(0, 32);
+        const expectedPathPart = createHash("sha256")
+            .update("https://example.test/reused.js")
+            .digest("hex")
+            .slice(0, 32);
         const createResourceCalls: string[] = [];
         awsHarness.send.mockImplementation(async (command) => {
             switch (commandName(command)) {
