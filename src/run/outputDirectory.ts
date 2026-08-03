@@ -313,7 +313,7 @@ export const reserveRunOutputDirectory = (
         throw new RunOutputDirectoryError(`Output path ${preferred} must not be a symbolic link`);
     }
     if (preferredState === "not-directory") {
-        if (overwrite) throw new RunOutputDirectoryError(`Output path ${preferred} must be a directory`);
+        throw new RunOutputDirectoryError(`Output path ${preferred} exists and is not a directory`);
     } else if (preferredState === "empty" || (overwrite && preferredState === "occupied")) {
         if (preferredState === "occupied" && !hasValidOwnerMarker(preferred)) {
             throw new RunOutputDirectoryError(

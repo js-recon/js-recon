@@ -109,6 +109,16 @@ describe("run output directory reservation", () => {
         expect(() => reserveRunOutputDirectory(process.cwd(), true)).toThrow(/current working directory/);
     });
 
+    it("rejects a file at the output path without overwrite instead of silently redirecting", () => {
+        const root = makeTemporaryDirectory();
+        const outputFile = path.join(root, "output");
+        fs.writeFileSync(outputFile, "not a directory");
+
+        expect(() => reserveRunOutputDirectory(outputFile, false)).toThrow(/exists and is not a directory/);
+        expect(fs.existsSync(`${outputFile}-2`)).toBe(false);
+        expect(fs.readFileSync(outputFile, "utf8")).toBe("not a directory");
+    });
+
     it("refuses to overwrite broad protected directories", () => {
         expect(() => reserveRunOutputDirectory(os.homedir(), true)).toThrow(/protected directory/);
         expect(() => reserveRunOutputDirectory(path.dirname(process.cwd()), true)).toThrow(/protected directory/);
