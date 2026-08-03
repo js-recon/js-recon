@@ -150,11 +150,17 @@ const strings = async (
             const fileContent = fs.readFileSync(file, "utf-8");
 
             // parse the file contents with babel
-            const ast = parser.parse(fileContent, {
-                sourceType: "unambiguous",
-                plugins: ["jsx", "typescript"],
-                errorRecovery: true,
-            });
+            let ast;
+            try {
+                ast = parser.parse(fileContent, {
+                    sourceType: "unambiguous",
+                    plugins: ["jsx", "typescript"],
+                    errorRecovery: true,
+                });
+            } catch (err) {
+                console.error(chalk.yellow(`[!] Skipping unparseable file: ${file}`));
+                continue;
+            }
 
             all_strings[file] = extractStrings(ast);
         }
