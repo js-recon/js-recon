@@ -9,6 +9,7 @@ import vue_getClientSidePaths from "./vue_getClientSidePaths.js";
 import vue_viteMapDeps from "./vue_viteMapDeps.js";
 import vue_stringJsFiles from "./vue_stringJsFiles.js";
 import { shouldRunMethod } from "../methodFilter.js";
+import { progressLog } from "../../utility/progressLog.js";
 
 export interface VueDiscoveryResult {
     jsFiles: string[];
@@ -33,7 +34,9 @@ const vue_discoverJsFiles = async (
     onFilesDiscovered?: (files: string[]) => void,
     includeMethods: string[] = [],
     excludeMethods: string[] = [],
-    threads: number = 1
+    threads: number = 1,
+    showProgress: boolean = true,
+    allowPrompts: boolean = true
 ): Promise<VueDiscoveryResult> => {
     let jsFiles: string[] = [];
 
@@ -58,7 +61,7 @@ const vue_discoverJsFiles = async (
 
     // method 1: through runtime.<hash>.js
     if (shouldRunMethod("vue_RuntimeJs", inc, exc)) {
-        emit(await vue_runtimeJs(url));
+        emit(await vue_runtimeJs(url, allowPrompts));
     }
 
     // single JS file on the page (typically dev-mode)
@@ -68,7 +71,7 @@ const vue_discoverJsFiles = async (
         emit(fromSingleJs);
         const newSingleJs = countNew(fromSingleJs, beforeSingleJs);
         if (newSingleJs > 0) {
-            console.log(chalk.green(`[✓] Found ${newSingleJs} new files from the single JS file on home`));
+            progressLog(chalk.green(`[✓] Found ${newSingleJs} new files from the single JS file on home`));
         }
     }
 
@@ -84,7 +87,7 @@ const vue_discoverJsFiles = async (
         emit(fromViteMapDeps);
         const newViteMapDeps = countNew(fromViteMapDeps, beforeViteMapDeps);
         if (newViteMapDeps > 0) {
-            console.log(chalk.green(`[✓] Found ${newViteMapDeps} new files from __vite__mapDeps`));
+            progressLog(chalk.green(`[✓] Found ${newViteMapDeps} new files from __vite__mapDeps`));
         }
     }
 
@@ -95,18 +98,18 @@ const vue_discoverJsFiles = async (
         emit(fromImports);
         const newJsImports = countNew(fromImports, beforeJsImports);
         if (newJsImports > 0) {
-            console.log(chalk.green(`[✓] Found ${newJsImports} new files from import statements`));
+            progressLog(chalk.green(`[✓] Found ${newJsImports} new files from import statements`));
         }
     }
 
     // scan string literals inside known JS files for .js references
     if (shouldRunMethod("vue_stringJsFiles", inc, exc)) {
         const beforeStringRefs = new Set(jsFiles.map(normalize));
-        const fromStringRefs = await vue_stringJsFiles(jsFiles, maxJsSizeMb, threads);
+        const fromStringRefs = await vue_stringJsFiles(jsFiles, maxJsSizeMb, threads, showProgress);
         emit(fromStringRefs);
         const newStringRefs = countNew(fromStringRefs, beforeStringRefs);
         if (newStringRefs > 0) {
-            console.log(chalk.green(`[✓] Found ${newStringRefs} new files from string literal JS references`));
+            progressLog(chalk.green(`[✓] Found ${newStringRefs} new files from string literal JS references`));
         }
     }
 
@@ -117,7 +120,7 @@ const vue_discoverJsFiles = async (
         emit(fromSourceMaps);
         const newSourceMaps = countNew(fromSourceMaps, beforeSourceMaps);
         if (newSourceMaps > 0) {
-            console.log(chalk.green(`[✓] Found ${newSourceMaps} new files from reconstructing source maps`));
+            progressLog(chalk.green(`[✓] Found ${newSourceMaps} new files from reconstructing source maps`));
         }
     }
 
@@ -126,7 +129,7 @@ const vue_discoverJsFiles = async (
     // surface client-side paths so the caller can recurse into them
     let clientSidePaths: string[] = [];
     if (shouldRunMethod("vue_getClientSidePaths", inc, exc)) {
-        clientSidePaths = await vue_getClientSidePaths(url, jsFiles, maxJsSizeMb, threads);
+        clientSidePaths = await vue_getClientSidePaths(url, jsFiles, maxJsSizeMb, threads, showProgress);
     }
 
     return { jsFiles, clientSidePaths: [...new Set(clientSidePaths)] };

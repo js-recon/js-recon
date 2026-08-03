@@ -5,7 +5,6 @@ import * as globalsUtil from "../utility/globals.js";
 import * as fs from "fs";
 import lazyLoad from "../lazyLoad/index.js";
 import chalk from "chalk";
-import CONFIG from "../globalConfig.js";
 import analyze from "../analyze/index.js";
 import report from "../report/index.js";
 import refactor from "../refactor/index.js";
@@ -24,8 +23,13 @@ import {
 } from "./interruptHandler.js";
 import { detectBundler } from "./bundler-detect.js";
 import configureProxy from "../utility/configureProxy.js";
+import { getOxylabsFallbackConfiguration } from "../proxy/oxylabsFallback.js";
 import { probeFeasibility } from "../proxy/checkFeasibility.js";
 import { getResolvedProxyConfigFromGlobals } from "../utility/makeReq.js";
+import { resolveHostOutputDirectory } from "../lazyLoad/outputPath.js";
+import { awaitCancellableStep } from "./cancellableStep.js";
+import { resolveTargetInputs } from "../utility/targetInputs.js";
+import { clearRunOutputDirectory, getBatchTargetDirectoryName, reserveRunOutputDirectory } from "./outputDirectory.js";
 
 /**
  * Determines the directory for a Content Delivery Network (CDN) if used by the target.
@@ -37,17 +41,16 @@ import { getResolvedProxyConfigFromGlobals } from "../utility/makeReq.js";
  * @param outputDir - The base output directory
  * @returns Promise that resolves to the path of the CDN directory or undefined if no CDN is detected
  */
-const getCdnDir = async (host: string, outputDir: string): Promise<string | undefined> => {
+const getCdnDir = async (host: string, outputDir: string, isBatch: boolean): Promise<string | undefined> => {
     // get the JS URLs
     let cdnDir: string | undefined;
     for (const url of getJsUrls()) {
         if (url.includes("_next/static/chunks")) {
             // check if the host and url.host match
-            const urlHostDir = new URL(url).host.replace(":", "_"); // e.g. example.com_8443
             const urlHost = new URL(url).host; // e.g. example.com:8443
             const initialHost = new URL(host).host; // e.g. example.com:443
             if (urlHost !== initialHost) {
-                cdnDir = path.join(outputDir, urlHostDir);
+                cdnDir = resolveHostOutputDirectory(outputDir, urlHost, isBatch);
                 break;
             }
         }
@@ -82,7 +85,7 @@ const processUrl = async (
     includeMethods: string[] = [],
     excludeMethods: string[] = []
 ): Promise<void> => {
-    const targetHost = new URL(url).host.replace(":", "_");
+    const targetHost = new URL(url).host;
 
     console.log(chalk.bgGreenBright(`[+] Starting analysis for ${url}...`));
 
@@ -125,30 +128,33 @@ const processUrl = async (
 
     console.log(chalk.bgCyan("[1/8] Running lazyload to download JavaScript files..."));
     resetSkipStep();
-    await Promise.race([
-        lazyLoad(
-            url,
-            outputDir,
-            cmd.strictScope,
-            cmd.scope.split(","),
-            cmd.threads,
-            false,
-            "",
-            cmd.insecure,
-            false,
-            cmd.sourcemapDir,
-            cmd.research,
-            cmd.researchOutput,
-            Number(cmd.maxIterations),
-            Number(cmd.maxJsSize),
-            Number(cmd.lazyloadTimeout) * 60 * 1000,
-            Number(cmd.maxPages),
-            includeMethods,
-            excludeMethods,
-            Number(cmd.detectionTimeout) * 1000
-        ),
-        getSkipStepPromise(),
-    ]);
+    await awaitCancellableStep(
+        (signal) =>
+            lazyLoad(
+                url,
+                outputDir,
+                cmd.strictScope,
+                cmd.scope.split(","),
+                cmd.threads,
+                false,
+                "",
+                cmd.insecure,
+                false,
+                cmd.sourcemapDir,
+                cmd.research,
+                cmd.researchOutput,
+                Number(cmd.maxIterations),
+                Number(cmd.maxJsSize),
+                Number(cmd.lazyloadTimeout) * 60 * 1000,
+                Number(cmd.maxPages),
+                includeMethods,
+                excludeMethods,
+                Number(cmd.detectionTimeout) * 1000,
+                signal,
+                isBatch
+            ),
+        getSkipStepPromise()
+    );
     console.log(chalk.bgGreen("[+] Lazyload complete."));
     if (shouldSkipTarget()) return;
 
@@ -249,7 +255,7 @@ const processUrl = async (
                 // of always assuming targetHost, mirroring getCdnDir's approach for the map step.
                 let reactAssetsHostDir = targetHost;
                 for (const jsUrl of getJsUrls()) {
-                    const jsUrlHost = new URL(jsUrl).host.replace(":", "_");
+                    const jsUrlHost = new URL(jsUrl).host;
                     if (jsUrlHost !== targetHost) {
                         reactAssetsHostDir = jsUrlHost;
                         break;
@@ -264,7 +270,7 @@ const processUrl = async (
                         false,
                         undefined,
                         undefined,
-                        `${outputDir}/${reactAssetsHostDir}/assets`
+                        path.join(resolveHostOutputDirectory(outputDir, reactAssetsHostDir, isBatch), "assets")
                     ),
                     getSkipStepPromise(),
                 ]);
@@ -533,7 +539,7 @@ const processUrl = async (
         const reportFile = isBatch ? `${workingDir}/report` : "report";
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
-        const angularHostDir = `${outputDir}/${targetHost}`;
+        const angularHostDir = resolveHostOutputDirectory(outputDir, targetHost, isBatch);
 
         console.log(chalk.bgCyan("[2/4] Running map to find functions and API calls..."));
         globalsUtil.setOpenapi(true);
@@ -600,8 +606,8 @@ const processUrl = async (
     // if the target is using a CDN, then just passing the outputDir/host won't work, and would throw an error.
     // So, if the target was found to be using a CDN, scan the CDN directory rather than the outputDir/host
     // One IMPORTANT thing: this is only meant for modules that rely on just the code (map)
-    const cdnDir = await getCdnDir(url, outputDir);
-    const cdnOutputDir = cdnDir ? cdnDir : outputDir + "/" + targetHost;
+    const cdnDir = await getCdnDir(url, outputDir, isBatch);
+    const cdnOutputDir = cdnDir ? cdnDir : resolveHostOutputDirectory(outputDir, targetHost, isBatch);
 
     console.log(chalk.bgCyan("[2/8] Running strings to extract endpoints..."));
     resetSkipStep();
@@ -614,30 +620,33 @@ const processUrl = async (
 
     console.log(chalk.bgCyan("[3/8] Running lazyload with subsequent requests to download JavaScript files..."));
     resetSkipStep();
-    await Promise.race([
-        lazyLoad(
-            url,
-            outputDir,
-            cmd.strictScope,
-            cmd.scope.split(","),
-            cmd.threads,
-            true,
-            `${extractedUrlsFile}.json`,
-            cmd.insecure,
-            true,
-            cmd.sourcemapDir,
-            cmd.research,
-            cmd.researchOutput,
-            Number(cmd.maxIterations),
-            Number(cmd.maxJsSize),
-            Number(cmd.lazyloadTimeout) * 60 * 1000,
-            Number(cmd.maxPages),
-            includeMethods,
-            excludeMethods,
-            Number(cmd.detectionTimeout) * 1000
-        ),
-        getSkipStepPromise(),
-    ]);
+    await awaitCancellableStep(
+        (signal) =>
+            lazyLoad(
+                url,
+                outputDir,
+                cmd.strictScope,
+                cmd.scope.split(","),
+                cmd.threads,
+                true,
+                `${extractedUrlsFile}.json`,
+                cmd.insecure,
+                true,
+                cmd.sourcemapDir,
+                cmd.research,
+                cmd.researchOutput,
+                Number(cmd.maxIterations),
+                Number(cmd.maxJsSize),
+                Number(cmd.lazyloadTimeout) * 60 * 1000,
+                Number(cmd.maxPages),
+                includeMethods,
+                excludeMethods,
+                Number(cmd.detectionTimeout) * 1000,
+                signal,
+                isBatch
+            ),
+        getSkipStepPromise()
+    );
     console.log(chalk.bgGreen("[+] Lazyload with subsequent requests complete."));
     if (shouldSkipTarget()) return;
 
@@ -656,30 +665,33 @@ const processUrl = async (
     // updated paths picks up chunks for those dynamic routes (e.g. the post page).
     console.log(chalk.bgCyan("[4.5/8] Re-running lazyload with subsequent requests for newly discovered paths..."));
     resetSkipStep();
-    await Promise.race([
-        lazyLoad(
-            url,
-            outputDir,
-            cmd.strictScope,
-            cmd.scope.split(","),
-            cmd.threads,
-            true,
-            `${extractedUrlsFile}.json`,
-            cmd.insecure,
-            false,
-            cmd.sourcemapDir,
-            cmd.research,
-            cmd.researchOutput,
-            Number(cmd.maxIterations),
-            Number(cmd.maxJsSize),
-            Number(cmd.lazyloadTimeout) * 60 * 1000,
-            Number(cmd.maxPages),
-            includeMethods,
-            excludeMethods,
-            Number(cmd.detectionTimeout) * 1000
-        ),
-        getSkipStepPromise(),
-    ]);
+    await awaitCancellableStep(
+        (signal) =>
+            lazyLoad(
+                url,
+                outputDir,
+                cmd.strictScope,
+                cmd.scope.split(","),
+                cmd.threads,
+                true,
+                `${extractedUrlsFile}.json`,
+                cmd.insecure,
+                false,
+                cmd.sourcemapDir,
+                cmd.research,
+                cmd.researchOutput,
+                Number(cmd.maxIterations),
+                Number(cmd.maxJsSize),
+                Number(cmd.lazyloadTimeout) * 60 * 1000,
+                Number(cmd.maxPages),
+                includeMethods,
+                excludeMethods,
+                Number(cmd.detectionTimeout) * 1000,
+                signal,
+                isBatch
+            ),
+        getSkipStepPromise()
+    );
     console.log(chalk.bgGreen("[+] Lazyload re-pass complete."));
     if (shouldSkipTarget()) return;
 
@@ -714,9 +726,10 @@ const processUrl = async (
 
     console.log(chalk.bgCyan("[6/8] Running endpoints to extract endpoints..."));
     resetSkipStep();
-    if (fs.existsSync(`${outputDir}/${targetHost}/___subsequent_requests`)) {
+    const targetOutputDir = resolveHostOutputDirectory(outputDir, targetHost, isBatch);
+    if (fs.existsSync(path.join(targetOutputDir, "___subsequent_requests"))) {
         await Promise.race([
-            endpoints(url, `${outputDir}/${targetHost}/`, endpointsFile, ["json"], "next", false, mappedJsonFile),
+            endpoints(url, targetOutputDir, endpointsFile, ["json"], "next", false, mappedJsonFile),
             getSkipStepPromise(),
         ]);
     } else {
@@ -784,19 +797,6 @@ const processUrl = async (
 };
 
 /**
- * Removes everything inside a directory without removing the directory itself.
- *
- * Used instead of `fs.rmSync(dir, { recursive: true })` for --output-overwrite: the output
- * directory may be a Docker bind-mount point, and removing a mount point throws EBUSY
- * ("Device or resource busy") even from inside the container's own mount namespace.
- */
-const emptyDir = (dir: string): void => {
-    for (const entry of fs.readdirSync(dir)) {
-        fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
-    }
-};
-
-/**
  * Main handler for the 'run' command that executes the complete js-recon analysis pipeline.
  *
  * Sets up global configuration and determines whether to process a single URL or
@@ -807,134 +807,107 @@ const emptyDir = (dir: string): void => {
  * @returns Promise that resolves when all URL processing is complete
  */
 export default async (cmd: any): Promise<void> => {
+    const resolvedTargets = resolveTargetInputs(cmd.url);
     configureProxy(cmd);
+    if (getOxylabsFallbackConfiguration().enabled) globalsUtil.setUseProxy(false);
     // Snapshot the originally-configured proxy state so `processUrl`'s --proxy-waf-fallback check
     // can reset it before each target in batch mode, regardless of what a previous target left it as.
-    cmd._proxyConfigured = globalsUtil.getUseProxy();
     globalsUtil.setDisableCache(cmd.disableCache);
     globalsUtil.setRespCacheFile(cmd.cacheFile);
     globalsUtil.setYes(cmd.yes);
 
-    const isBatch = fs.existsSync(cmd.url);
+    const outputOverwrite = cmd.outputOverwrite === true;
+    const outputReservation = reserveRunOutputDirectory(cmd.output, outputOverwrite);
+    const isBatch = resolvedTargets.isBatch;
+    const runCommand = Object.freeze({
+        ...cmd,
+        output: outputReservation.path,
+        _proxyConfigured: globalsUtil.getUseProxy(),
+    });
+    if (outputReservation.redirected) {
+        console.log(
+            chalk.yellow(
+                `[i] Output directory ${cmd.output} is already occupied; using ${outputReservation.path} instead.`
+            )
+        );
+    }
+    if (outputOverwrite && outputReservation.occupied) {
+        console.log(chalk.yellow(`[!] Output directory ${runCommand.output} already exists. Overwriting it.`));
+        clearRunOutputDirectory(runCommand.output);
+    }
+
     installSigintHandler(isBatch);
-
-    const outputOverwrite = cmd.outputOverwrite || process.env.JS_RECON_OUTPUT_OVERWRITE === "true";
-
     try {
-        // check if the given URL is a file
         if (!isBatch) {
-            // check if output directory exists. If so, ask the user to switch to other directory
-            // if not done, it might conflict this process
-            // for devs: run `npm run cleanup` to prepare this directory
-            if (fs.existsSync(cmd.output)) {
-                if (outputOverwrite) {
-                    console.log(chalk.yellow(`[!] Output directory ${cmd.output} already exists. Overwriting it.`));
-                    emptyDir(cmd.output);
-                } else {
-                    console.error(
-                        chalk.red(
-                            `[!] Output directory ${cmd.output} already exists. Please switch to other directory or it might conflict with this process.`
-                        )
-                    );
-                    console.log(
-                        chalk.yellow(
-                            `[i] For advanced users: use the individual modules separately. See docs at ${CONFIG.modulesDocs}`
-                        )
-                    );
-                    process.exit(11);
-                }
-            }
-
-            try {
-                new URL(cmd.url);
-            } catch (e) {
-                console.error(chalk.red(`[!] Invalid URL: ${cmd.url}`));
-                process.exit(12);
-            }
-
             await processUrl(
-                cmd.url,
-                cmd.output,
+                resolvedTargets.targets[0],
+                runCommand.output,
                 ".",
-                cmd,
+                runCommand,
                 false,
-                cmd._includeMethods ?? [],
-                cmd._excludeMethods ?? []
+                runCommand._includeMethods ?? [],
+                runCommand._excludeMethods ?? []
             );
         } else {
-            // since this is a file, we need to first load the URLs in the memory remove empty strings
-            const urls = fs
-                .readFileSync(cmd.url, "utf-8")
-                .split("\n")
-                .filter((url) => url !== "");
-
-            if (!fs.existsSync(cmd.output)) {
-                fs.mkdirSync(cmd.output, { recursive: true });
-            }
-
-            const globalDbPath = `${cmd.output}/js-recon.db`;
+            const globalDbPath = `${runCommand.output}/js-recon.db`;
             await initGlobalReportDb(globalDbPath);
+            const targetHosts = resolvedTargets.targets.map((target) => new URL(target).host);
+            const hostFrequencies = targetHosts.reduce<Map<string, number>>(
+                (frequencies, host) => new Map(frequencies).set(host, (frequencies.get(host) ?? 0) + 1),
+                new Map()
+            );
 
-            for (const url of urls) {
+            for (const url of resolvedTargets.targets) {
                 resetSkipTarget();
 
-                // Validate URL only
-                let urlObj;
-                try {
-                    urlObj = new URL(url);
-                } catch {
-                    console.error(chalk.bgRed(`[!] Invalid URL: ${url}`));
-                    continue;
-                }
-
-                const hostDir = urlObj.host.replace(":", "_");
-                const thisTargetDir = `${cmd.output}/${hostDir}`;
-
-                if (fs.existsSync(thisTargetDir) && outputOverwrite) {
+                const urlObj = new URL(url);
+                let hostDir = getBatchTargetDirectoryName(url, (hostFrequencies.get(urlObj.host) ?? 0) > 1);
+                const requestedTargetDir = path.join(runCommand.output, hostDir);
+                const targetReservation = reserveRunOutputDirectory(requestedTargetDir, outputOverwrite);
+                const thisTargetDir = targetReservation.path;
+                hostDir = path.basename(thisTargetDir);
+                if (outputOverwrite && targetReservation.occupied) {
                     console.log(chalk.yellow(`[!] Output directory ${thisTargetDir} already exists. Overwriting it.`));
-                    emptyDir(thisTargetDir);
-                } else if (fs.existsSync(thisTargetDir)) {
-                    console.error(chalk.red(`[!] Output directory ${thisTargetDir} already exists. Skipping ${url}.`));
-                    console.log(
-                        chalk.yellow(
-                            `[i] For advanced users: use the individual modules separately. See docs at ${CONFIG.modulesDocs}`
-                        )
-                    );
-                    continue;
+                    clearRunOutputDirectory(thisTargetDir);
+                } else if (targetReservation.redirected) {
+                    console.log(chalk.yellow(`[i] Target output already exists; using ${thisTargetDir} for ${url}.`));
                 }
 
-                fs.mkdirSync(thisTargetDir, { recursive: true });
                 try {
-                    await processUrl(
-                        url,
-                        thisTargetDir,
-                        thisTargetDir,
-                        cmd,
-                        true,
-                        cmd._includeMethods ?? [],
-                        cmd._excludeMethods ?? []
-                    );
-                } catch (error) {
-                    console.error(chalk.bgRed(`[!] Unhandled error while processing ${url}: ${error}`));
-                    process.exitCode = 1;
-                    continue;
-                }
-
-                const domainDbPath = `${thisTargetDir}/js-recon.db`;
-                if (fs.existsSync(domainDbPath)) {
                     try {
-                        mergeDomainIntoGlobalDb(globalDbPath, domainDbPath, hostDir);
+                        await processUrl(
+                            url,
+                            thisTargetDir,
+                            thisTargetDir,
+                            runCommand,
+                            true,
+                            runCommand._includeMethods ?? [],
+                            runCommand._excludeMethods ?? []
+                        );
                     } catch (error) {
-                        console.error(
-                            chalk.yellow(`[!] Failed to merge ${hostDir} into the global js-recon.db: ${error}`)
+                        console.error(chalk.bgRed(`[!] Unhandled error while processing ${url}: ${error}`));
+                        process.exitCode = 1;
+                        continue;
+                    }
+
+                    const domainDbPath = `${thisTargetDir}/js-recon.db`;
+                    if (fs.existsSync(domainDbPath)) {
+                        try {
+                            mergeDomainIntoGlobalDb(globalDbPath, domainDbPath, hostDir);
+                        } catch (error) {
+                            console.error(
+                                chalk.yellow(`[!] Failed to merge ${hostDir} into the global js-recon.db: ${error}`)
+                            );
+                        }
+                    } else {
+                        console.log(
+                            chalk.yellow(
+                                `[i] No js-recon.db found for ${hostDir}, skipping merge into the global database.`
+                            )
                         );
                     }
-                } else {
-                    console.log(
-                        chalk.yellow(
-                            `[i] No js-recon.db found for ${hostDir}, skipping merge into the global database.`
-                        )
-                    );
+                } finally {
+                    targetReservation.release();
                 }
             }
         }
@@ -942,8 +915,12 @@ export default async (cmd: any): Promise<void> => {
         console.error(chalk.bgRed(`[!] Unhandled error: ${error}`));
         process.exitCode = 1;
     } finally {
-        await waitForPendingInterrupt();
-        removeSigintHandler();
+        try {
+            await waitForPendingInterrupt();
+        } finally {
+            removeSigintHandler();
+            outputReservation.release();
+        }
         process.exit(process.exitCode ?? 0);
     }
 };

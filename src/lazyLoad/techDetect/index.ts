@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import * as cheerio from "cheerio";
-import makeRequest, { buildPuppeteerProxyArgs, getResolvedProxyConfigFromGlobals } from "../../utility/makeReq.js";
+import makeRequest, { getActivePuppeteerProxyArgs } from "../../utility/makeReq.js";
 import puppeteer from "../../utility/puppeteerInstance.js";
 import * as globalsUtil from "../../utility/globals.js";
 import { getChromiumPath } from "../../utility/getChromiumPath.js";
@@ -24,7 +24,10 @@ import { isSigintHandlerActive } from "../../run/interruptHandler.js";
  *   - name: The name of the detected front-end framework.
  *   - evidence: A string with the evidence of the detection, or an empty string if no front-end framework was detected.
  */
-const frameworkDetect = async (url: string): Promise<{ name: string; evidence: string }> => {
+const frameworkDetect = async (
+    url: string,
+    signal?: AbortSignal
+): Promise<{ name: string; evidence: string } | null> => {
     const log = (...args: any[]) => {
         if (!globalsUtil.getQuiet()) console.log(...args);
     };
@@ -34,7 +37,8 @@ const frameworkDetect = async (url: string): Promise<{ name: string; evidence: s
     // wait until after the puppeteer + downstream check* calls, the Response
     // body gets invalidated (undici flips bodyUsed=true mid-flight when the
     // response is held idle alongside other in-flight fetches).
-    const res = await makeRequest(url, {});
+    if (signal?.aborted) return null;
+    const res = await makeRequest(url, signal ? { signal } : {});
     let resBody: string | null = null;
     if (res !== null) {
         try {
@@ -47,6 +51,7 @@ const frameworkDetect = async (url: string): Promise<{ name: string; evidence: s
             );
         }
     }
+    if (signal?.aborted) return null;
 
     // get the page source in the browser (skipped in cache-only mode — no network allowed)
     let pageSource = "";
@@ -57,7 +62,7 @@ const frameworkDetect = async (url: string): Promise<{ name: string; evidence: s
     const responseEvidence = new Map<string, { status: number; contentType: string | null; body: string }>();
     if (!globalsUtil.getCacheOnly()) {
         const chromiumPath = getChromiumPath();
-        const proxyArgs = buildPuppeteerProxyArgs(getResolvedProxyConfigFromGlobals());
+        const proxyArgs = getActivePuppeteerProxyArgs();
         const browser = await puppeteer.launch({
             executablePath: chromiumPath,
             args: [
@@ -68,73 +73,100 @@ const frameworkDetect = async (url: string): Promise<{ name: string; evidence: s
             ],
             handleSIGINT: !isSigintHandlerActive(),
         });
-        const page = await browser.newPage();
-        if (proxyArgs.authenticate) {
-            await page.authenticate(proxyArgs.authenticate);
-        }
-        page.setDefaultNavigationTimeout(30000);
-
-        const cdp = await page.createCDPSession();
-        await cdp.send("Page.setDownloadBehavior", { behavior: "deny" });
-
-        // Intercept all requests so framework-specific URL patterns (e.g. /_nuxt/, /_next/)
-        // can be used as a detection signal even when they don't appear in parsed HTML.
-        await page.setRequestInterception(true);
-        page.on("request", (req) => {
-            interceptedUrls.push(req.url());
-            // Abort non-http/s schemes (mailto:, data:, etc.) — continue() throws for them.
-            if (/^https?:\/\//i.test(req.url())) {
-                req.continue().catch(() => {});
-            } else {
-                req.abort().catch(() => {});
-            }
-        });
-        // Captures each response's status/content-type/body as it arrives — reading the
-        // body must happen while the page/CDP session is still alive, so this can't be
-        // deferred until after browser.close(). Body-read failures (redirects, aborted
-        // responses) are swallowed to an empty string rather than dropping the entry.
-        const responseBodyPromises: Promise<void>[] = [];
-        page.on("response", (httpRes) => {
-            const responseUrl = httpRes.url();
-            const status = httpRes.status();
-            const contentType = httpRes.headers()["content-type"] ?? null;
-            responseBodyPromises.push(
-                httpRes
-                    .text()
-                    .catch(() => "")
-                    .then((body) => {
-                        responseEvidence.set(responseUrl, { status, contentType, body });
-                    })
-            );
-        });
+        const abortBrowser = () => {
+            void browser.close().catch(() => undefined);
+        };
+        signal?.addEventListener("abort", abortBrowser, { once: true });
         try {
-            await page.goto(url, {
-                waitUntil: "load",
-                timeout: 30000,
-            });
-            // If no framework URL was intercepted yet, we may have landed on a
-            // bot-challenge page (e.g. Vercel's challenge.v2.min.js) that fires
-            // its own load event before JS-redirecting to the real app. Wait for
-            // that redirect navigation; on sites with no redirect this times out
-            // quickly and we continue with what we have.
-            const hasFrameworkSignal = interceptedUrls.some(
-                (u) => u.includes("/_next/") || u.includes("/_nuxt/") || u.includes("/_app/immutable/")
-            );
-            if (!hasFrameworkSignal) {
-                await page.waitForNavigation({ waitUntil: "load", timeout: 5000 }).catch(() => {});
+            if (signal?.aborted) return null;
+            const page = await browser.newPage();
+            if (proxyArgs.authenticate) {
+                await page.authenticate(proxyArgs.authenticate);
             }
-            // Give client-side frameworks a brief window to settle
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            pageSource = await page.content();
+            page.setDefaultNavigationTimeout(30000);
+
+            const cdp = await page.createCDPSession();
+            await cdp.send("Page.setDownloadBehavior", { behavior: "deny" });
+
+            // Intercept all requests so framework-specific URL patterns (e.g. /_nuxt/, /_next/)
+            // can be used as a detection signal even when they don't appear in parsed HTML.
+            await page.setRequestInterception(true);
+            page.on("request", (req) => {
+                interceptedUrls.push(req.url());
+                // Abort non-http/s schemes (mailto:, data:, etc.) — continue() throws for them.
+                if (/^https?:\/\//i.test(req.url())) {
+                    req.continue().catch(() => {});
+                } else {
+                    req.abort().catch(() => {});
+                }
+            });
+            // Captures each response's status/content-type/body as it arrives — reading the
+            // body must happen while the page/CDP session is still alive, so this can't be
+            // deferred until after browser.close(). Body-read failures (redirects, aborted
+            // responses) are swallowed to an empty string rather than dropping the entry.
+            const responseBodyPromises: Promise<void>[] = [];
+            page.on("response", (httpRes) => {
+                const responseUrl = httpRes.url();
+                const status = httpRes.status();
+                const contentType = httpRes.headers()["content-type"] ?? null;
+                responseBodyPromises.push(
+                    httpRes
+                        .text()
+                        .catch(() => "")
+                        .then((body) => {
+                            responseEvidence.set(responseUrl, { status, contentType, body });
+                        })
+                );
+            });
+            try {
+                await page.goto(url, {
+                    waitUntil: "load",
+                    timeout: 30000,
+                });
+                // If no framework URL was intercepted yet, we may have landed on a
+                // bot-challenge page (e.g. Vercel's challenge.v2.min.js) that fires
+                // its own load event before JS-redirecting to the real app. Wait for
+                // that redirect navigation; on sites with no redirect this times out
+                // quickly and we continue with what we have.
+                const hasFrameworkSignal = interceptedUrls.some(
+                    (u) => u.includes("/_next/") || u.includes("/_nuxt/") || u.includes("/_app/immutable/")
+                );
+                if (!hasFrameworkSignal) {
+                    await page.waitForNavigation({ waitUntil: "load", timeout: 5000 }).catch(() => {});
+                }
+                // Give client-side frameworks a brief window to settle, unless cancellation
+                // has already closed the browser and made the result irrelevant.
+                if (!signal?.aborted) {
+                    await new Promise<void>((resolve) => {
+                        const finish = () => {
+                            clearTimeout(timeout);
+                            signal?.removeEventListener("abort", finish);
+                            resolve();
+                        };
+                        const timeout = setTimeout(finish, 2000);
+                        signal?.addEventListener("abort", finish, { once: true });
+                    });
+                }
+                if (!signal?.aborted) pageSource = await page.content();
+            } catch {
+                if (!signal?.aborted) {
+                    log(
+                        chalk.yellow("[!] Page navigation/content failed, falling back to fetch response if available")
+                    );
+                }
+            } finally {
+                await Promise.allSettled(responseBodyPromises);
+            }
         } catch (err) {
-            log(chalk.yellow("[!] Page navigation/content failed, falling back to fetch response if available"));
+            if (signal?.aborted) return null;
+            throw err;
         } finally {
-            // Wait for in-flight response body reads so responseEvidence is populated
-            // before the CDP session backing them goes away.
-            await Promise.allSettled(responseBodyPromises);
+            signal?.removeEventListener("abort", abortBrowser);
             await browser.close().catch(() => {});
         }
     }
+
+    if (signal?.aborted) return null;
 
     // if (res === null || res === undefined) {
     //   return;

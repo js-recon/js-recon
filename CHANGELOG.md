@@ -1,5 +1,12 @@
 # Change Log
 
+## 1.4.4 (unreleased)
+
+### Fixed
+
+- `run`: batch mode (`-u <target-file>`) aborted the entire run if any single line in the target file was malformed, even when other lines were valid targets that appeared before it — no output was produced at all. A malformed line is now logged with a `[!]` warning and skipped; the rest of the file's valid targets are still processed. The run only fails outright if the target file contains zero valid targets. (`run`)
+- `checkFireWallBlocking` (used by `proxy --feasibility` and the AWS API Gateway request path in `makeReq.ts`) hardcoded a fake `503` status and never passed real response headers to `detectBlockedResponse`'s CDN-header-corroborated detection path, so a genuine `403` "Access Denied" WAF/CDN block (e.g. a real Cloudflare `cf-ray` header) was silently missed even though the underlying detector correctly flags it when given real inputs. `checkFireWallBlocking` now accepts the real HTTP status and headers at all three call sites; when they genuinely aren't available, the status-corroborated detection path is skipped rather than spoofed against the wrong status. (`proxy`)
+
 ## 1.4.3 - 2026-07-30
 
 ### Added

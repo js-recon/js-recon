@@ -3,8 +3,15 @@ import fs from "fs";
 import path from "path";
 import * as cliProgress from "cli-progress";
 import frameworkDetect from "../lazyLoad/techDetect/index.js";
-import { computeBarSize, watchBarResize, setActiveBarLogger, progressLog } from "../utility/progressLog.js";
+import {
+    activateBarLogger,
+    computeBarSize,
+    progressLog,
+    watchBarResize,
+    withProgressResources,
+} from "../utility/progressLog.js";
 import * as globalsUtil from "../utility/globals.js";
+import { resolveTargetInputs, type TargetInput } from "../utility/targetInputs.js";
 
 type OutputFormat = "text" | "csv" | "json" | "jsonl";
 
@@ -20,17 +27,6 @@ const FRAMEWORK_LABELS: Record<string, string> = {
     svelte: "svelte",
     angular: "angular",
     react: "react",
-};
-
-const parseUrls = (urlArg: string): string[] => {
-    if (fs.existsSync(urlArg)) {
-        return fs
-            .readFileSync(urlArg, "utf-8")
-            .split("\n")
-            .map((u) => u.trim())
-            .filter((u) => u.length > 0);
-    }
-    return [urlArg];
 };
 
 export const deriveOutputPath = (outputFile: string, format: OutputFormat): string => {
@@ -81,12 +77,12 @@ const logOutputFiles = (outputFile: string, formats: OutputFormat[]): void => {
 };
 
 const fingerprint = async (
-    urlArg: string,
+    urlArg: TargetInput,
     outputFile: string | undefined,
     formatArg: string,
     threads = 5
 ): Promise<void> => {
-    const urls = parseUrls(urlArg);
+    const urls = resolveTargetInputs(urlArg).targets;
     const concurrency = Math.max(1, threads);
 
     const rawFormats = formatArg
@@ -118,9 +114,7 @@ const fingerprint = async (
 
     const bar = multiBar.create(urls.length, 0, { url: "" });
     const stopWatcher = watchBarResize(bar, overhead);
-    setActiveBarLogger(multiBar);
-
-    globalsUtil.setQuiet(true);
+    const releaseBarLogger = activateBarLogger(multiBar, process.stdout.isTTY === true);
 
     let nextIdx = 0;
 
@@ -157,12 +151,16 @@ const fingerprint = async (
         }
     };
 
-    await Promise.all(Array.from({ length: Math.min(concurrency, urls.length) }, worker));
-
-    globalsUtil.setQuiet(false);
-    multiBar.stop();
-    setActiveBarLogger(null);
-    stopWatcher();
+    await withProgressResources(
+        async () => {
+            globalsUtil.setQuiet(true);
+            await Promise.all(Array.from({ length: Math.min(concurrency, urls.length) }, worker));
+        },
+        () => globalsUtil.setQuiet(false),
+        () => multiBar.stop(),
+        stopWatcher,
+        releaseBarLogger
+    );
 
     const detected = results.filter((r) => r.framework !== null).length;
     console.log(chalk.cyan(`\n[i] ${detected}/${results.length} URLs fingerprinted`));

@@ -1,6 +1,7 @@
 # Logs
 logs
 *.log
+TODOS.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -138,7 +139,9 @@ output/*
 strings.json
 extracted_urls*
 .proxy_config.json
+.proxy_config.json.cleanup/
 .resp_cache.json
+.resp_cache.json.entries/
 .vscode/*
 !.vscode/tasks.json
 output*/
@@ -171,3 +174,6 @@ CLAUDE.md
 **/.claude/skills/
 .claude/agents/
 **/.claude/agents/
+
+# IDE stuff
+.idea/

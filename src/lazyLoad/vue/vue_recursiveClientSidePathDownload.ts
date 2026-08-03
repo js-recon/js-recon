@@ -1,7 +1,15 @@
 import chalk from "chalk";
 import cliProgress from "cli-progress";
 import vue_discoverJsFiles from "./vue_discoverJsFiles.js";
-import { setActiveBarLogger, computeBarSize, watchBarResize } from "../../utility/progressLog.js";
+import {
+    activateBarLogger,
+    computeBarSize,
+    progressError,
+    progressLog,
+    progressWarn,
+    watchBarResize,
+    withProgressResources,
+} from "../../utility/progressLog.js";
 
 /**
  * Recursively walks newly discovered Vue.js client-side paths.
@@ -66,7 +74,10 @@ const vue_recursiveClientSidePathDownload = async (
         stagnant: `0/${STAGNATION_LIMIT}`,
     });
     const stopBarWatcher = watchBarResize(bar, 99);
-    setActiveBarLogger({ log: (s: string) => process.stdout.write("\r\x1b[K" + s) });
+    const releaseBarLogger = activateBarLogger(
+        { log: (s: string) => process.stdout.write("\r\x1b[K" + s) },
+        process.stdout.isTTY === true
+    );
 
     const refreshBar = () => {
         bar.setTotal(knownPaths.size);
@@ -77,100 +88,97 @@ const vue_recursiveClientSidePathDownload = async (
         });
     };
 
-    try {
-        while (pending.length > 0) {
-            const batch = pending.filter((p) => !visitedPaths.has(p));
-            pending = [];
+    await withProgressResources(
+        async () => {
+            while (pending.length > 0) {
+                const batch = pending.filter((p) => !visitedPaths.has(p));
+                pending = [];
 
-            if (batch.length === 0) break;
+                if (batch.length === 0) break;
 
-            round++;
-            const sizeBeforeRound = allJsFiles.size;
+                round++;
+                const sizeBeforeRound = allJsFiles.size;
 
-            const errors: string[] = [];
-            let cursor = 0;
-            const workerCount = Math.max(1, Math.min(threads, batch.length));
-            // `threads` is meant to be a global concurrency budget. Each concurrent page worker
-            // here runs its own `vue_discoverJsFiles` with further internal concurrent discovery
-            // loops, so passing the full `threads` value down would multiply out to
-            // workerCount * threads concurrent requests. Give nested discovery a budget of one
-            // whenever more than one page is being crawled concurrently, keeping the total
-            // in-flight request count bounded by `threads`.
-            const nestedThreads = workerCount > 1 ? 1 : threads;
+                const errors: string[] = [];
+                let cursor = 0;
+                const workerCount = Math.max(1, Math.min(threads, batch.length));
+                // `threads` is meant to be a global concurrency budget. Each concurrent page worker
+                // here runs its own `vue_discoverJsFiles` with further internal concurrent discovery
+                // loops, so passing the full `threads` value down would multiply out to
+                // workerCount * threads concurrent requests. Give nested discovery a budget of one
+                // whenever more than one page is being crawled concurrently, keeping the total
+                // in-flight request count bounded by `threads`.
+                const nestedThreads = workerCount > 1 ? 1 : threads;
 
-            const worker = async () => {
-                while (cursor < batch.length) {
-                    const path = batch[cursor++];
-                    try {
-                        const { jsFiles, clientSidePaths: newPaths } = await vue_discoverJsFiles(
-                            path,
-                            maxJsSizeMb,
-                            onFilesDiscovered,
-                            includeMethods,
-                            excludeMethods,
-                            nestedThreads
-                        );
+                const worker = async () => {
+                    while (cursor < batch.length) {
+                        const path = batch[cursor++];
+                        try {
+                            const { jsFiles, clientSidePaths: newPaths } = await vue_discoverJsFiles(
+                                path,
+                                maxJsSizeMb,
+                                onFilesDiscovered,
+                                includeMethods,
+                                excludeMethods,
+                                nestedThreads,
+                                false,
+                                false
+                            );
 
-                        for (const file of jsFiles) {
-                            allJsFiles.add(file);
-                        }
-
-                        for (const newPath of newPaths) {
-                            if (!knownPaths.has(newPath)) {
-                                knownPaths.add(newPath);
-                                pending.push(newPath);
+                            for (const file of jsFiles) {
+                                allJsFiles.add(file);
                             }
+
+                            for (const newPath of newPaths) {
+                                if (!knownPaths.has(newPath)) {
+                                    knownPaths.add(newPath);
+                                    pending.push(newPath);
+                                }
+                            }
+                        } catch (err) {
+                            errors.push(
+                                `[!] Failed to recurse into ${path}: ${err instanceof Error ? err.message : String(err)}`
+                            );
+                        } finally {
+                            visitedPaths.add(path);
+                            refreshBar();
                         }
-                    } catch (err) {
-                        errors.push(
-                            `[!] Failed to recurse into ${path}: ${err instanceof Error ? err.message : String(err)}`
-                        );
-                    } finally {
-                        visitedPaths.add(path);
-                        refreshBar();
                     }
-                }
-            };
+                };
 
-            await Promise.all(Array.from({ length: workerCount }, () => worker()));
+                await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
-            if (errors.length > 0) {
-                bar.stop();
-                for (const msg of errors) {
-                    console.error(chalk.red(msg));
+                if (errors.length > 0) {
+                    for (const msg of errors) {
+                        progressError(chalk.red(msg));
+                    }
+                    refreshBar();
                 }
-                bar.start(knownPaths.size, visitedPaths.size, {
-                    round,
-                    jsFiles: allJsFiles.size,
-                    stagnant: `${stagnantRounds}/${STAGNATION_LIMIT}`,
-                });
+
+                const newFilesThisRound = allJsFiles.size - sizeBeforeRound;
+                if (newFilesThisRound === 0) {
+                    stagnantRounds++;
+                    refreshBar();
+                    if (stagnantRounds >= STAGNATION_LIMIT) {
+                        progressWarn(
+                            chalk.yellow(
+                                `[!] Stopping recursion: ${STAGNATION_LIMIT} consecutive rounds without new JS files`
+                            )
+                        );
+                        break;
+                    }
+                } else {
+                    stagnantRounds = 0;
+                }
             }
-
-            const newFilesThisRound = allJsFiles.size - sizeBeforeRound;
-            if (newFilesThisRound === 0) {
-                stagnantRounds++;
-                refreshBar();
-                if (stagnantRounds >= STAGNATION_LIMIT) {
-                    bar.stop();
-                    console.error(
-                        chalk.yellow(
-                            `[!] Stopping recursion: ${STAGNATION_LIMIT} consecutive rounds without new JS files`
-                        )
-                    );
-                    break;
-                }
-            } else {
-                stagnantRounds = 0;
-            }
-        }
-    } finally {
-        bar.stop();
-        stopBarWatcher();
-        setActiveBarLogger(null);
-    }
+        },
+        () => bar.stop(),
+        stopBarWatcher,
+        releaseBarLogger
+    );
 
     if (allJsFiles.size > 0) {
-        console.log(
+        progressLog(
             chalk.green(
                 `[✓] Recursive client-side discovery yielded ${allJsFiles.size} JS file(s) across ${visitedPaths.size} path(s)`
             )

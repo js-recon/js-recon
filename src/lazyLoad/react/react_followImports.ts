@@ -1,6 +1,7 @@
 import makeRequest from "../../utility/makeReq.js";
 import chalk from "chalk";
 import { runWithConcurrency } from "../../utility/concurrency.js";
+import { progressWarn } from "../../utility/progressLog.js";
 
 /**
  * Extracts all JS file references from the content of a JS file:
@@ -79,34 +80,45 @@ const react_followImports = async (
     maxJsSizeMb: number,
     baseUrl: string,
     visited: Set<string>,
-    threads: number = 1
+    threads: number = 1,
+    compactOutput: boolean = false
 ): Promise<string[]> => {
     const discovered: string[] = [];
     const toFetch = jsFiles.filter((jsFile) => !visited.has(jsFile));
+    let warningCount = 0;
+    const reportWarning = compactOutput
+        ? () => {
+              warningCount++;
+          }
+        : (message: string) => console.error(message);
     for (const jsFile of toFetch) visited.add(jsFile);
 
     await runWithConcurrency(toFetch, threads, async (jsFile) => {
         try {
-            const req = await makeRequest(jsFile);
+            const req = await makeRequest(jsFile, compactOutput ? { reportErrors: false } : undefined);
             if (!req || req.status !== 200) return;
 
             const contentLength = req.headers.get("content-length");
             if (contentLength && parseInt(contentLength) > maxJsSizeMb * 1024 * 1024) {
-                console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
+                reportWarning(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
                 return;
             }
 
             const content = await req.text();
             if (content.length > maxJsSizeMb * 1024 * 1024) {
-                console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
+                reportWarning(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
                 return;
             }
 
             discovered.push(...extractImports(content, jsFile, baseUrl));
         } catch (err) {
-            console.error(chalk.yellow(`[!] Could not follow imports in ${jsFile}: ${err}`));
+            reportWarning(chalk.yellow(`[!] Could not follow imports in ${jsFile}: ${err}`));
         }
     });
+
+    if (compactOutput && warningCount > 0) {
+        progressWarn(chalk.yellow(`[!] Skipped ${warningCount} JS file(s) while following imports`));
+    }
 
     // Return only URLs not yet in visited (deduplicated)
     return [...new Set(discovered)].filter((u) => !visited.has(u));

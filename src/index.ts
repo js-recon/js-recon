@@ -23,6 +23,19 @@ import csMast from "./cs_mast/index.js";
 import sourcemaps from "./sourcemaps/index.js";
 import { printBanner } from "./utility/banner.js";
 import completion from "./completion/index.js";
+import {
+    ApplicationConfigError,
+    getLoadedApplicationConfig,
+    prepareProgramConfiguration,
+} from "./config/applicationConfig.js";
+import {
+    configureOxylabsFallback,
+    getOxylabsFallbackConfiguration,
+    OxylabsFallbackConfigurationError,
+    resolveOxylabsFallback,
+} from "./proxy/oxylabsFallback.js";
+import { collectTargetInput, TargetInputError } from "./utility/targetInputs.js";
+import { RunOutputDirectoryError } from "./run/outputDirectory.js";
 
 const args = process.argv.slice(2);
 const isVersionFlag = args.length === 1 && (args[0] === "-V" || args[0] === "--version");
@@ -35,7 +48,13 @@ if (!isVersionFlag && !isCompletionCmd) {
  * Main CLI application entry point for js-recon tool.
  * Sets up command-line interface with various modules for JavaScript reconnaissance.
  */
-program.version(CONFIG.version).description(CONFIG.toolDesc);
+program
+    .version(CONFIG.version)
+    .description(CONFIG.toolDesc)
+    .option(
+        "--config <file>",
+        "Application YAML config (default: ~/.config/js-recon/config.yaml; JS_RECON_CONFIG takes precedence)"
+    );
 
 program.configureHelp({
     styleTitle: (str) => chalk.bold.cyan(str),
@@ -88,7 +107,11 @@ function validateAndSetTimeout(timeoutValue: string): void {
 program
     .command("lazyload")
     .description("Run lazy load module")
-    .option("-u, --url <url/file>", "Target URL or a file containing a list of URLs (one per line)")
+    .option(
+        "-u, --url <url/list/file>",
+        "Target URL, comma-separated URLs, or target file; may be repeated",
+        collectTargetInput
+    )
     .option("-o, --output <directory>", "Output directory", "output")
     .option("--strict-scope", "Download JS files from only the input URL domain", false)
     .option("-s, --scope <scope>", "Download JS files from specific domains (comma-separated)", "*")
@@ -97,6 +120,14 @@ program
     .option("--urls-file <file>", "Input JSON file containing URLs", "extracted_urls.json")
     .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` module)", ".proxy_config.json")
     .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
+    .option(
+        "--oxylabs-waf-fallback",
+        "Retry strongly identified CDN/WAF blocks through configured Oxylabs; direct requests remain the default",
+        false
+    )
+    .option("--oxylabs-fallback-max-requests <count>", "Maximum paid Oxylabs fallback requests per origin", "10")
+    .option("--oxylabs-fallback-max-total <count>", "Maximum paid Oxylabs fallback requests per run", "100")
+    .option("--oxylabs-fallback-max-origins <count>", "Maximum distinct fallback origins per run", "25")
     .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
     .option("--disable-cache", "Disable response caching", false)
     .option("--cache-only", "Only use the response cache; never make network requests", false)
@@ -172,12 +203,13 @@ program
             process.exit(22);
         }
 
-        if (!cmd.url) {
-            console.error(chalk.red("[!] Missing required option: -u, --url <url/file>"));
+        if (!cmd.url || (Array.isArray(cmd.url) && cmd.url.length === 0)) {
+            console.error(chalk.red("[!] Missing required option: -u, --url <url/list/file>"));
             process.exit(1);
         }
 
         configureProxy(cmd);
+        if (getOxylabsFallbackConfiguration().enabled) globalsUtil.setUseProxy(false);
         globalsUtil.setDisableCache(cmd.disableCache);
         globalsUtil.setRespCacheFile(cmd.cacheFile);
         globalsUtil.setCacheOnly(cmd.cacheOnly);
@@ -524,7 +556,11 @@ program
 program
     .command("run")
     .description("Run all modules")
-    .option("-u, --url <url/file>", "Target URL or a file containing a list of URLs (one per line)")
+    .option(
+        "-u, --url <url/list/file>",
+        "Target URL, comma-separated URLs, or target file; may be repeated",
+        collectTargetInput
+    )
     .option("-r, --rules <file/dir>", "Rules file or directory (passed to analyze module)")
     .option(
         "--disable-rules-version-check",
@@ -540,7 +576,7 @@ program
     .option("-o, --output <directory>", "Output directory", "output")
     .option(
         "--output-overwrite",
-        "Overwrite the output directory if it already exists instead of erroring out. Can also be set via the JS_RECON_OUTPUT_OVERWRITE=true environment variable.",
+        "Replace an occupied js-recon-owned output instead of selecting output-2, output-3, etc. Can also be set via JS_RECON_OUTPUT_OVERWRITE=true.",
         false
     )
     .option("--strict-scope", "Download JS files from only the input URL domain", false)
@@ -553,6 +589,14 @@ program
         "Before each target, check whether the configured proxy is needed and can bypass a WAF/firewall (reuses the `proxy --feasibility` logic); skip the target if the proxy can't bypass it",
         false
     )
+    .option(
+        "--oxylabs-waf-fallback",
+        "Retry strongly identified CDN/WAF blocks through configured Oxylabs; direct requests remain the default",
+        false
+    )
+    .option("--oxylabs-fallback-max-requests <count>", "Maximum paid Oxylabs fallback requests per origin", "10")
+    .option("--oxylabs-fallback-max-total <count>", "Maximum paid Oxylabs fallback requests per run", "100")
+    .option("--oxylabs-fallback-max-origins <count>", "Maximum distinct fallback origins per run", "25")
     .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
     .option("--disable-cache", "Disable response caching", false)
     .option("--cache-only", "Only use the response cache; never make network requests", false)
@@ -646,8 +690,8 @@ program
         cmd._includeMethods = includeMethods;
         cmd._excludeMethods = excludeMethods;
 
-        if (!cmd.url) {
-            console.error(chalk.red("[!] Missing required option: -u, --url <url/file>"));
+        if (!cmd.url || (Array.isArray(cmd.url) && cmd.url.length === 0)) {
+            console.error(chalk.red("[!] Missing required option: -u, --url <url/list/file>"));
             process.exit(1);
         }
 
@@ -693,7 +737,11 @@ program
 program
     .command("fingerprint")
     .description("Detect front-end frameworks across one or more URLs")
-    .requiredOption("-u, --url <url/file>", "Target URL or a file containing a list of URLs (one per line)")
+    .option(
+        "-u, --url <url/list/file>",
+        "Target URL, comma-separated URLs, or target file; may be repeated",
+        collectTargetInput
+    )
     .option("-o, --output <file>", "Output file to write results")
     .option("-f, --format <formats>", "Output format(s): text, csv, json, jsonl (comma-separated)", "text")
     .option("-t, --threads <threads>", "Number of concurrent detection workers", "5")
@@ -701,6 +749,10 @@ program
     .option("-k, --insecure", "Disable SSL certificate verification", false)
     .option("--no-sandbox", "Disable browser sandbox")
     .action(async (cmd) => {
+        if (!cmd.url || (Array.isArray(cmd.url) && cmd.url.length === 0)) {
+            console.error(chalk.red("[!] Missing required option: -u, --url <url/list/file>"));
+            process.exit(1);
+        }
         validateAndSetTimeout(cmd.timeout);
         globalsUtil.setDisableCache(true);
         globalsUtil.setYes(true);
@@ -799,4 +851,38 @@ Examples:
         completion(shell);
     });
 
-program.parse(process.argv);
+try {
+    prepareProgramConfiguration(program);
+    program.hook("preAction", (_rootCommand, actionCommand) => {
+        const commandOptions = actionCommand.opts();
+        if (commandOptions.oxylabsWafFallback && commandOptions.proxyWafFallback) {
+            throw new OxylabsFallbackConfigurationError(
+                "--oxylabs-waf-fallback cannot be combined with --proxy-waf-fallback"
+            );
+        }
+        configureOxylabsFallback(
+            resolveOxylabsFallback({
+                enabled: commandOptions.oxylabsWafFallback === true,
+                maxRequestsPerOrigin: commandOptions.oxylabsFallbackMaxRequests ?? "10",
+                maxTotalRequests: commandOptions.oxylabsFallbackMaxTotal ?? "100",
+                maxOrigins: commandOptions.oxylabsFallbackMaxOrigins ?? "25",
+                loadedConfig: getLoadedApplicationConfig(),
+                env: process.env,
+                ignoreEnvironment: commandOptions.ignoreProxyEnv === true,
+            })
+        );
+    });
+    await (async () => program.parseAsync(process.argv))();
+} catch (error) {
+    if (
+        error instanceof ApplicationConfigError ||
+        error instanceof OxylabsFallbackConfigurationError ||
+        error instanceof TargetInputError ||
+        error instanceof RunOutputDirectoryError
+    ) {
+        console.error(chalk.red(`[!] ${error.message}`));
+        process.exitCode = 1;
+    } else {
+        throw error;
+    }
+}
