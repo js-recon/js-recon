@@ -4,6 +4,7 @@ import _traverse from "@babel/traverse";
 import chalk from "chalk";
 import t from "@babel/types";
 import { runWithConcurrency } from "../../utility/concurrency.js";
+import { progressLog } from "../../utility/progressLog.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -53,7 +54,11 @@ export const extractViteMapDepsChunks = (content: string, jsUrl: string): string
                     // Explicit relative paths (./ or ../) → file-relative.
                     // Everything else → root-relative (origin).
                     const isFileRelative = val.startsWith("./") || val.startsWith("../");
-                    found.push(new URL(val, isFileRelative ? jsUrl : jsOrigin).href);
+                    try {
+                        found.push(new URL(val, isFileRelative ? jsUrl : jsOrigin).href);
+                    } catch {
+                        // Target-controlled manifests may contain malformed URL-like strings.
+                    }
                 }
             }
         },
@@ -81,7 +86,7 @@ const vue_viteMapDeps = async (jsFiles: string[], maxJsSizeMb: number = 2, threa
 
         const chunks = extractViteMapDepsChunks(content, jsUrl);
         if (chunks.length > 0) {
-            console.log(chalk.green(`[✓] Found ${chunks.length} chunks from __vite__mapDeps in ${jsUrl}`));
+            progressLog(chalk.green(`[✓] Found ${chunks.length} chunks from __vite__mapDeps in ${jsUrl}`));
             for (const u of chunks) discovered.add(u);
         }
     });

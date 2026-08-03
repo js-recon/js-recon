@@ -1,0 +1,251 @@
+# js-recon application configuration
+#
+# The CLI creates ~/.config/js-recon/config.yaml on first use. Copy this file
+# elsewhere when you want to use: js-recon --config /path/to/config.yaml <command>
+#
+# Precedence (highest first): environment, command-line flag, this YAML file,
+# built-in default. Every command option also has a canonical environment name:
+# JS_RECON_<COMMAND>_<OPTION>, for example JS_RECON_RUN_THREADS.
+#
+# null means "not configured". Keep credential-bearing files mode 0600.
+version: 1
+
+oxylabs:
+    # Required in an explicitly selected config when oxylabsWafFallback is true.
+    # JS_RECON_OXYLABS_USERNAME/PASSWORD/COUNTRY may override these values.
+    username: null
+    password: null
+    country: null
+
+commands:
+    lazyload:
+        # May also be a YAML list of HTTP(S) URLs:
+        # url:
+        #     - https://one.example.com
+        #     - https://two.example.com
+        url: null
+        output: output
+        strictScope: false
+        scope: "*"
+        threads: "1"
+        subsequentRequests: false
+        urlsFile: extracted_urls.json
+        proxyConfig: .proxy_config.json
+        ignoreProxyEnv: false
+        oxylabsWafFallback: false
+        oxylabsFallbackMaxRequests: "10"
+        oxylabsFallbackMaxTotal: "100"
+        oxylabsFallbackMaxOrigins: "25"
+        cacheFile: .resp_cache.json
+        disableCache: false
+        cacheOnly: false
+        yes: false
+        timeout: "30000"
+        insecure: false
+        sandbox: true
+        buildId: false
+        sourcemapDir: extracted
+        research: false
+        researchOutput: research.json
+        maxIterations: "10"
+        maxJsSize: "2"
+        lazyloadTimeout: "30"
+        detectionTimeout: "30"
+        maxPages: "200"
+        includeMethods: null
+        excludeMethods: null
+        listMethods: null
+
+    endpoints:
+        url: null
+        directory: null
+        output: endpoints
+        outputFormat: json
+        tech: null
+        list: false
+        mappedJson: null
+
+    strings:
+        directory: null
+        output: strings.json
+        extractUrls: false
+        extractedUrlPath: extracted_urls
+        permutate: false
+        openapi: false
+        scanSecrets: false
+        trufflehog: false
+
+    proxy:
+        init: false
+        destroy: null
+        destroyAll: false
+        region: null
+        awsAccessKey: null
+        awsSecretKey: null
+        config: .proxy_config.json
+        list: false
+        feasibility: false
+        feasibilityUrl: null
+        proxyMethod: null
+        proxy: null
+        oxylabsUsername: null
+        oxylabsPassword: null
+        oxylabsCountry: null
+        oxylabsCity: null
+        oxylabsSessionId: null
+
+    map:
+        directory: null
+        tech: null
+        list: false
+        output: mapped
+        format: json
+        interactive: false
+        command: []
+        ai: null
+        aiThreads: "5"
+        aiProvider: openai
+        aiEndpoint: null
+        openaiApiKey: null
+        model: gpt-4o-mini
+        openapi: false
+        openapiOutput: mapped-openapi.json
+        openapiChunkTag: false
+        graphql: true
+        ngql: null
+        maxRecursionDepth: "3"
+        maxHeap: null
+
+    refactor:
+        mappedJson: mapped.json
+        output: output_refactored
+        tech: null
+        list: false
+        collisions: null
+        signatureQuality: "100"
+        refreshCache: false
+        skipCacheChecks: false
+        remote: true
+        remoteCollisions: null
+        scat: null
+        detectVersion: false
+        detectVersionConfig: null
+        detectVersionDynamicThreshold: "3"
+        detectVersionDynamicConfPurge: false
+
+    analyze:
+        rules: null
+        mappedJson: mapped.json
+        tech: null
+        openapi: null
+        list: false
+        validate: false
+        output: analyze.json
+        disableRulesVersionCheck: false
+
+    report:
+        sqliteDb: js-recon.db
+        mappedJson: null
+        analyzeJson: null
+        endpointsJson: null
+        mappedOpenapiJson: null
+        output: report
+
+    run:
+        # May also be a YAML list. Repeated -u flags and comma-separated URLs
+        # are supported on the command line; a target-file path is also valid.
+        # url:
+        #     - https://one.example.com
+        #     - https://two.example.com
+        url: null
+        rules: null
+        disableRulesVersionCheck: false
+        command: []
+        output: output
+        outputOverwrite: false
+        strictScope: false
+        scope: "*"
+        threads: "1"
+        proxyConfig: .proxy_config.json
+        ignoreProxyEnv: false
+        proxyWafFallback: false
+        oxylabsWafFallback: false
+        oxylabsFallbackMaxRequests: "10"
+        oxylabsFallbackMaxTotal: "100"
+        oxylabsFallbackMaxOrigins: "25"
+        cacheFile: .resp_cache.json
+        disableCache: false
+        cacheOnly: false
+        yes: false
+        secrets: false
+        trufflehog: false
+        ai: null
+        aiThreads: "5"
+        aiProvider: openai
+        aiEndpoint: null
+        openaiApiKey: null
+        model: gpt-4o-mini
+        mapOpenapiChunkTag: false
+        graphql: true
+        ngql: null
+        timeout: "30000"
+        insecure: false
+        sandbox: true
+        sourcemapDir: extracted
+        research: false
+        researchOutput: research.json
+        maxIterations: "10"
+        maxJsSize: "2"
+        lazyloadTimeout: "30"
+        detectionTimeout: "30"
+        maxHeap: null
+        maxPages: "200"
+        includeMethods: null
+        excludeMethods: null
+        listMethods: null
+        csMastTechDetectThreshold: "50"
+        disableRefactor: false
+
+    load:
+        caido: null
+        url: null
+        cacheFile: .resp_cache.json
+
+    fingerprint:
+        # May also be a YAML list of HTTP(S) URLs.
+        url: null
+        output: null
+        format: text
+        threads: "5"
+        timeout: "30000"
+        insecure: false
+        sandbox: true
+
+    mcp:
+        cli: false
+        server: false
+        chat: []
+        config: null
+        apiKey: null
+        model: null
+        provider: null
+        refreshClaudeCreds: true
+        claudeClientId: null
+
+    cs-mast:
+        output: output
+        collisionTable: false
+        minCollisions: "2"
+        collisionOutput: null
+        collisionFormat: csv
+        scat: lit,decl,loop,cond
+        sinc: ""
+        allScatPermutations: false
+        permOutput: null
+        permConcurrency: "0"
+
+    sourcemaps:
+        input: null
+        output: extracted
+
+    completion: {}

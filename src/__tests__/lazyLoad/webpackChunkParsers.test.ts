@@ -1,8 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
+    deduplicateWebpackChunkPaths,
     extractObjectMapChunkEntries,
     extractIfChainChunkFilenames,
 } from "../../lazyLoad/react/react_webpackChunkPaths.js";
+
+describe("deduplicateWebpackChunkPaths", () => {
+    it("returns the exact unique URLs whose count is shown and queued", () => {
+        expect(
+            deduplicateWebpackChunkPaths([
+                "https://example.test/chunk-a.js",
+                "https://example.test/chunk-a.js",
+                "https://example.test/chunk-b.js",
+            ])
+        ).toEqual(["https://example.test/chunk-a.js", "https://example.test/chunk-b.js"]);
+    });
+});
 
 describe("extractObjectMapChunkEntries", () => {
     it("extracts numeric-keyed string entries from a FunctionExpression object map", () => {

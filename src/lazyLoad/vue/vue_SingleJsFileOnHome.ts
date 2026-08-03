@@ -3,6 +3,7 @@ import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import * as cheerio from "cheerio";
 import chalk from "chalk";
+import { progressError, progressLog, progressWarn } from "../../utility/progressLog.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -12,7 +13,7 @@ const vue_singleJsFileOnHome = async (url: string) => {
     // first, get the home page content
     const req = await makeRequest(url, {});
     if (req == null) {
-        console.error(chalk.red(`Failed to fetch ${url}`));
+        progressError(chalk.red(`Failed to fetch ${url}`));
         return jsFilesFound;
     }
     const homePageContent = await req.text();
@@ -38,13 +39,13 @@ const vue_singleJsFileOnHome = async (url: string) => {
     }
 
     // if the count is 1, then it's a single JS file
-    console.log(chalk.green("[✓] Single JS file detected"));
+    progressLog(chalk.green("[✓] Single JS file detected"));
 
     // add that JS file to the list
     jsFilesFound.push(new URL(jsUrl, url).href);
 
     // print the warning
-    console.error(chalk.yellow("[!] This method is MEMORY INTENSIVE. Underpowered devices may freeze"));
+    progressWarn(chalk.yellow("[!] This method is MEMORY INTENSIVE. Underpowered devices may freeze"));
 
     // resolve the URL
     if (jsUrl.startsWith("/") || jsUrl.startsWith("./") || jsUrl.startsWith("../")) {
@@ -53,6 +54,10 @@ const vue_singleJsFileOnHome = async (url: string) => {
 
     // get the contents of that JS file
     const jsReq = await makeRequest(jsUrl);
+    if (!jsReq) {
+        progressError(chalk.red(`Failed to fetch ${jsUrl}`));
+        return jsFilesFound;
+    }
     const jsContent = await jsReq.text();
 
     // parse the JS file

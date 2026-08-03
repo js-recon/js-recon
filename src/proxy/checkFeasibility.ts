@@ -61,14 +61,18 @@ export const determineFeasibilityOutcome = (
  */
 export const probeFeasibility = async (resolved: ResolvedProxyConfig, url: string): Promise<FeasibilityOutcome> => {
     console.log(chalk.cyan(`[i] Checking feasibility of the "${resolved.method}" proxy method with ${url}`));
-    const directBody = await (await fetch(url)).text();
-    const blockedWithoutProxy = await checkFireWallBlocking(directBody);
+    const directResponse = await fetch(url);
+    const directBody = await directResponse.text();
+    const blockedWithoutProxy = await checkFireWallBlocking(directBody, {
+        status: directResponse.status,
+        headers: directResponse.headers,
+    });
 
     let blockedWithProxy = false;
     if (blockedWithoutProxy) {
         for (let i = 0; i < PROXY_CHECK_REQUESTS; i++) {
-            const body = await proxyFeasibilityRequest(resolved, url);
-            if (await checkFireWallBlocking(body)) {
+            const { body, status, headers } = await proxyFeasibilityRequest(resolved, url);
+            if (await checkFireWallBlocking(body, { status, headers })) {
                 blockedWithProxy = true;
                 break;
             }

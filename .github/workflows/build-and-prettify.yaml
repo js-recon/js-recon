@@ -218,14 +218,14 @@ jobs:
           docker rm js-recon-run
 
       - name: Verify all rules fired
-        run: node scripts/smoke-test.js
+        run: node scripts/smoke-test.js "$(find output -name analyze.json | head -n1)"
 
       - name: Upload analyze.json on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: analyze-json-docker
-          path: output/localhost_3001/analyze.json
+          path: output/**/analyze.json
           if-no-files-found: ignore
 
       - name: Build the rules-bundled (-w-rules) image
@@ -252,14 +252,14 @@ jobs:
           }
 
       - name: Verify all rules fired (w-rules image)
-        run: node scripts/smoke-test.js output-w-rules/localhost_3001/analyze.json
+        run: node scripts/smoke-test.js "$(find output-w-rules -name analyze.json | head -n1)"
 
       - name: Upload w-rules analyze.json on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: analyze-json-docker-w-rules
-          path: output-w-rules/localhost_3001/analyze.json
+          path: output-w-rules/**/analyze.json
           if-no-files-found: ignore
 
   integration-test-macos:
@@ -343,12 +343,12 @@ jobs:
           PUPPETEER_EXECUTABLE_PATH: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 
       - name: Verify all rules fired
-        run: node scripts/smoke-test.js
+        run: node scripts/smoke-test.js "$(find output -name analyze.json | head -n1)"
 
       - name: Upload analyze.json on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: analyze-json-macos
-          path: output/localhost_3001/analyze.json
+          path: output/**/analyze.json
           if-no-files-found: ignore

@@ -1,13 +1,14 @@
 import makeRequest from "../../utility/makeReq.js";
 import chalk from "chalk";
 import { runWithConcurrency } from "../../utility/concurrency.js";
+import { progressLog } from "../../utility/progressLog.js";
 
 const react_sourcemapUrls = async (jsFiles: string[], threads: number = 1): Promise<string[]> => {
     const mapUrls: string[] = [];
 
     await runWithConcurrency(jsFiles, threads, async (jsUrl) => {
         try {
-            const res = await makeRequest(jsUrl, {});
+            const res = await makeRequest(jsUrl, { reportErrors: false });
             if (!res) return;
             const body = await res.text();
             const match = body.match(/\/\/# sourceMappingURL=(.+)$/m);
@@ -22,7 +23,7 @@ const react_sourcemapUrls = async (jsFiles: string[], threads: number = 1): Prom
     });
 
     if (mapUrls.length > 0) {
-        console.log(chalk.green(`[✓] Found ${mapUrls.length} sourcemaps from ${jsFiles.length} JS files`));
+        progressLog(chalk.green(`[✓] Found ${mapUrls.length} sourcemaps from ${jsFiles.length} JS files`));
     }
 
     return mapUrls;

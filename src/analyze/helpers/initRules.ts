@@ -2,7 +2,40 @@ import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import extract from "extract-zip";
-import { withProxyDispatcher } from "../../utility/makeReq.js";
+import { withActiveProxyDispatcher, type FetchOptsWithDispatcher } from "../../utility/makeReq.js";
+
+const RULES_RELEASE_URL = "https://api.github.com/repos/js-recon/js-recon-rules/releases/latest";
+
+interface RulesRelease {
+    readonly tagName: string;
+    readonly zipballUrl: string;
+}
+
+const fetchLatestRulesRelease = async (options: FetchOptsWithDispatcher): Promise<RulesRelease> => {
+    const response = await fetch(RULES_RELEASE_URL, options);
+    if (!response.ok) {
+        throw new Error(`Rules release lookup failed with HTTP ${response.status}`);
+    }
+
+    const release = (await response.json()) as unknown;
+    if (typeof release !== "object" || release === null) {
+        throw new Error("Rules release response was not an object");
+    }
+    const { tag_name: tagName, zipball_url: zipballUrl } = release as Record<string, unknown>;
+    if (typeof tagName !== "string" || typeof zipballUrl !== "string") {
+        throw new Error("Rules release response is missing tag_name or zipball_url");
+    }
+
+    const parsedZipballUrl = new URL(zipballUrl);
+    if (
+        parsedZipballUrl.protocol !== "https:" ||
+        parsedZipballUrl.hostname !== "api.github.com" ||
+        !parsedZipballUrl.pathname.startsWith("/repos/js-recon/js-recon-rules/zipball/")
+    ) {
+        throw new Error("Rules release response contains an unexpected zipball URL");
+    }
+    return Object.freeze({ tagName, zipballUrl: parsedZipballUrl.toString() });
+};
 
 /**
  * Downloads and extracts the latest analysis rules from the GitHub repository.
@@ -15,20 +48,17 @@ import { withProxyDispatcher } from "../../utility/makeReq.js";
  */
 const downloadRules = async (homeDir: string): Promise<void> => {
     console.log(chalk.cyan("[i] Rules not found. Downloading from GitHub..."));
-    const fetchOpts = withProxyDispatcher();
-    const response = await fetch("https://api.github.com/repos/js-recon/js-recon-rules/releases/latest", fetchOpts);
-    const release = await response.json();
-    const zipballUrl = release.zipball_url;
+    const buffer = await withActiveProxyDispatcher(async (options) => {
+        const release = await fetchLatestRulesRelease(options);
+        const downloadResponse = await fetch(release.zipballUrl, options);
+
+        if (!downloadResponse.ok) {
+            throw new Error(`Failed to download rules: ${downloadResponse.statusText}`);
+        }
+        return Buffer.from(await downloadResponse.arrayBuffer());
+    });
 
     const zipPath = path.join(homeDir, "/.js-recon/rules.zip");
-    const downloadResponse = await fetch(zipballUrl, fetchOpts);
-
-    if (!downloadResponse.ok) {
-        throw new Error(`Failed to download rules: ${downloadResponse.statusText}`);
-    }
-
-    const arrayBuffer = await downloadResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
     fs.writeFileSync(zipPath, buffer);
 
     console.log(chalk.cyan("[i] Unzipping rules..."));
@@ -135,20 +165,15 @@ const initRules = async (disableVersionCheck: boolean = false): Promise<void> =>
     // also, if the version.txt exist, check if the version.txt is latest as per the latest release on github
     const version = fs.readFileSync(versionPath, "utf8").trim();
     try {
-        const response = await fetch(
-            "https://api.github.com/repos/js-recon/js-recon-rules/releases/latest",
-            withProxyDispatcher()
-        );
-        const release = await response.json();
-        const release_tag_name = release.tag_name;
-        if (`v${version}` !== release_tag_name) {
+        const release = await withActiveProxyDispatcher(fetchLatestRulesRelease);
+        if (`v${version}` !== release.tagName) {
             console.error(chalk.yellow("[!] Rules are not up to date. Downloading latest version..."));
             // remove the rules directory
             fs.rmSync(path.join(homeDir, "/.js-recon/rules"), { recursive: true });
             await downloadRules(homeDir);
         }
     } catch {
-        console.error(chalk.red("[!] An error occured when fetching rules from GitHub"));
+        console.error(chalk.red("[!] An error occurred when fetching rules from GitHub"));
     }
 };
 

@@ -48,6 +48,12 @@ describe("extractViteMapDepsChunks", () => {
         expect(extractViteMapDepsChunks("{{{{ not valid %%%%", JS_URL)).toEqual([]);
     });
 
+    it("skips malformed URL strings without aborting the manifest", () => {
+        const code = `const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["http://[.js","./valid.js"])))=>i.map(i=>d[i]);`;
+
+        expect(extractViteMapDepsChunks(code, JS_URL)).toEqual(["https://cdn.example.com/assets/valid.js"]);
+    });
+
     it("handles multiple .js paths in one declaration", () => {
         const code = buildMapDepsCode(["./a.js", "./b.js", "./c.js", "./d.js"]);
         const result = extractViteMapDepsChunks(code, JS_URL);

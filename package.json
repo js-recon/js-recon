@@ -1,6 +1,6 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "1.4.3",
+    "version": "1.4.4",
     "description": "JS Recon Tool",
     "main": "build/index.js",
     "type": "module",
@@ -15,7 +15,7 @@
         "test:watch": "vitest",
         "test:build": "node build/index.js -h",
         "postinstall": "patch-package",
-        "cleanup": "rm -rf build output output_refactored .resp_cache.json endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* && tsc"
+        "cleanup": "rm -rf build output output_refactored .resp_cache.json .resp_cache.json.entries endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* && tsc"
     },
     "keywords": [],
     "author": "Shriyans Sudhi",

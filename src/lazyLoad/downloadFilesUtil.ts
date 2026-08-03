@@ -3,8 +3,10 @@ import path from "path";
 import fs from "fs";
 import prettier from "prettier";
 import makeRequest from "../utility/makeReq.js";
-import { getURLDirectory } from "../utility/urlUtils.js";
+import { getURLDirectory, hostMatchesScope } from "../utility/urlUtils.js";
 import { getScope, getMaxReqQueue } from "./globals.js"; // Import scope and max_req_queue functions
+import { getSanitizedAssetFilename, resolveAssetOutputDirectory } from "./outputPath.js";
+import { getDownloadedAssetKind, readDownloadedAssetResponse } from "./downloadResponse.js";
 
 /**
  * Downloads the provided JavaScript or JSON URLs and stores them in the given output directory.
@@ -41,69 +43,72 @@ const downloadFiles = async (urls: string[], output: string) => {
                 return;
             }
 
-            const { host, directory } = getURLDirectory(url);
+            const { rawHost } = getURLDirectory(url);
 
-            if (!getScope().includes("*") && !getScope().includes(host)) {
+            if (!hostMatchesScope(rawHost, getScope())) {
                 ignoredJSFiles.push(url);
-                if (!ignoredJSDomains.includes(host)) {
-                    ignoredJSDomains.push(host);
+                if (!ignoredJSDomains.includes(rawHost)) {
+                    ignoredJSDomains.push(rawHost);
                 }
                 return;
             }
 
-            const childDir = path.join(output, host, directory);
-            fs.mkdirSync(childDir, { recursive: true });
-
             let res;
             try {
-                res = await makeRequest(url, {});
+                res = await makeRequest(url, { reportErrors: true });
             } catch (err) {
                 console.error(chalk.red(`[!] Failed to download: ${url}`));
                 return;
             }
 
             if (!res) {
-                console.error(chalk.red(`[!] Failed to download: ${url}`));
+                // makeRequest owns the detailed fetch diagnostic.
                 return;
             }
 
-            const rawText = await res.text();
-            const file =
-                url.match(/\.json/) || url.match(/\.m?js\.map/) ? rawText : `// File Source: ${url}\n${rawText}`;
-
-            let filename: string | undefined;
-            try {
-                filename = url
-                    .split("/")
-                    .pop()
-                    ?.match(/[a-zA-Z0-9\.\-_]+\.(mjs(\.map)?|js(on)?(\.map)?|vue)/)?.[0];
-            } catch {
-                for (const chunk of url.split("/")) {
-                    if (chunk.match(/\.(mjs(\.map)?|js(on)?|vue)$/)) {
-                        filename = chunk;
-                        break;
-                    }
-                }
+            const responseResult = await readDownloadedAssetResponse(url, res);
+            if (responseResult.ok === false) {
+                const label = responseResult.failure === "invalidResponse" ? "Invalid response" : "Failed to download";
+                console.error(chalk.red(`[!] ${label}: ${url} : ${responseResult.reason}`));
+                return;
             }
+
+            const rawText = responseResult.body;
+            const assetKind = getDownloadedAssetKind(url);
+            const file = assetKind === "json" ? rawText : `// File Source: ${url}\n${rawText}`;
+
+            const filename = getSanitizedAssetFilename(url);
 
             if (!filename) {
                 console.warn(chalk.yellow(`[!] Could not determine filename for URL: ${url}. Skipping.`));
                 return;
             }
 
+            const childDir = resolveAssetOutputDirectory(output, url);
             const filePath = path.join(childDir, filename);
+            let formatted: string;
             try {
-                if (url.match(/\.json/) || url.match(/\.m?js\.map/)) {
-                    const formatted =
+                if (assetKind === "json") {
+                    formatted =
                         file.length <= PRETTIER_SIZE_LIMIT ? await prettier.format(file, { parser: "json" }) : file;
-                    fs.writeFileSync(filePath, formatted);
+                } else if (assetKind === "vue") {
+                    formatted =
+                        file.length <= PRETTIER_SIZE_LIMIT ? await prettier.format(file, { parser: "vue" }) : file;
                 } else {
-                    const formatted =
+                    formatted =
                         file.length <= PRETTIER_SIZE_LIMIT ? await prettier.format(file, { parser: "babel" }) : file;
-                    fs.writeFileSync(filePath, formatted);
                 }
-            } catch {
-                console.error(chalk.red(`[!] Failed to write file: ${filePath}`));
+            } catch (formatErr) {
+                console.error(chalk.red(`[!] Failed to format file: ${filePath} : ${formatErr}`));
+                return;
+            }
+
+            try {
+                fs.mkdirSync(childDir, { recursive: true });
+                fs.writeFileSync(filePath, formatted);
+            } catch (writeErr) {
+                console.error(chalk.red(`[!] Failed to write file: ${filePath} : ${writeErr}`));
+                return;
             }
             download_count++;
         } catch (err) {
