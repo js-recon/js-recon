@@ -1,6 +1,6 @@
 # JS Recon
 
-![NPM Licence](https://img.shields.io/npm/l/%40js-recon%2Fjs-recon) ![GitHub repo size](https://img.shields.io/github/repo-size/js-recon/js-recon) ![NPM Downloads](https://img.shields.io/npm/dm/%40js-recon%2Fjs-recon) ![GitHub commit activity (dev)](https://img.shields.io/github/commit-activity/w/js-recon/js-recon/dev) ![NPM Last Update](https://img.shields.io/npm/last-update/%40js-recon%2Fjs-recon) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/js-recon/js-recon)
+![NPM Licence](https://img.shields.io/npm/l/%40js-recon%2Fjs-recon) ![GitHub repo size](https://img.shields.io/github/repo-size/js-recon/js-recon) ![NPM Downloads](https://img.shields.io/npm/dm/%40js-recon%2Fjs-recon) ![GitHub commit activity (dev)](https://img.shields.io/github/commit-activity/w/js-recon/js-recon/dev) ![NPM Last Update](https://img.shields.io/npm/last-update/%40js-recon%2Fjs-recon) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/js-recon/js-recon) [![Plumber Score](https://score.getplumber.io/github.com/js-recon/js-recon.svg)](https://score.getplumber.io/github.com/js-recon/js-recon)
 
 <p align="center">
   <a href="https://js-recon.io">
