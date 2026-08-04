@@ -3,149 +3,149 @@
 
 version: "2.0"
 github:
-  controls:
-    containerImageMustNotUseForbiddenTags:
-      enabled: true
-      tags:
-      - latest
-      - dev
-      - development
-      - staging
-      - main
-      - master
-      containerImagesMustBePinnedByDigest: true
-    branchMustBeProtected:
-      enabled: false # disabled: enabling real GitHub branch protection is a separate follow-up (would need to allow-list bot/PAT push automation first)
-      namePatterns:
-      - main
-      - dev
-      defaultMustBeProtected: true
-      allowForcePush: false
-      codeOwnerApprovalRequired: false
-    externalRefsMustNotCollide:
-      enabled: true
-    pipelineMustNotEnableDebugTrace:
-      enabled: true
-      forbiddenVariables:
-      - ACTIONS_STEP_DEBUG
-      - ACTIONS_RUNNER_DEBUG
-    securityJobsMustNotBeWeakened:
-      enabled: true
-      securityJobPatterns:
-      - '*codeql*'
-      - '*dependency-review*'
-      - '*trufflehog*'
-      - '*gitleaks*'
-      - '*osv-scanner*'
-      - '*-sast'
-      - '*-sast-*'
-      - '*-scan'
-      - '*scan*'
-      - '*-security'
-      - '*-security-*'
-      - '*-audit'
-      - '*-audit-*'
-      allowFailureMustBeFalse:
-        enabled: false
-      rulesMustNotBeRedefined:
-        enabled: false
-      whenMustNotBeManual:
-        enabled: false
-    pipelineMustNotUseDockerInDocker:
-      enabled: true
-      detectInsecureDaemon: true
-    actionsMustBePinnedByCommitSha:
-      enabled: true
-      trustedOwners:
-      - actions
-      - github
-    githubActionMustComeFromAuthorizedSources:
-      enabled: true
-      trustGithubOfficialActions: true
-      trustSameOrgActions: true
-      trustedGithubActions:
-        - shriyanss/verified-commit-action
-        - docker/login-action
-        - getplumber/plumber
-    workflowMustNotInjectUserInputInScripts:
-      enabled: true
-    workflowMustNotWriteUntrustedContentToGitHubEnv:
-      enabled: true
-    workflowMustNotUseDangerousTriggers:
-      enabled: true
-    pullRequestTargetMustNotCheckoutHead:
-      enabled: true
-    workflowsMustDeclarePermissions:
-      enabled: true
-    reusableWorkflowsMustNotInheritSecrets:
-      enabled: true
-    workflowMustNotExportEntireSecretsContext:
-      enabled: true
-    workflowMustNotGrantPermissionsWriteAll:
-      enabled: true
-    actionsMustNotBeArchived:
-      enabled: true
-    actionRefsMustExistUpstream:
-      enabled: true
-    actionsMustNotCarryKnownCVEs:
-      enabled: true
-    actionsMustNotExecuteMutableRemoteCode:
-      enabled: true
-    releaseWorkflowsMustNotRestoreUntrustedCache:
-      enabled: true
-      publishActions:
-      - pypa/gh-action-pypi-publish
-      - JS-DevTools/npm-publish
-      - gradle/publish-plugin
-      - softprops/action-gh-release
-      - ncipollo/release-action
-      - goreleaser/goreleaser-action
-      - crazy-max/ghaction-docker-buildx
-      - changesets/action
-      cacheActions:
-      - action: actions/cache
-        mode: always
-      - action: actions/cache/restore
-        mode: always
-      - action: Swatinem/rust-cache
-        mode: always
-      - action: actions/setup-go
-        mode: default
-        disableInput: cache
-        disableValue: false
-      - action: gradle/actions/setup-gradle
-        mode: default
-        disableInput: cache-disabled
-        disableValue: true
-      - action: actions/setup-node
-        mode: opt-in
-        enableInput: cache
-      - action: actions/setup-python
-        mode: opt-in
-        enableInput: cache
-      - action: actions/setup-java
-        mode: opt-in
-        enableInput: cache
-      - action: pnpm/action-setup
-        mode: opt-in
-        enableInput: cache
-      - action: docker/build-push-action
-        mode: opt-in
-        enableInput: cache-from
-        enableContains: type=gha
-      publishScriptPatterns:
-      - (?i)(npm|pnpm|yarn|bun)\s+publish
-      - (?i)cargo\s+publish
-      - (?i)twine\s+upload
-      - (?i)poetry\s+publish
-      - (?i)gh\s+release\s+create
-      - (?i)goreleaser\s+release
-      - (?i)semantic-release
-      - (?i)gradlew?\b[^\n]*\bpublish
-      - (?i)\bmvnw?\b[^\n]*\bdeploy\b
-      - (?i)dotnet\s+nuget\s+push
-      - (?i)gem\s+push
-      - (?i)docker\s+push
-      publishScriptExcludePatterns:
-      - (?i)--dry-run
-      - (?i)publishToMavenLocal
+    controls:
+        containerImageMustNotUseForbiddenTags:
+            enabled: true
+            tags:
+                - latest
+                - dev
+                - development
+                - staging
+                - main
+                - master
+            containerImagesMustBePinnedByDigest: true
+        branchMustBeProtected:
+            enabled: false # disabled: enabling real GitHub branch protection is a separate follow-up (would need to allow-list bot/PAT push automation first)
+            namePatterns:
+                - main
+                - dev
+            defaultMustBeProtected: true
+            allowForcePush: false
+            codeOwnerApprovalRequired: false
+        externalRefsMustNotCollide:
+            enabled: true
+        pipelineMustNotEnableDebugTrace:
+            enabled: true
+            forbiddenVariables:
+                - ACTIONS_STEP_DEBUG
+                - ACTIONS_RUNNER_DEBUG
+        securityJobsMustNotBeWeakened:
+            enabled: true
+            securityJobPatterns:
+                - "*codeql*"
+                - "*dependency-review*"
+                - "*trufflehog*"
+                - "*gitleaks*"
+                - "*osv-scanner*"
+                - "*-sast"
+                - "*-sast-*"
+                - "*-scan"
+                - "*scan*"
+                - "*-security"
+                - "*-security-*"
+                - "*-audit"
+                - "*-audit-*"
+            allowFailureMustBeFalse:
+                enabled: false
+            rulesMustNotBeRedefined:
+                enabled: false
+            whenMustNotBeManual:
+                enabled: false
+        pipelineMustNotUseDockerInDocker:
+            enabled: true
+            detectInsecureDaemon: true
+        actionsMustBePinnedByCommitSha:
+            enabled: true
+            trustedOwners:
+                - actions
+                - github
+        githubActionMustComeFromAuthorizedSources:
+            enabled: true
+            trustGithubOfficialActions: true
+            trustSameOrgActions: true
+            trustedGithubActions:
+                - shriyanss/verified-commit-action
+                - docker/login-action
+                - getplumber/plumber
+        workflowMustNotInjectUserInputInScripts:
+            enabled: true
+        workflowMustNotWriteUntrustedContentToGitHubEnv:
+            enabled: true
+        workflowMustNotUseDangerousTriggers:
+            enabled: true
+        pullRequestTargetMustNotCheckoutHead:
+            enabled: true
+        workflowsMustDeclarePermissions:
+            enabled: true
+        reusableWorkflowsMustNotInheritSecrets:
+            enabled: true
+        workflowMustNotExportEntireSecretsContext:
+            enabled: true
+        workflowMustNotGrantPermissionsWriteAll:
+            enabled: true
+        actionsMustNotBeArchived:
+            enabled: true
+        actionRefsMustExistUpstream:
+            enabled: true
+        actionsMustNotCarryKnownCVEs:
+            enabled: true
+        actionsMustNotExecuteMutableRemoteCode:
+            enabled: true
+        releaseWorkflowsMustNotRestoreUntrustedCache:
+            enabled: true
+            publishActions:
+                - pypa/gh-action-pypi-publish
+                - JS-DevTools/npm-publish
+                - gradle/publish-plugin
+                - softprops/action-gh-release
+                - ncipollo/release-action
+                - goreleaser/goreleaser-action
+                - crazy-max/ghaction-docker-buildx
+                - changesets/action
+            cacheActions:
+                - action: actions/cache
+                  mode: always
+                - action: actions/cache/restore
+                  mode: always
+                - action: Swatinem/rust-cache
+                  mode: always
+                - action: actions/setup-go
+                  mode: default
+                  disableInput: cache
+                  disableValue: false
+                - action: gradle/actions/setup-gradle
+                  mode: default
+                  disableInput: cache-disabled
+                  disableValue: true
+                - action: actions/setup-node
+                  mode: opt-in
+                  enableInput: cache
+                - action: actions/setup-python
+                  mode: opt-in
+                  enableInput: cache
+                - action: actions/setup-java
+                  mode: opt-in
+                  enableInput: cache
+                - action: pnpm/action-setup
+                  mode: opt-in
+                  enableInput: cache
+                - action: docker/build-push-action
+                  mode: opt-in
+                  enableInput: cache-from
+                  enableContains: type=gha
+            publishScriptPatterns:
+                - (?i)(npm|pnpm|yarn|bun)\s+publish
+                - (?i)cargo\s+publish
+                - (?i)twine\s+upload
+                - (?i)poetry\s+publish
+                - (?i)gh\s+release\s+create
+                - (?i)goreleaser\s+release
+                - (?i)semantic-release
+                - (?i)gradlew?\b[^\n]*\bpublish
+                - (?i)\bmvnw?\b[^\n]*\bdeploy\b
+                - (?i)dotnet\s+nuget\s+push
+                - (?i)gem\s+push
+                - (?i)docker\s+push
+            publishScriptExcludePatterns:
+                - (?i)--dry-run
+                - (?i)publishToMavenLocal
