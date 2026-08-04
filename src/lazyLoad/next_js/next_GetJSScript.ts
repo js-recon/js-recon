@@ -1,5 +1,5 @@
 // lazyLoad/nextGetJSScript.js
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import { URL } from "url";
 import * as cheerio from "cheerio";
 import makeRequest from "../../utility/makeReq.js";
@@ -30,13 +30,13 @@ const next_getJSScript = async (url: string): Promise<string[]> => {
         res = await makeRequest(url, {});
         if (res) break;
         if (attempt < maxAttempts) {
-            console.error(chalk.yellow(`[!] Request to ${url} failed, retrying (${attempt}/${maxAttempts})...`));
+            printMsg(MSG.Warn, `[!] Request to ${url} failed, retrying (${attempt}/${maxAttempts})...`);
             await sleep(1000);
         }
     }
     if (!res) {
         if (!getCacheOnly()) {
-            console.error(chalk.red(`[!] Giving up on ${url} after ${maxAttempts} attempts`));
+            printMsg(MSG.Err, `[!] Giving up on ${url} after ${maxAttempts} attempts`);
         }
         return toReturn;
     }

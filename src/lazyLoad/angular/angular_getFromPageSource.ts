@@ -1,10 +1,10 @@
 import makeRequest from "../../utility/makeReq.js";
-import chalk from "chalk";
 import * as cheerio from "cheerio";
 import resolvePath from "../../utility/resolvePath.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const angular_getFromPageSource = async (url: string) => {
-    console.log(chalk.cyan("[i] Analyzing page source"));
+    printMsg(MSG.Header, "[i] Analyzing page source");
 
     let foundUrls: string[] = [];
 

@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import cliProgress from "cli-progress";
 import fs from "fs";
 import path from "path";
@@ -54,9 +55,9 @@ const subsequentRequests = async (
 
     // open the urls file, and load the paths (JSON)
     if (!fs.existsSync(urlsFile)) {
-        console.error(chalk.red(`[!] URLs file ${urlsFile} does not exist`));
-        console.error(chalk.yellow(`[!] Please run strings module first with -e flag`));
-        console.error(chalk.yellow(`[!] Example: js-recon strings -d <directory> -e`));
+        printMsg(MSG.Err, `[!] URLs file ${urlsFile} does not exist`);
+        printMsg(MSG.Warn, `[!] Please run strings module first with -e flag`);
+        printMsg(MSG.Warn, `[!] Example: js-recon strings -d <directory> -e`);
         process.exit(17);
     }
     let endpoints = JSON.parse(fs.readFileSync(urlsFile, "utf8")).paths;
@@ -245,9 +246,7 @@ const subsequentRequests = async (
     // dedupe
     jsFilesFromPageHtml = [...new Set(jsFilesFromPageHtml)];
 
-    console.log(
-        chalk.green(`[✓] Found ${new Set([...staticJSURLs, ...jsFilesFromPageHtml]).size} JS chunks from page HTML`)
-    );
+    printMsg(MSG.Run, `[✓] Found ${new Set([...staticJSURLs, ...jsFilesFromPageHtml]).size} JS chunks from page HTML`);
 
     return new Set([...staticJSURLs, ...jsFilesFromPageHtml]);
 };

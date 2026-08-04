@@ -124,20 +124,18 @@ describe("DownloadQueue progress", () => {
         mockedFormat.mockRejectedValue(new SyntaxError("Unexpected token (2:1)"));
         const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
         const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
         const queue = new DownloadQueue(outputDir, 2, { compactOutput: true });
 
         queue.push(["https://example.test/one.js", "https://example.test/two.js", "https://example.test/three.js"]);
         await queue.drain();
         queue.printSummary();
 
-        const output = warnSpy.mock.calls.flat().join("\n");
+        const output = errorSpy.mock.calls.flat().join("\n");
         expect(output).toContain("3 failed (0 download, 3 invalid response, 0 format, 0 write)");
         expect(output).not.toContain("one.js");
         expect(output).not.toContain("Unexpected token");
         expect(output).not.toContain("<!doctype");
-        expect(warnSpy).toHaveBeenCalledTimes(1);
-        expect(errorSpy).not.toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledTimes(1);
         expect(logSpy).not.toHaveBeenCalled();
     });
 

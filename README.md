@@ -157,7 +157,7 @@ js-recon --config ./operator.yaml run \
 - Map feature analyzes the JS files and outputs it to a JSON file. An interactive mode can be then used to analyze it
 - Reconstruct HTTP requests that the app makes to the server, and output them to the OpenAPI spec
 - Run analyze to find potential issues in JS code and the HTTP requests the app makes
-- Generate a report from the analyze module
+- Generate a report from the analyze module (optional active endpoint probing via `sj`/swagger-jacker integration using `--sj`)
 
 ## Example Scenario
 

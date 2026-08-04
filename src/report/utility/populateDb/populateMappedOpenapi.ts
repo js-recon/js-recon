@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import Database from "better-sqlite3";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 /**
  * Populates the mapped OpenAPI table in the database with the given OpenAPI data.
@@ -34,13 +34,13 @@ const populateMappedOpenapi = async (db: Database.Database, openapi: any) => {
                         tags: details.tags ? JSON.stringify(details.tags) : null,
                     });
                 } catch (error) {
-                    console.error(`Error inserting OpenAPI path: ${path} [${method}]`, error);
+                    printMsg(MSG.Err, `Error inserting OpenAPI path: ${path} [${method}] - ${error}`);
                 }
             }
         }
     })();
 
-    console.log(chalk.green("[✓] Populated mapped openapi into the database..."));
+    printMsg(MSG.Run, "[✓] Populated mapped openapi into the database...");
 };
 
 export default populateMappedOpenapi;

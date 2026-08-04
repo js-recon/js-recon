@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import { EngineOutput } from "../../../analyze/helpers/outputHelper.js";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 import Database from "better-sqlite3";
 
 /**
@@ -35,5 +35,5 @@ export const populateAnalysisFindings = async (db: Database.Database, findings: 
     });
 
     insertMany(findings);
-    console.log(chalk.green("[✓] Populated analysis findings into the database..."));
+    printMsg(MSG.Run, "[✓] Populated analysis findings into the database...");
 };

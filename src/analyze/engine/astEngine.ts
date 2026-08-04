@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import { Chunks } from "../../utility/interfaces.js";
 import { Rule } from "../types/index.js";
 
@@ -15,6 +14,7 @@ import { findMemberExpressionAssignment } from "../helpers/engineHelpers/findMem
 import { findDirectAssignment } from "../helpers/engineHelpers/findDirectAssignment.js";
 import { computeTaint, sinkConsumesTaint, TaintInfo } from "../helpers/engineHelpers/taintFlow.js";
 import { EngineOutput } from "../helpers/outputHelper.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * ESQuery-based AST analysis engine for detecting code patterns using custom rules.
@@ -172,11 +172,7 @@ const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
                 const memberExpression = step.checkAssignmentExist.memberExpression;
 
                 if (selectedNode && memberExpression) {
-                    const assignmentNode = findMemberExpressionAssignment(
-                        selectedNode,
-                        toMatch,
-                        matchList[step.checkAssignmentExist.name].scope
-                    );
+                    const assignmentNode = findMemberExpressionAssignment(selectedNode, toMatch);
 
                     if (assignmentNode) {
                         matchList[step.name] = { node: assignmentNode, scope: ast };
@@ -207,16 +203,17 @@ const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
                 const code = generator(reportNode).code;
 
                 if (rule.severity === "info") {
-                    console.log(chalk.cyan(message));
+                    printMsg(MSG.Header, message);
                 } else if (rule.severity === "low") {
-                    console.log(chalk.yellow(message));
+                    printMsg(MSG.Warn, message);
                 } else if (rule.severity === "medium") {
-                    console.log(chalk.magenta(message));
+                    printMsg(MSG.Info, message);
                 } else if (rule.severity === "high") {
-                    console.error(chalk.red(message));
+                    printMsg(MSG.Err, message);
                 }
 
-                console.log(
+                printMsg(
+                    MSG.Plain,
                     highlight(code, {
                         language: "javascript",
                         ignoreIllegals: true,

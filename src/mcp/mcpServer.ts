@@ -176,7 +176,17 @@ export const startMcpServer = async (): Promise<void> => {
         },
         async (args) => {
             const { captured } = await captureStdout(async () => {
-                await analyze(args.rulesPath, args.mappedJson, args.tech, false, args.openapi, false, args.outputFile);
+                await analyze(
+                    args.rulesPath,
+                    args.mappedJson,
+                    args.tech,
+                    false,
+                    args.openapi,
+                    false,
+                    args.outputFile,
+                    false,
+                    false
+                );
             });
             return textResult(`${captured}\n\n[Output] ${path.resolve(args.outputFile)}`);
         }
@@ -235,6 +245,7 @@ export const startMcpServer = async (): Promise<void> => {
                 scope: "*",
                 threads: String(args.threads),
                 proxyConfig: ".proxy_config.json",
+                ignoreProxyEnv: false,
                 cacheFile: ".resp_cache.json",
                 disableCache: false,
                 yes: args.yes,
@@ -243,7 +254,7 @@ export const startMcpServer = async (): Promise<void> => {
                 aiThreads: "5",
                 aiProvider: "openai",
                 aiEndpoint: undefined,
-                openaiApiKey: undefined,
+                aiApiKey: undefined,
                 model: "gpt-4o-mini",
                 mapOpenapiChunkTag: false,
                 timeout: "30000",

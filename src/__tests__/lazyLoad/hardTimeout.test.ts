@@ -13,10 +13,12 @@ const harness = vi.hoisted(() => ({
     reactFollowImports: vi.fn(),
     reactSourcemapUrls: vi.fn(),
     extractSourceMaps: vi.fn(async () => undefined),
+    genericCrawlPages: vi.fn(async () => []),
 }));
 
 vi.mock("../../lazyLoad/techDetect/index.js", () => ({
     default: harness.frameworkDetect,
+    getLastInterceptedUrls: vi.fn(() => []),
 }));
 
 vi.mock("../../lazyLoad/react/react_getScriptTags.js", () => ({ default: harness.reactGetScriptTags }));
@@ -24,6 +26,7 @@ vi.mock("../../lazyLoad/react/react_webpackChunkPaths.js", () => ({ default: har
 vi.mock("../../lazyLoad/react/react_followImports.js", () => ({ default: harness.reactFollowImports }));
 vi.mock("../../lazyLoad/react/react_sourcemapUrls.js", () => ({ default: harness.reactSourcemapUrls }));
 vi.mock("../../lazyLoad/downloadLoadedJsUtil.js", () => ({ default: vi.fn(async () => []) }));
+vi.mock("../../lazyLoad/generic/generic_crawlPages.js", () => ({ default: harness.genericCrawlPages }));
 
 vi.mock("../../lazyLoad/next_js/NextJsCrawler.js", () => ({
     default: class MockNextJsCrawler {
@@ -179,7 +182,7 @@ describe("lazyLoad hard timeout", () => {
 
         expect(capturedSignal?.aborted).toBe(true);
         expect(detectorSettled).toBe(true);
-        expect(globals.getTech()).toBe("");
+        expect(globals.getTech()).toBe("generic");
     });
 
     it("clears a previous target's technology when the module timeout interrupts detection", async () => {

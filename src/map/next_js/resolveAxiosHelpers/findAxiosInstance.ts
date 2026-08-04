@@ -1,6 +1,6 @@
 import { Node } from "@babel/types";
 import _traverse from "@babel/traverse";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
@@ -34,9 +34,7 @@ export const findAxiosInstance = (
                         if (firstArg && (firstArg.type === "StringLiteral" || firstArg.type === "NumericLiteral")) {
                             const thisFunctionAssignmentValue = firstArg.value.toString();
                             if (thisFunctionAssignmentValue === axiosImportedToChunk) {
-                                console.log(
-                                    chalk.green(`[✓] ${chunkName} uses axios client initialized in ${varName}`)
-                                );
+                                printMsg(MSG.Run, `[✓] ${chunkName} uses axios client initialized in ${varName}`);
                                 axiosInstance = varName;
                                 path.stop();
                             }

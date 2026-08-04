@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import { Chunks } from "../../../utility/interfaces.js";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 import Database from "better-sqlite3";
 
 /**
@@ -36,5 +36,5 @@ export const populateMappedJson = async (db: Database.Database, chunks: Chunks) 
     });
 
     insertMany(Object.values(chunks));
-    console.log(chalk.green("[✓] Populated mapped data into the database..."));
+    printMsg(MSG.Run, "[✓] Populated mapped data into the database...");
 };

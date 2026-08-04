@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import fs from "fs";
@@ -114,13 +114,13 @@ interface FetchEntry {
  * made with the native fetch() API rather than via webpack chunks.
  */
 const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Promise<void> => {
-    console.log(chalk.cyan(`[i] Resolving ${frameworkName} fetch instances`));
+    printMsg(MSG.Header, `[i] Resolving ${frameworkName} fetch instances`);
 
     let files: string[];
     try {
         files = fs.readdirSync(directory, { recursive: true, encoding: "utf8" }) as string[];
     } catch {
-        console.error(chalk.red(`[!] Could not read directory: ${directory}`));
+        printMsg(MSG.Err, `[!] Could not read directory: ${directory}`);
         return;
     }
 
@@ -128,7 +128,7 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
         .filter((f) => (f.endsWith(".js") || f.endsWith(".mjs")) && !f.includes("___subsequent_requests"))
         .filter((f) => !fs.lstatSync(path.join(directory, f)).isDirectory());
 
-    const MAX_MAP_FILE_SIZE_BYTES = 1.5 * 1024 * 1024;
+    const MAX_MAP_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 
     // Pre-pass: scan every file for object-literal properties whose value is a
     // function that ultimately calls fetch(). Their property names are the
@@ -195,10 +195,9 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
         const file = files[_mi];
         const filePath = path.join(directory, file);
         if (fs.statSync(filePath).size > MAX_MAP_FILE_SIZE_BYTES) {
-            console.error(
-                chalk.yellow(
-                    `[!] Skipping ${file} (${(fs.statSync(filePath).size / 1024 / 1024).toFixed(1)} MB > 1.5 MB limit) — fetch coverage may be incomplete`
-                )
+            printMsg(
+                MSG.Warn,
+                `[!] Skipping ${file} (${(fs.statSync(filePath).size / 1024 / 1024).toFixed(1)} MB > ${MAX_MAP_FILE_SIZE_BYTES / 1024 / 1024} MB limit) — fetch coverage may be incomplete`
             );
             continue;
         }
@@ -295,7 +294,7 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
                 if (typeof url === "string" && (url.includes("[var ") || url.includes("[MemberExpression"))) {
                     const substituted = substituteVariablesInString(url, fileContent);
                     if (substituted !== url) {
-                        console.log(chalk.cyan(`    [i] Resolved variables in URL: ${url} -> ${substituted}`));
+                        printMsg(MSG.Header, `    [i] Resolved variables in URL: ${url} -> ${substituted}`);
                         url = substituted;
                     }
                 }
@@ -400,14 +399,13 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
             }
         }
 
-        console.log(chalk.blue(`[+] Found fetch call in "${entry.filePath}":${entry.fileLine}`));
-        console.log(chalk.green(`    URL: ${entry.url}`));
+        printMsg(MSG.Info, `[+] Found fetch call in "${entry.filePath}":${entry.fileLine}`);
+        printMsg(MSG.Run, `    URL: ${entry.url}`);
         if (entry.method !== "GET" || Object.keys(entry.headers).length > 0 || entry.body) {
-            console.log(chalk.green(`    Method: ${entry.method}`));
+            printMsg(MSG.Run, `    Method: ${entry.method}`);
         }
-        if (Object.keys(entry.headers).length > 0)
-            console.log(chalk.green(`    Headers: ${JSON.stringify(entry.headers)}`));
-        if (entry.body) console.log(chalk.green(`    Body: ${entry.body}`));
+        if (Object.keys(entry.headers).length > 0) printMsg(MSG.Run, `    Headers: ${JSON.stringify(entry.headers)}`);
+        if (entry.body) printMsg(MSG.Run, `    Body: ${entry.body}`);
 
         // Skip the openapi/postman registration for callsites where the URL
         // never resolved to anything URL-shaped. Examples:
@@ -438,7 +436,7 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
         });
     }
 
-    console.log(chalk.green(`[✓] Found and resolved ${totalFetchCalls} fetch call(s) across ${frameworkName} files`));
+    printMsg(MSG.Run, `[✓] Found and resolved ${totalFetchCalls} fetch call(s) across ${frameworkName} files`);
 };
 
 export default vue_resolveFetch;

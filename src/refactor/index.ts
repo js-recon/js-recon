@@ -1,9 +1,9 @@
-import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
 import { Chunks } from "../utility/interfaces.js";
 import prettier from "prettier";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 // Next.js
 import refactorNext, { refactorNextWebpack } from "./next/index.js";
@@ -218,34 +218,34 @@ const loadRemoteLibSigs = async (tech: string, opts: RemoteLibSigsOptions): Prom
     const config = loadRefactorConfig();
     const configWarnings = validateRefactorConfig(config);
     for (const w of configWarnings) {
-        console.log(chalk.yellow(`[!] Refactor config warning: ${w}`));
+        printMsg(MSG.Warn, `[!] Refactor config warning: ${w}`);
     }
 
     // Validate cache files.
     const cacheWarnings = validateCaches();
     for (const w of cacheWarnings) {
-        console.log(chalk.yellow(`[!] Cache validation warning: ${w} (will refresh)`));
+        printMsg(MSG.Warn, `[!] Cache validation warning: ${w} (will refresh)`);
     }
 
     if (opts.remoteCollisions) {
         // User-supplied path: validate it exists in the HF bucket.
-        console.log(chalk.cyan(`[i] Validating remote dataset path "${branch}"...`));
+        printMsg(MSG.Header, `[i] Validating remote dataset path "${branch}"...`);
         const pathExists = await validateRemotePath(branch);
         if (!pathExists) {
-            console.error(
-                chalk.red(`[!] Remote dataset path "${branch}" not found in the shriyanss/cs-mast-s-dataset bucket.`)
+            printMsg(
+                MSG.Err,
+                `[!] Remote dataset path "${branch}" not found in the shriyanss/cs-mast-s-dataset bucket.`
             );
             process.exit(25);
         }
     } else {
         // Auto-detected branch: validate metadata files exist.
-        console.log(chalk.cyan(`[i] Validating remote bucket prefix "${branch}"...`));
+        printMsg(MSG.Header, `[i] Validating remote bucket prefix "${branch}"...`);
         const branchOk = await validateRemoteBranch(branch);
         if (!branchOk) {
-            console.log(
-                chalk.red(
-                    `[!] Remote bucket prefix "${branch}" is missing required metadata (sample_size / technology). Skipping remote signatures.`
-                )
+            printMsg(
+                MSG.Err,
+                `[!] Remote bucket prefix "${branch}" is missing required metadata (sample_size / technology). Skipping remote signatures.`
             );
             return null;
         }
@@ -253,10 +253,9 @@ const loadRemoteLibSigs = async (tech: string, opts: RemoteLibSigsOptions): Prom
         // Verify the bucket prefix technology matches.
         const remoteTech = await getTechnology(branch);
         if (remoteTech !== tech) {
-            console.log(
-                chalk.red(
-                    `[!] Remote bucket prefix "${branch}" is for technology "${remoteTech}", not "${tech}". Skipping remote signatures.`
-                )
+            printMsg(
+                MSG.Err,
+                `[!] Remote bucket prefix "${branch}" is for technology "${remoteTech}", not "${tech}". Skipping remote signatures.`
             );
             return null;
         }
@@ -281,14 +280,14 @@ const loadRemoteLibSigs = async (tech: string, opts: RemoteLibSigsOptions): Prom
     let listCache = cacheWarnings.length > 0 ? null : loadListCache();
     const branchMissingFromCache = !listCache?.branches[branch];
     if (shouldRefreshListCache(listCache, opts) || branchMissingFromCache) {
-        console.log(chalk.cyan(`[i] Refreshing remote file list cache for bucket prefix "${branch}"...`));
+        printMsg(MSG.Header, `[i] Refreshing remote file list cache for bucket prefix "${branch}"...`);
         const paths = await listCollisionsFiles(branch, scatDir);
         const now = Date.now();
         const branches: Record<string, string[]> = listCache?.branches ?? {};
         branches[branch] = paths;
         listCache = { generatedAt: now, branches };
         saveListCache(listCache);
-        console.log(chalk.cyan(`[i] File list cache updated: ${paths.length} files found`));
+        printMsg(MSG.Header, `[i] File list cache updated: ${paths.length} files found`);
     }
 
     const filePaths: string[] = listCache?.branches[branch] ?? [];
@@ -296,14 +295,13 @@ const loadRemoteLibSigs = async (tech: string, opts: RemoteLibSigsOptions): Prom
     const matchingPaths = filePaths.filter((p) => p.endsWith(`/${scatDir}/collisions.json`));
 
     if (matchingPaths.length === 0) {
-        console.log(chalk.yellow(`[!] No remote collisions files found for scat "${scatDir}" in branch "${branch}"`));
+        printMsg(MSG.Warn, `[!] No remote collisions files found for scat "${scatDir}" in branch "${branch}"`);
         return null;
     }
 
-    console.log(
-        chalk.cyan(
-            `[i] Loading ${matchingPaths.length} remote signature files (quality threshold: ${opts.signatureQuality}%)...`
-        )
+    printMsg(
+        MSG.Header,
+        `[i] Loading ${matchingPaths.length} remote signature files (quality threshold: ${opts.signatureQuality}%)...`
     );
 
     // Content-based cache validation: fetch the upstream tree's per-file hashes once per
@@ -317,10 +315,9 @@ const loadRemoteLibSigs = async (tech: string, opts: RemoteLibSigsOptions): Prom
         try {
             remoteHashes = await listCollisionsFileHashes(branch, scatDir);
         } catch (e) {
-            console.log(
-                chalk.yellow(
-                    `[!] Could not fetch upstream content hashes for cache validation (${(e as Error).message}) — falling back to age-based cache checks.`
-                )
+            printMsg(
+                MSG.Warn,
+                `[!] Could not fetch upstream content hashes for cache validation (${(e as Error).message}) — falling back to age-based cache checks.`
             );
         }
     }
@@ -349,14 +346,14 @@ const loadRemoteLibSigs = async (tech: string, opts: RemoteLibSigsOptions): Prom
                 // For auto-detected branches, invalidate the list cache so a stale
                 // entry (e.g. a deleted file) is not tried again on the next run.
                 if (!opts.remoteCollisions && !opts.skipCacheChecks) {
-                    console.log(chalk.yellow(`[!] Could not fetch ${relPath} (404 or error) — refreshing list cache`));
+                    printMsg(MSG.Warn, `[!] Could not fetch ${relPath} (404 or error) — refreshing list cache`);
                     const freshPaths = await listCollisionsFiles(branch, scatDir);
                     const updatedBranches = listCache?.branches ?? {};
                     updatedBranches[branch] = freshPaths;
                     saveListCache({ generatedAt: Date.now(), branches: updatedBranches });
                     listCache = { generatedAt: Date.now(), branches: updatedBranches };
                 } else {
-                    console.log(chalk.yellow(`[!] Could not fetch ${relPath} — skipping`));
+                    printMsg(MSG.Warn, `[!] Could not fetch ${relPath} — skipping`);
                 }
                 continue;
             }
@@ -387,20 +384,18 @@ const loadRemoteLibSigs = async (tech: string, opts: RemoteLibSigsOptions): Prom
     }
 
     if (!intersection || intersection.size === 0) {
-        console.log(
-            chalk.red(
-                `[!] Remote signatures loaded but intersection is empty — library stripping will find nothing to skip ` +
-                    `(quality threshold may be too high, or every dataset entry fetched 0 records). ` +
-                    `If this is unexpected, purge ~/.js-recon/refactor/{signature_cache,cs-mast-s-list-cache.json} and retry.`
-            )
+        printMsg(
+            MSG.Err,
+            `[!] Remote signatures loaded but intersection is empty — library stripping will find nothing to skip ` +
+                `(quality threshold may be too high, or every dataset entry fetched 0 records). ` +
+                `If this is unexpected, purge ~/.js-recon/refactor/{signature_cache,cs-mast-s-list-cache.json} and retry.`
         );
         return null;
     }
 
-    console.log(
-        chalk.cyan(
-            `[i] Loaded ${intersection.size} library signatures from remote (${loadedCount} files, bucket prefix: ${branch})`
-        )
+    printMsg(
+        MSG.Header,
+        `[i] Loaded ${intersection.size} library signatures from remote (${loadedCount} files, bucket prefix: ${branch})`
     );
     return { sigs: intersection, desc: `remote:${branch} (${loadedCount} files, quality>=${opts.signatureQuality}%)` };
 };
@@ -437,7 +432,7 @@ function runBuildCheck(outputDir: string, writtenFiles: string[], detectedVersio
         }) ?? writtenFiles[0];
     const entryRelative = `./${path.basename(entryFile)}`;
 
-    console.log(chalk.cyan(`[i] Setting up webpack build check in ${outputDir}/ (entry: ${entryRelative})`));
+    printMsg(MSG.Header, `[i] Setting up webpack build check in ${outputDir}/ (entry: ${entryRelative})`);
 
     // Use detected React version when available, fall back to React 18.
     const reactVersion = detectedVersion ? `^${detectedVersion.reactNpm}` : "^18.3.1";
@@ -448,10 +443,9 @@ function runBuildCheck(outputDir: string, writtenFiles: string[], detectedVersio
           : "^18.3.1";
 
     if (detectedVersion) {
-        console.log(
-            chalk.cyan(
-                `[i] Using detected React version ${detectedVersion.versionKey} in package.json (react@${reactVersion})`
-            )
+        printMsg(
+            MSG.Header,
+            `[i] Using detected React version ${detectedVersion.versionKey} in package.json (react@${reactVersion})`
         );
     }
 
@@ -516,20 +510,20 @@ module.exports = {
 `;
     fs.writeFileSync(path.join(outputDir, "index.html"), indexHtml);
 
-    console.log(chalk.cyan("[i] Installing dependencies..."));
+    printMsg(MSG.Header, "[i] Installing dependencies...");
     try {
         execSync("npm install", { cwd: outputDir, stdio: "inherit" });
     } catch {
-        console.log(chalk.red("[!] npm install failed — skipping build check"));
+        printMsg(MSG.Err, "[!] npm install failed — skipping build check");
         return;
     }
 
-    console.log(chalk.cyan("[i] Running build check..."));
+    printMsg(MSG.Header, "[i] Running build check...");
     try {
         execSync("npm run build", { cwd: outputDir, stdio: "inherit" });
-        console.log(chalk.green("[✓] Build check passed"));
+        printMsg(MSG.Run, "[✓] Build check passed");
     } catch {
-        console.log(chalk.red("[!] Build check failed — review output above"));
+        printMsg(MSG.Err, "[!] Build check failed — review output above");
     }
 }
 
@@ -579,7 +573,7 @@ function runViteBuildCheck(outputDir: string, writtenFiles: string[], detectedVe
         }) ?? jsxFiles[0];
     const entryRelative = `./${path.basename(entryFile)}`;
 
-    console.log(chalk.cyan(`[i] Setting up Vite build check in ${outputDir}/ (entry: ${entryRelative})`));
+    printMsg(MSG.Header, `[i] Setting up Vite build check in ${outputDir}/ (entry: ${entryRelative})`);
 
     // Use detected React version when available, fall back to React 18.
     const reactVersion = detectedVersion ? `^${detectedVersion.reactNpm}` : "^18.3.1";
@@ -590,10 +584,9 @@ function runViteBuildCheck(outputDir: string, writtenFiles: string[], detectedVe
           : "^18.3.1";
 
     if (detectedVersion) {
-        console.log(
-            chalk.cyan(
-                `[i] Using detected React version ${detectedVersion.versionKey} in package.json (react@${reactVersion})`
-            )
+        printMsg(
+            MSG.Header,
+            `[i] Using detected React version ${detectedVersion.versionKey} in package.json (react@${reactVersion})`
         );
     }
 
@@ -636,20 +629,20 @@ export default defineConfig({
 `;
     fs.writeFileSync(path.join(outputDir, "index.html"), indexHtml);
 
-    console.log(chalk.cyan("[i] Installing dependencies..."));
+    printMsg(MSG.Header, "[i] Installing dependencies...");
     try {
         execSync("npm install", { cwd: outputDir, stdio: "inherit" });
     } catch {
-        console.log(chalk.red("[!] npm install failed — skipping build check"));
+        printMsg(MSG.Err, "[!] npm install failed — skipping build check");
         return;
     }
 
-    console.log(chalk.cyan("[i] Running Vite build check..."));
+    printMsg(MSG.Header, "[i] Running Vite build check...");
     try {
         execSync("npm run build", { cwd: outputDir, stdio: "inherit" });
-        console.log(chalk.green("[✓] Vite build check passed"));
+        printMsg(MSG.Run, "[✓] Vite build check passed");
     } catch {
-        console.log(chalk.red("[!] Vite build check failed — review output above"));
+        printMsg(MSG.Err, "[!] Vite build check failed — review output above");
     }
 }
 
@@ -671,16 +664,15 @@ async function resolveVersionDetectionScatDirs(bundler: string, opts: RemoteLibS
 
     if (detectConfig === "dynamic") {
         if (opts.detectVersionDynamicConfPurge) {
-            console.log(chalk.cyan("[i] Version detection: purging cached dynamic scat config..."));
+            printMsg(MSG.Header, "[i] Version detection: purging cached dynamic scat config...");
             purgeDynamicVersionDetectionScatConfig();
         }
 
         const cfg = loadRefactorConfig();
         if (cfg.dynamicVersionDetectionScatConfig && cfg.dynamicVersionDetectionScatConfig.length > 0) {
-            console.log(
-                chalk.cyan(
-                    `[i] Version detection: using cached dynamic scat config (${cfg.dynamicVersionDetectionScatConfig.join(", ")})`
-                )
+            printMsg(
+                MSG.Header,
+                `[i] Version detection: using cached dynamic scat config (${cfg.dynamicVersionDetectionScatConfig.join(", ")})`
             );
             return cfg.dynamicVersionDetectionScatConfig;
         }
@@ -690,11 +682,11 @@ async function resolveVersionDetectionScatDirs(bundler: string, opts: RemoteLibS
         try {
             versions = await listAvailableVersions(bundler);
         } catch (e) {
-            console.log(chalk.yellow(`[!] Version detection: could not list versions (${String(e)})`));
+            printMsg(MSG.Warn, `[!] Version detection: could not list versions (${String(e)})`);
             return [];
         }
         if (versions.length === 0) {
-            console.log(chalk.yellow(`[!] Version detection: no version data found for ${bundler}`));
+            printMsg(MSG.Warn, `[!] Version detection: no version data found for ${bundler}`);
             return [];
         }
 
@@ -703,7 +695,7 @@ async function resolveVersionDetectionScatDirs(bundler: string, opts: RemoteLibS
         if (selected.length > 0) {
             saveDynamicVersionDetectionScatConfig(selected);
         } else {
-            console.log(chalk.yellow(`[!] Version detection: dynamic selection found no valid scat configs`));
+            printMsg(MSG.Warn, `[!] Version detection: dynamic selection found no valid scat configs`);
         }
         return selected;
     }
@@ -715,8 +707,9 @@ async function resolveVersionDetectionScatDirs(bundler: string, opts: RemoteLibS
         .filter(Boolean);
     const scatDir = scatToDir(categories);
     if (!scatDir) {
-        console.log(
-            chalk.red(`[!] --detect-version-config "${detectConfig}" produced an empty scat dir; check category names`)
+        printMsg(
+            MSG.Err,
+            `[!] --detect-version-config "${detectConfig}" produced an empty scat dir; check category names`
         );
         process.exit(26);
     }
@@ -726,18 +719,15 @@ async function resolveVersionDetectionScatDirs(bundler: string, opts: RemoteLibS
     try {
         versions = await listAvailableVersions(bundler);
     } catch (e) {
-        console.log(
-            chalk.yellow(`[!] Version detection: could not list versions to validate static config (${String(e)})`)
-        );
+        printMsg(MSG.Warn, `[!] Version detection: could not list versions to validate static config (${String(e)})`);
         return [];
     }
 
     const valid = await validateStaticScatConfig(bundler, versions, scatDir);
     if (!valid) {
-        console.log(
-            chalk.red(
-                `[!] --detect-version-config "${detectConfig}" (scat dir: "${scatDir}") has empty reliable_signatures.json for one or more versions. Cannot use for version detection.`
-            )
+        printMsg(
+            MSG.Err,
+            `[!] --detect-version-config "${detectConfig}" (scat dir: "${scatDir}") has empty reliable_signatures.json for one or more versions. Cannot use for version detection.`
         );
         process.exit(26);
     }
@@ -770,31 +760,31 @@ const refactor = async (
     remoteOpts?: RemoteLibSigsOptions & { noRemote?: boolean },
     assetsDir?: string
 ): Promise<void> => {
-    console.log(chalk.cyan("[i] Loading refactor module..."));
+    printMsg(MSG.Header, "[i] Loading refactor module...");
 
     if (list) {
-        console.log(chalk.cyan("[i] Listing available technologies"));
+        printMsg(MSG.Header, "[i] Listing available technologies");
         for (const key of Object.keys(availableTechs) as Array<keyof typeof availableTechs>) {
-            console.log(chalk.green(`- ${key}: ${availableTechs[key]}`));
+            printMsg(MSG.Run, `- ${key}: ${availableTechs[key]}`);
         }
         return;
     }
 
     // check if the file exists
     if (!fs.existsSync(mappedJson)) {
-        console.error(chalk.red("[!] Mapped JSON file does not exist"));
+        printMsg(MSG.Err, "[!] Mapped JSON file does not exist");
         process.exit(7);
     }
 
     // verify if the tech provided is valid
     if (!Object.keys(availableTechs).includes(tech)) {
-        console.error(chalk.red("[!] Invalid technology provided"));
+        printMsg(MSG.Err, "[!] Invalid technology provided");
         process.exit(8);
     }
 
     // check if the output directory already exists
     if (fs.existsSync(outputDir)) {
-        console.error(chalk.red("[!] Output directory already exists"));
+        printMsg(MSG.Err, "[!] Output directory already exists");
         process.exit(9);
     } else {
         fs.mkdirSync(outputDir);
@@ -811,25 +801,24 @@ const refactor = async (
         // Explicit local path — use existing resolver unchanged.
         const result = buildLibSigs(collisionsFile, tech, remoteOpts?.scat);
         if (!result) {
-            console.log(chalk.red(`[!] Could not resolve library signatures from: ${collisionsFile}`));
+            printMsg(MSG.Err, `[!] Could not resolve library signatures from: ${collisionsFile}`);
             const scat = BASELINE_SCAT_DIR[tech];
             if (scat) {
-                console.log(
-                    chalk.red(
-                        `    accepted layouts:\n` +
-                            `      <file>                                           (direct collisions.json)\n` +
-                            `      <dir>/baselines/${tech}/${scat}/collisions.json\n` +
-                            `      <dir>/${tech}/${scat}/collisions.json\n` +
-                            `      <dir>/${scat}/collisions.json\n` +
-                            `      <dir>/collisions.json\n` +
-                            `      <dir>/<feature>/${scat}/collisions.json          (per-feature results dir)`
-                    )
+                printMsg(
+                    MSG.Err,
+                    `    accepted layouts:\n` +
+                        `      <file>                                           (direct collisions.json)\n` +
+                        `      <dir>/baselines/${tech}/${scat}/collisions.json\n` +
+                        `      <dir>/${tech}/${scat}/collisions.json\n` +
+                        `      <dir>/${scat}/collisions.json\n` +
+                        `      <dir>/collisions.json\n` +
+                        `      <dir>/<feature>/${scat}/collisions.json          (per-feature results dir)`
                 );
             }
             process.exit(10);
         }
         libSigs = result.sigs;
-        console.log(chalk.cyan(`[i] Loaded ${libSigs.size} library signatures from ${result.desc}`));
+        printMsg(MSG.Header, `[i] Loaded ${libSigs.size} library signatures from ${result.desc}`);
     } else if (remoteOpts?.remoteCollisions || (!remoteOpts?.noRemote && TECH_TO_BRANCH[tech])) {
         // Load from remote HuggingFace dataset.
         // --remote-collisions uses the explicit path; otherwise falls back to TECH_TO_BRANCH.
@@ -844,7 +833,7 @@ const refactor = async (
         if (result) {
             libSigs = result.sigs;
         } else {
-            console.log(chalk.yellow(`[~] Remote signatures unavailable — proceeding without library stripping`));
+            printMsg(MSG.Warn, `[~] Remote signatures unavailable — proceeding without library stripping`);
             const branch = opts.remoteCollisions ?? TECH_TO_BRANCH[tech] ?? "unknown";
             const scatDir = opts.scat ? scatToDir(opts.scat) : (BASELINE_SCAT_DIR[tech] ?? "unknown");
             libStrippingSkipped = { tech, scat: scatDir, branch };
@@ -863,17 +852,17 @@ const refactor = async (
                 });
                 // Skip writing empty files
                 if (formatted.trim().length === 0) {
-                    console.log(chalk.gray(`[~] Module ${moduleId} is empty after stripping — skipping`));
+                    printMsg(MSG.Info, `[~] Module ${moduleId} is empty after stripping — skipping`);
                     continue;
                 }
                 const filePath = `${outputDir}/${moduleId}.js`;
                 fs.writeFileSync(filePath, formatted);
-                console.log(chalk.green(`[✓] Module ${moduleId} written to ${filePath}`));
+                printMsg(MSG.Run, `[✓] Module ${moduleId} written to ${filePath}`);
             }
         }
     } else if (tech === "next-webpack") {
         if (remoteOpts?.scat) {
-            console.log(chalk.cyan(`[i] Using custom scat config: ${remoteOpts.scat.join(",")}`));
+            printMsg(MSG.Header, `[i] Using custom scat config: ${remoteOpts.scat.join(",")}`);
         }
         for (const [, value] of Object.entries(chunks)) {
             const moduleFiles = await refactorNextWebpack(
@@ -893,12 +882,12 @@ const refactor = async (
                     formatted = rawCode;
                 }
                 if (formatted.trim().length === 0) {
-                    console.log(chalk.gray(`[~] Module ${moduleId} is empty after stripping — skipping`));
+                    printMsg(MSG.Info, `[~] Module ${moduleId} is empty after stripping — skipping`);
                     continue;
                 }
                 const filePath = `${outputDir}/${moduleId}.js`;
                 fs.writeFileSync(filePath, formatted);
-                console.log(chalk.green(`[✓] Module ${moduleId} written to ${filePath}`));
+                printMsg(MSG.Run, `[✓] Module ${moduleId} written to ${filePath}`);
             }
         }
     } else if (tech === "react-webpack") {
@@ -924,7 +913,7 @@ const refactor = async (
         if (preScanAssetsDir) {
             const vendorFiles = findVendorChunkFiles(chunks, preScanAssetsDir);
             for (const vendorFile of vendorFiles) {
-                console.log(chalk.cyan(`[i] Pre-scanning vendor chunk: ${path.basename(vendorFile)}`));
+                printMsg(MSG.Header, `[i] Pre-scanning vendor chunk: ${path.basename(vendorFile)}`);
                 const vendorCode = fs.readFileSync(vendorFile, "utf8");
                 const vendorChunk = {
                     id: path.basename(vendorFile, ".js"),
@@ -941,15 +930,13 @@ const refactor = async (
                 const vendorResult = await refactorReact(vendorChunk, undefined, undefined, true);
                 for (const [id, info] of vendorResult.libModuleMap) {
                     accLibModuleMap.set(id, info);
-                    console.log(
-                        chalk.gray(`  [-] Vendor module ${id} → ${info.type} (${info.exportMap.size} exports)`)
-                    );
+                    printMsg(MSG.Info, `  [-] Vendor module ${id} → ${info.type} (${info.exportMap.size} exports)`);
                 }
             }
         }
 
         if (remoteOpts?.scat) {
-            console.log(chalk.cyan(`[i] Using custom scat config: ${remoteOpts.scat.join(",")}`));
+            printMsg(MSG.Header, `[i] Using custom scat config: ${remoteOpts.scat.join(",")}`);
         }
         const writtenFiles: string[] = [];
         for (const [, value] of sortedEntries) {
@@ -972,13 +959,13 @@ const refactor = async (
                 });
                 // Skip writing empty files (e.g. index.js after webpack runtime stripping).
                 if (formatted.trim().length === 0) {
-                    console.log(chalk.gray(`[~] Module ${moduleId} is empty after stripping — skipping`));
+                    printMsg(MSG.Info, `[~] Module ${moduleId} is empty after stripping — skipping`);
                     continue;
                 }
                 const filePath = `${outputDir}/${moduleId}.js`;
                 fs.writeFileSync(filePath, formatted);
                 writtenFiles.push(filePath);
-                console.log(chalk.green(`[✓] Module ${moduleId} written to ${outputDir}/${moduleId}.js`));
+                printMsg(MSG.Run, `[✓] Module ${moduleId} written to ${outputDir}/${moduleId}.js`);
             }
         }
 
@@ -1012,14 +999,13 @@ const refactor = async (
                     vendorCodes.length > 0 ? vendorCodes : undefined
                 );
                 if (vResult) {
-                    console.log(
-                        chalk.green(
-                            `[✓] Detected React version: ${vResult.versionKey} (${vResult.matchCount} signature matches)`
-                        )
+                    printMsg(
+                        MSG.Run,
+                        `[✓] Detected React version: ${vResult.versionKey} (${vResult.matchCount} signature matches)`
                     );
                     detectedVersion = vResult;
                 } else {
-                    console.log(chalk.yellow(`[!] Version detection: no matching version found`));
+                    printMsg(MSG.Warn, `[!] Version detection: no matching version found`);
                 }
             }
         }
@@ -1038,7 +1024,7 @@ const refactor = async (
             for (const vendorFile of missingFiles) {
                 const basename = path.basename(vendorFile);
                 if (!/vendor[-_]react/i.test(basename) && !/rolldown[-_]runtime/i.test(basename)) continue;
-                console.log(chalk.cyan(`[i] Including missing vendor chunk: ${basename}`));
+                printMsg(MSG.Header, `[i] Including missing vendor chunk: ${basename}`);
                 const key = basename.replace(/\.js$/, "");
                 chunks[key] = {
                     id: basename,
@@ -1105,7 +1091,7 @@ const refactor = async (
                 formatted = combined;
             }
             if (formatted.trim().length === 0) {
-                console.log(chalk.gray(`[~] Chunk ${keys.join("+")} is empty after refactoring — skipping`));
+                printMsg(MSG.Info, `[~] Chunk ${keys.join("+")} is empty after refactoring — skipping`);
                 continue;
             }
             fs.writeFileSync(filePath, formatted);
@@ -1114,7 +1100,7 @@ const refactor = async (
             // to attempt renaming the same path twice (ENOENT on the second try).
             writtenFiles.push(filePath);
             for (const key of keys) {
-                console.log(chalk.green(`[✓] Chunk ${key} written to ${filePath}`));
+                printMsg(MSG.Run, `[✓] Chunk ${key} written to ${filePath}`);
             }
         }
 
@@ -1127,14 +1113,13 @@ const refactor = async (
             if (vScatDirs.length > 0) {
                 const vResult = await detectReactVersion(chunks, tech, vScatDirs);
                 if (vResult) {
-                    console.log(
-                        chalk.green(
-                            `[✓] Detected React version: ${vResult.versionKey} (${vResult.matchCount} signature matches)`
-                        )
+                    printMsg(
+                        MSG.Run,
+                        `[✓] Detected React version: ${vResult.versionKey} (${vResult.matchCount} signature matches)`
                     );
                     viteDetectedVersion = vResult;
                 } else {
-                    console.log(chalk.yellow(`[!] Version detection: no matching version found`));
+                    printMsg(MSG.Warn, `[!] Version detection: no matching version found`);
                 }
             }
         }
@@ -1156,12 +1141,12 @@ const refactor = async (
                     formatted = rawCode;
                 }
                 if (formatted.trim().length === 0) {
-                    console.log(chalk.gray(`[~] Module ${moduleId} is empty after stripping — skipping`));
+                    printMsg(MSG.Info, `[~] Module ${moduleId} is empty after stripping — skipping`);
                     continue;
                 }
                 const filePath = `${outputDir}/${moduleId}.js`;
                 fs.writeFileSync(filePath, formatted);
-                console.log(chalk.green(`[✓] Module ${moduleId} written to ${filePath}`));
+                printMsg(MSG.Run, `[✓] Module ${moduleId} written to ${filePath}`);
             }
         }
     } else if (tech === "vue-vite") {
@@ -1185,24 +1170,24 @@ const refactor = async (
                 formatted = rawCode;
             }
             if (formatted.trim().length === 0) {
-                console.log(chalk.gray(`[~] Chunk ${chunkKey} is empty after refactoring — skipping`));
+                printMsg(MSG.Info, `[~] Chunk ${chunkKey} is empty after refactoring — skipping`);
                 continue;
             }
             fs.writeFileSync(filePath, formatted);
-            console.log(chalk.green(`[✓] Chunk ${chunkKey} written to ${filePath}`));
+            printMsg(MSG.Run, `[✓] Chunk ${chunkKey} written to ${filePath}`);
         }
     }
 
     if (libStrippingSkipped) {
         const { tech: skippedTech, scat, branch } = libStrippingSkipped;
-        console.log(chalk.yellow.bold("=".repeat(60)));
-        console.log(chalk.yellow.bold("[!] LIBRARY STRIPPING WAS SKIPPED FOR THIS RUN"));
-        console.log(chalk.yellow(`    tech: ${skippedTech}  scat: ${scat}  branch: ${branch}`));
-        console.log(chalk.yellow("    No remote collisions data available — output includes library code."));
-        console.log(chalk.yellow.bold("=".repeat(60)));
+        printMsg(MSG.Warn, "=".repeat(60));
+        printMsg(MSG.Warn, "[!] LIBRARY STRIPPING WAS SKIPPED FOR THIS RUN");
+        printMsg(MSG.Warn, `    tech: ${skippedTech}  scat: ${scat}  branch: ${branch}`);
+        printMsg(MSG.Warn, "    No remote collisions data available — output includes library code.");
+        printMsg(MSG.Warn, "=".repeat(60));
     }
 
-    console.log(chalk.green("[✓] Refactoring complete."));
+    printMsg(MSG.Run, "[✓] Refactoring complete.");
 };
 
 export default refactor;

@@ -1,7 +1,6 @@
 // ECMAScript export reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/export
 // ECMAScript import reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
 
-import chalk from "chalk";
 import parser from "@babel/parser";
 import _traverse, { NodePath } from "@babel/traverse";
 import _generator from "@babel/generator";
@@ -19,6 +18,7 @@ import {
     renameRouteComponents,
 } from "./transform.js";
 import { LibraryModuleInfo, classifyLibraryModule, resolveReexportChains } from "./library-classify.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 const generate = (_generator as unknown as { default: typeof _generator }).default ?? _generator;
@@ -183,7 +183,7 @@ const refactorReact = async (
     classifyAllAsLibrary?: boolean,
     scatOverride?: ScatCategory[]
 ): Promise<RefactorReactResult> => {
-    console.log(chalk.cyan(`[i] Processing React bundle: ${chunk.id}`));
+    printMsg(MSG.Header, `[i] Processing React bundle: ${chunk.id}`);
 
     const ast = parser.parse(chunk.code, {
         sourceType: "unambiguous",
@@ -198,10 +198,9 @@ const refactorReact = async (
         const key = path.node.key;
         if (!t.isNumericLiteral(key)) {
             if (t.isStringLiteral(key) && /[a-zA-Z]/.test(key.value)) {
-                console.log(
-                    chalk.yellow(
-                        `[!] Alphanumeric module ID "${key.value}" detected — not yet supported, skipping (please open a PR)`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] Alphanumeric module ID "${key.value}" detected — not yet supported, skipping (please open a PR)`
                 );
             }
             return;
@@ -211,7 +210,7 @@ const refactorReact = async (
         const id = String(key.value);
         const params = value.params;
         if (params.length > 3) {
-            console.log(chalk.yellow(`[!] Module ${id} has ${params.length} params — not yet researched, skipping`));
+            printMsg(MSG.Warn, `[!] Module ${id} has ${params.length} params — not yet researched, skipping`);
             return;
         }
         const moduleParam = params[0] && t.isIdentifier(params[0]) ? (params[0] as t.Identifier).name : "";
@@ -233,10 +232,9 @@ const refactorReact = async (
         const key = path.node.key;
         if (!t.isNumericLiteral(key)) {
             if (t.isStringLiteral(key) && /[a-zA-Z]/.test(key.value)) {
-                console.log(
-                    chalk.yellow(
-                        `[!] Alphanumeric module ID "${key.value}" detected — not yet supported, skipping (please open a PR)`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] Alphanumeric module ID "${key.value}" detected — not yet supported, skipping (please open a PR)`
                 );
             }
             return;
@@ -244,7 +242,7 @@ const refactorReact = async (
         const id = String(key.value);
         const params = path.node.params;
         if (params.length > 3) {
-            console.log(chalk.yellow(`[!] Module ${id} has ${params.length} params — not yet researched, skipping`));
+            printMsg(MSG.Warn, `[!] Module ${id} has ${params.length} params — not yet researched, skipping`);
             return;
         }
         const moduleParam = params[0] && t.isIdentifier(params[0]) ? (params[0] as t.Identifier).name : "";
@@ -266,7 +264,7 @@ const refactorReact = async (
         ObjectMethod: captureMethod,
     });
 
-    console.log(chalk.cyan(`[i] Found ${modules.length} modules`));
+    printMsg(MSG.Header, `[i] Found ${modules.length} modules`);
 
     // Detect lazy chunk bundles: no IIFE wrapper, program body is entirely push() calls.
     // Modules in lazy chunks are always application code — skip library classification for them.
@@ -275,7 +273,7 @@ const refactorReact = async (
     const isLazyBundle =
         iifeBody === null && ast.program.body.length > 0 && ast.program.body.every(isLazyChunkPushStmt);
     if (isLazyBundle) {
-        console.log(chalk.cyan(`[i] Detected lazy chunk format — skipping library classification`));
+        printMsg(MSG.Header, `[i] Detected lazy chunk format — skipping library classification`);
     }
 
     const files: Record<string, string> = {};
@@ -300,14 +298,14 @@ const refactorReact = async (
                   ? "css-module"
                   : null;
             if (styleLoaderType !== null) {
-                console.log(chalk.gray(`[-] Module ${mod.id} detected as ${styleLoaderType} — skipping`));
+                printMsg(MSG.Info, `[-] Module ${mod.id} detected as ${styleLoaderType} — skipping`);
                 libModuleMap.set(mod.id, { type: styleLoaderType, exportMap: new Map() });
                 libraryCount++;
                 continue;
             }
         }
         if (isLib) {
-            console.log(chalk.gray(`[-] Module ${mod.id} matches library baseline — skipping`));
+            printMsg(MSG.Info, `[-] Module ${mod.id} matches library baseline — skipping`);
             libraryCount++;
             // Classify the library module so import rewriting can use proper named imports
             const info = classifyLibraryModule(mod);
@@ -322,7 +320,7 @@ const refactorReact = async (
     // normal non-lazy chunks when a library baseline is provided.
     if (classifyAllAsLibrary || (!isLazyBundle && libSigs && libSigs.size > 0)) {
         if (!isLazyBundle && libSigs && libSigs.size > 0) {
-            console.log(chalk.cyan(`[i] Library modules skipped: ${libraryCount}/${modules.length}`));
+            printMsg(MSG.Header, `[i] Library modules skipped: ${libraryCount}/${modules.length}`);
         }
         resolveReexportChains(libModuleMap, modules);
     }
@@ -337,7 +335,7 @@ const refactorReact = async (
         const afterRename = renameRouteComponents(afterD);
         const code = validateAndFix(afterRename, id);
         if (code === null) {
-            console.log(chalk.yellow(`[~] Module ${id} skipped due to unresolvable syntax errors`));
+            printMsg(MSG.Warn, `[~] Module ${id} skipped due to unresolvable syntax errors`);
             continue;
         }
         files[id] = code;
@@ -357,7 +355,7 @@ const refactorReact = async (
             }
         }
         if (indexStatements.length > 0) {
-            console.log(chalk.cyan(`[i] Writing ${indexStatements.length} non-module statements to index.js`));
+            printMsg(MSG.Header, `[i] Writing ${indexStatements.length} non-module statements to index.js`);
             const transformed = transformIndexStatements(
                 indexStatements,
                 mergedLibMap.size > 0 ? mergedLibMap : undefined

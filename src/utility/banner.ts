@@ -5,6 +5,7 @@ import path from "path";
 import https from "https";
 import os from "os";
 import CONFIG from "../globalConfig.js";
+import { printMsg, MSG } from "./printMsg.js";
 
 const LOGO_URL = "https://js-recon.io/img/js-recon-logo.png";
 const CACHE_DIR = path.join(os.homedir(), ".js-recon");
@@ -54,7 +55,7 @@ export async function printBanner(): Promise<void> {
     const name = chalk.bold.hex("#00d4ff")("JS Recon");
     const version = chalk.dim(`v${CONFIG.version}`);
     const tagline = chalk.hex("#888888")(CONFIG.toolDesc);
-    console.log(`  ${name}  ${version}`);
-    console.log(`  ${tagline}`);
-    console.log();
+    printMsg(MSG.Plain, `  ${name}  ${version}`);
+    printMsg(MSG.Plain, `  ${tagline}`);
+    printMsg(MSG.Plain, "");
 }

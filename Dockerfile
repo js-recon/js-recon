@@ -12,6 +12,7 @@ COPY ./package-lock.json .
 COPY ./tsconfig.json .
 COPY ./patches ./patches
 COPY ./src ./src
+COPY ./scripts ./scripts
 
 USER root
 ENV PUPPETEER_SKIP_DOWNLOAD=true

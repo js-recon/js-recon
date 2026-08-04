@@ -1,10 +1,10 @@
-import chalk from "chalk";
 import * as cheerio from "cheerio";
 import makeRequest from "../../utility/makeReq.js";
 import resolvePath from "../../utility/resolvePath.js";
 import { URL } from "url";
 import { pushToJsUrls } from "../globals.js";
 import react_followImports from "../react/react_followImports.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const STAGNATION_LIMIT = 3;
 
@@ -104,7 +104,7 @@ const svelte_recursivePageCrawl = async (
 
     if (pendingPages.length === 0) return [];
 
-    console.log(chalk.cyan(`[i] Found ${pendingPages.length} candidate page link(s) for recursive JS discovery`));
+    printMsg(MSG.Header, `[i] Found ${pendingPages.length} candidate page link(s) for recursive JS discovery`);
 
     let stagnantRounds = 0;
 
@@ -133,7 +133,7 @@ const svelte_recursivePageCrawl = async (
                         allJsFiles.add(f);
                     }
                     if (onFilesDiscovered) onFilesDiscovered(jsFromPage);
-                    console.log(chalk.green(`[✓] ${pageUrl}: extracted ${jsFromPage.length} JS file(s)`));
+                    printMsg(MSG.Run, `[✓] ${pageUrl}: extracted ${jsFromPage.length} JS file(s)`);
                 }
 
                 // Follow ESM imports from the newly found JS files
@@ -158,8 +158,9 @@ const svelte_recursivePageCrawl = async (
                     }
                 }
             } catch (err) {
-                console.error(
-                    chalk.yellow(`[!] Failed to crawl ${pageUrl}: ${err instanceof Error ? err.message : String(err)}`)
+                printMsg(
+                    MSG.Warn,
+                    `[!] Failed to crawl ${pageUrl}: ${err instanceof Error ? err.message : String(err)}`
                 );
             }
         }
@@ -168,8 +169,9 @@ const svelte_recursivePageCrawl = async (
         if (newFilesThisRound === 0) {
             stagnantRounds++;
             if (stagnantRounds >= STAGNATION_LIMIT) {
-                console.error(
-                    chalk.yellow(`[!] Stopping page crawl: ${STAGNATION_LIMIT} consecutive rounds without new JS files`)
+                printMsg(
+                    MSG.Warn,
+                    `[!] Stopping page crawl: ${STAGNATION_LIMIT} consecutive rounds without new JS files`
                 );
                 break;
             }
@@ -179,10 +181,9 @@ const svelte_recursivePageCrawl = async (
     }
 
     if (allJsFiles.size > 0) {
-        console.log(
-            chalk.green(
-                `[✓] Recursive page crawl found ${allJsFiles.size} JS file(s) across ${visitedPages.size - 1} page(s)`
-            )
+        printMsg(
+            MSG.Run,
+            `[✓] Recursive page crawl found ${allJsFiles.size} JS file(s) across ${visitedPages.size - 1} page(s)`
         );
     }
 

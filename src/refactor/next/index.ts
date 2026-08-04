@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import _generator from "@babel/generator";
@@ -8,6 +7,7 @@ import { cs_mast_init, ScatCategory } from "@shriyanss/cs-mast";
 import { Chunk } from "../../utility/interfaces.js";
 import { TurboModuleEntry, WebpackModuleEntry, transformModule, transformWebpackModule } from "./transform.js";
 import { validateAndFix } from "./validator.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const generate = (_generator as unknown as { default: typeof _generator }).default ?? _generator;
 
@@ -67,7 +67,7 @@ export const refactorNextWebpack = async (
     libSigs?: Set<string>,
     scatOverride?: ScatCategory[]
 ): Promise<Record<string, string>> => {
-    console.log(chalk.cyan(`[i] Processing Next.js (webpack) chunk: ${chunk.id}`));
+    printMsg(MSG.Header, `[i] Processing Next.js (webpack) chunk: ${chunk.id}`);
 
     let ast: t.File;
     try {
@@ -77,7 +77,7 @@ export const refactorNextWebpack = async (
             errorRecovery: true,
         });
     } catch {
-        console.log(chalk.yellow(`[!] Failed to parse webpack chunk ${chunk.id} — skipping`));
+        printMsg(MSG.Warn, `[!] Failed to parse webpack chunk ${chunk.id} — skipping`);
         return {};
     }
 
@@ -148,7 +148,7 @@ export const refactorNextWebpack = async (
     });
 
     if (!captured) {
-        console.log(chalk.yellow(`[!] No module function found in webpack chunk ${chunk.id} — skipping`));
+        printMsg(MSG.Warn, `[!] No module function found in webpack chunk ${chunk.id} — skipping`);
         return {};
     }
 
@@ -156,7 +156,7 @@ export const refactorNextWebpack = async (
     if (libSigs && libSigs.size > 0) {
         const fnNode = (captured as WebpackModuleEntry).fnPath.node;
         if (moduleIsLibrary(fnNode, libSigs, scatOverride)) {
-            console.log(chalk.gray(`[-] Module ${chunk.id} matches library baseline — skipping`));
+            printMsg(MSG.Info, `[-] Module ${chunk.id} matches library baseline — skipping`);
             return {};
         }
     }
@@ -164,7 +164,7 @@ export const refactorNextWebpack = async (
     const statements = transformWebpackModule(captured);
     const code = validateAndFix(statements, chunk.id);
     if (code === null) {
-        console.log(chalk.yellow(`[~] Module ${chunk.id} skipped due to unresolvable syntax errors`));
+        printMsg(MSG.Warn, `[~] Module ${chunk.id} skipped due to unresolvable syntax errors`);
         return {};
     }
 
@@ -192,7 +192,7 @@ const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
  * Returns a map { [chunkId]: code } or {} if the chunk cannot be processed.
  */
 const refactorNextTurbopack = async (chunk: Chunk): Promise<Record<string, string>> => {
-    console.log(chalk.cyan(`[i] Processing Next.js (Turbopack) chunk: ${chunk.id}`));
+    printMsg(MSG.Header, `[i] Processing Next.js (Turbopack) chunk: ${chunk.id}`);
 
     const ast = parser.parse(chunk.code, {
         sourceType: "unambiguous",
@@ -226,7 +226,7 @@ async function refactorTurbopackModule(chunk: Chunk, ast: t.File): Promise<Recor
 
             const params = path.node.params;
             if (params.length > 3) {
-                console.log(chalk.yellow(`[!] Module ${chunk.id} has ${params.length} params — skipping`));
+                printMsg(MSG.Warn, `[!] Module ${chunk.id} has ${params.length} params — skipping`);
                 path.stop();
                 return;
             }
@@ -249,14 +249,14 @@ async function refactorTurbopackModule(chunk: Chunk, ast: t.File): Promise<Recor
     });
 
     if (!captured) {
-        console.log(chalk.yellow(`[!] No module function found in chunk ${chunk.id} — skipping`));
+        printMsg(MSG.Warn, `[!] No module function found in chunk ${chunk.id} — skipping`);
         return {};
     }
 
     const statements = transformModule(captured);
     const code = validateAndFix(statements, chunk.id);
     if (code === null) {
-        console.log(chalk.yellow(`[~] Module ${chunk.id} skipped due to unresolvable syntax errors`));
+        printMsg(MSG.Warn, `[~] Module ${chunk.id} skipped due to unresolvable syntax errors`);
         return {};
     }
 
@@ -300,14 +300,14 @@ async function refactorWebpackModule(chunk: Chunk, ast: t.File): Promise<Record<
     });
 
     if (!captured) {
-        console.log(chalk.yellow(`[!] No module function found in webpack chunk ${chunk.id} — skipping`));
+        printMsg(MSG.Warn, `[!] No module function found in webpack chunk ${chunk.id} — skipping`);
         return {};
     }
 
     const statements = transformWebpackModule(captured);
     const code = validateAndFix(statements, chunk.id);
     if (code === null) {
-        console.log(chalk.yellow(`[~] Module ${chunk.id} skipped due to unresolvable syntax errors`));
+        printMsg(MSG.Warn, `[~] Module ${chunk.id} skipped due to unresolvable syntax errors`);
         return {};
     }
 

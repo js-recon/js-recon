@@ -1,6 +1,6 @@
 import { Chunks } from "../../utility/interfaces.js";
-import chalk from "chalk";
 import fs from "fs";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Detects and marks chunks that contain Axios HTTP client library instances.
@@ -15,7 +15,7 @@ import fs from "fs";
  * @returns Promise that resolves to the updated chunks with Axios detection results
  */
 const getAxiosInstances = async (chunks: Chunks, output: string, formats: string[]): Promise<Chunks> => {
-    console.log(chalk.cyan("[i] Getting axios instances"));
+    printMsg(MSG.Header, "[i] Getting axios instances");
 
     let chunkCopy = structuredClone(chunks);
     // iterate through all the chunks
@@ -48,7 +48,7 @@ const getAxiosInstances = async (chunks: Chunks, output: string, formats: string
             if (chunks[chunk.id].description === "none") {
                 chunkCopy[chunk.id].description = "Axios library";
             }
-            console.log(chalk.green(`[✓] Axios detected in chunk ${chunk.id}`));
+            printMsg(MSG.Run, `[✓] Axios detected in chunk ${chunk.id}`);
         }
     }
 
@@ -56,7 +56,7 @@ const getAxiosInstances = async (chunks: Chunks, output: string, formats: string
     if (formats.includes("json")) {
         const chunks_json = JSON.stringify(chunkCopy, null, 2);
         fs.writeFileSync(`${output}.json`, chunks_json);
-        console.log(chalk.green(`[✓] Saved webpack with axios instances to ${output}.json`));
+        printMsg(MSG.Run, `[✓] Saved webpack with axios instances to ${output}.json`);
     }
 
     return chunkCopy;

@@ -4,6 +4,7 @@ export interface Rule {
     author: string;
     description: string;
     js_recon_version: string;
+    js_recon_max_version?: string;
     tech: ("next" | "vue" | "react" | "svelte" | "angular" | "all")[];
     severity: "info" | "low" | "medium" | "high";
     type: "request" | "ast" | "cs-mast-s";

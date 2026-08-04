@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import * as globalsUtil from "./globals.js";
+import { printMsg, MSG } from "./printMsg.js";
 
 /**
  * Configures the browser sandbox based on command-line flags and environment variables.
@@ -8,7 +8,7 @@ import * as globalsUtil from "./globals.js";
 const configureSandbox = (cmd) => {
     if (process.env.IS_DOCKER === "true" || cmd.sandbox === false) {
         globalsUtil.setDisableSandbox(true);
-        console.error(chalk.yellow(`[!] Disabling browser sandbox`));
+        printMsg(MSG.Warn, `[!] Disabling browser sandbox`);
     }
 };
 

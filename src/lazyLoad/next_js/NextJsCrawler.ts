@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import { URL } from "url";
 
 import next_getJSScript from "./next_GetJSScript.js";
@@ -13,6 +12,7 @@ import next_getClientSidePaths from "./next_getClientSidePaths.js";
 
 import * as lazyLoadGlobals from "../globals.js";
 import { shouldRunMethod } from "../methodFilter.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 interface NextJsCrawlerOptions {
     url: string;
@@ -323,10 +323,9 @@ class NextJsCrawler {
             if (this.stopped) break; // honour stop() at each iteration boundary
 
             if (this.MAX_PAGE_VISITS > 0 && this.totalPagesVisited >= this.MAX_PAGE_VISITS) {
-                console.error(
-                    chalk.yellow(
-                        `[!] Page visit cap reached (${this.MAX_PAGE_VISITS}). Skipping remaining pages in queue.`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] Page visit cap reached (${this.MAX_PAGE_VISITS}). Skipping remaining pages in queue.`
                 );
                 break;
             }
@@ -338,8 +337,8 @@ class NextJsCrawler {
             const extra = shouldRunMethod("next_GetJSScript", inc, exc) ? await next_getJSScript(u) : [];
 
             if (!extra || !Array.isArray(extra)) {
-                console.error(`[NextJsCrawler] Invalid return value from next_getJSScript for URL: ${u}`);
-                console.error(`[NextJsCrawler] Returned value:`, extra);
+                printMsg(MSG.Err, `[NextJsCrawler] Invalid return value from next_getJSScript for URL: ${u}`);
+                printMsg(MSG.Err, `[NextJsCrawler] Returned value: ${JSON.stringify(extra)}`);
                 process.exit(1);
             }
 
@@ -403,25 +402,25 @@ class NextJsCrawler {
             iteration++;
             const sizeBefore = this.size;
 
-            console.log(chalk.cyan(`[i] Recursive crawl pass ${iteration} – ${sizeBefore} URLs known`));
+            printMsg(MSG.Header, `[i] Recursive crawl pass ${iteration} – ${sizeBefore} URLs known`);
 
             const newUrls = await this.recursivePass(currentBatch);
 
             if (newUrls.length === 0) {
-                console.log(chalk.green(`[✓] Recursive crawl converged after ${iteration} pass(es)`));
+                printMsg(MSG.Run, `[✓] Recursive crawl converged after ${iteration} pass(es)`);
                 break;
             }
 
-            console.log(chalk.green(`[+] Pass ${iteration} discovered ${newUrls.length} new URL(s)`));
+            printMsg(MSG.Run, `[+] Pass ${iteration} discovered ${newUrls.length} new URL(s)`);
 
             // Next pass only analyses the newly found URLs
             currentBatch = newUrls;
         }
 
         if (this.stopped) {
-            console.error(chalk.yellow(`[!] Crawler stopped — downloading all discovered files`));
+            printMsg(MSG.Warn, `[!] Crawler stopped — downloading all discovered files`);
         } else if (iteration >= this.MAX_ITERATIONS) {
-            console.error(chalk.yellow(`[!] Reached max recursive crawl iterations (${this.MAX_ITERATIONS})`));
+            printMsg(MSG.Warn, `[!] Reached max recursive crawl iterations (${this.MAX_ITERATIONS})`);
         }
 
         // Phase 3 – brute-force .map files on the final set (skip if stopped by timeout)

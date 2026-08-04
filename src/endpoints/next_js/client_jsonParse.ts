@@ -1,9 +1,9 @@
-import chalk from "chalk";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import fs from "fs";
 import path from "path";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Extracts client-side paths from JSON.parse() calls in JavaScript files.
@@ -17,7 +17,7 @@ import path from "path";
  */
 const client_jsonParse = async (directory: string): Promise<string[]> => {
     let foundUrls = [];
-    console.log(chalk.cyan("[i] Searching for client-side paths in JSON.parse()"));
+    printMsg(MSG.Header, "[i] Searching for client-side paths in JSON.parse()");
 
     // filter out the directories
     let files = fs.readdirSync(directory, {
@@ -79,7 +79,7 @@ const client_jsonParse = async (directory: string): Promise<string[]> => {
                 },
             });
         } catch (err) {
-            console.error(chalk.red(`[!] Error when parsing JSON: ${err}`));
+            printMsg(MSG.Err, `[!] Error when parsing JSON: ${err}`);
         }
     }
 

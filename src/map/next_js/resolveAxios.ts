@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import { Chunks } from "../../utility/interfaces.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
@@ -9,6 +8,7 @@ import { ArrowFunctionExpression, FunctionDeclaration, Node } from "@babel/types
 import { handleZDotCreate, processZDotCreateCall } from "./resolveAxiosHelpers/handleZDotCreate.js";
 import { directCallsWithoutAssignment } from "./resolveAxiosHelpers/directCallsWithoutAssignment.js";
 import { collectInterceptorHeaders } from "./resolveAxiosHelpers/interceptorHeaders.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 // Headers injected globally by axios request interceptors. Populated once at
 // the start of `resolveAxios` and read by the per-call processors so every
@@ -52,29 +52,28 @@ export const getThirdArg = (ast: Node): string => {
  * @param {string} directory - The directory of the chunk file.
  */
 const resolveAxios = async (chunks: Chunks, directory: string) => {
-    console.log(chalk.cyan("[i] Resolving axios instances"));
+    printMsg(MSG.Header, "[i] Resolving axios instances");
 
     // Discover headers added by axios request interceptors up-front. The same
     // set applies to every request that flows through the shared axios client,
     // so we attach it to each emitted endpoint below.
     globalInterceptorHeaders = collectInterceptorHeaders(chunks);
     if (Object.keys(globalInterceptorHeaders).length > 0) {
-        console.log(
-            chalk.cyan(
-                `[i] Detected ${Object.keys(globalInterceptorHeaders).length} interceptor-injected header(s): ${Object.keys(globalInterceptorHeaders).join(", ")}`
-            )
+        printMsg(
+            MSG.Header,
+            `[i] Detected ${Object.keys(globalInterceptorHeaders).length} interceptor-injected header(s): ${Object.keys(globalInterceptorHeaders).join(", ")}`
         );
     }
 
     const { axiosExportedFrom, axiosImportedTo } = findAxiosClients(chunks);
 
     if (axiosExportedFrom.length === 0) {
-        console.error(chalk.yellow("[!] No axios clients defined in any chunk."));
+        printMsg(MSG.Warn, "[!] No axios clients defined in any chunk.");
         return;
     }
 
     if (Object.keys(axiosImportedTo).length === 0) {
-        console.error(chalk.yellow("[!] No chunks import any of the defined axios clients."));
+        printMsg(MSG.Warn, "[!] No chunks import any of the defined axios clients.");
         return;
     }
 
@@ -171,7 +170,7 @@ const resolveAxios = async (chunks: Chunks, directory: string) => {
             Object.keys(axiosImportedTo).includes(chunkName) &&
             Object.keys(zDotCreateInstances).length !== 0
         ) {
-            console.error(chalk.yellow(`[!] No axios calls found in ${chunkName}`));
+            printMsg(MSG.Warn, `[!] No axios calls found in ${chunkName}`);
         }
     }
 };

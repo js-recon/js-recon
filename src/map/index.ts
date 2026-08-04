@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import fs from "fs";
 
 // Next.JS
@@ -18,6 +17,7 @@ import { generateOpenapiV3Spec } from "../utility/openapiGenerator.js";
 import { generatePostmanCollection } from "../utility/postmanGenerator.js";
 import getExports from "./next_js/getExports.js";
 import resolveServerActions from "./next_js/resolveServerActions.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 // Vue.JS
 import getViteConnections from "./vue_js/getViteConnections.js";
@@ -79,12 +79,12 @@ const map = async (
     interactive_mode: boolean,
     commands: string[] = []
 ): Promise<void> => {
-    console.log(chalk.cyan("[i] Running 'map' module"));
+    printMsg(MSG.Header, "[i] Running 'map' module");
 
     if (list) {
-        console.log(chalk.cyan("Available technologies:"));
+        printMsg(MSG.Header, "Available technologies:");
         for (const [key, value] of Object.entries(availableTech)) {
-            console.log(chalk.cyan(`- '${key}': ${value}`));
+            printMsg(MSG.Header, `- '${key}': ${value}`);
         }
         return;
     }
@@ -92,22 +92,21 @@ const map = async (
     // iterate through all the formats, and match it with the available formats
     for (const format of formats) {
         if (!Object.keys(availableFormats).includes(format)) {
-            console.error(chalk.red(`[!] Invalid format: ${format}`));
+            printMsg(MSG.Err, `[!] Invalid format: ${format}`);
             process.exit(4);
         }
     }
 
     if (!tech) {
-        console.error(
-            chalk.red(
-                "[!] Please specify a technology with -t/--tech. Run with -l/--list to see available technologies"
-            )
+        printMsg(
+            MSG.Err,
+            "[!] Please specify a technology with -t/--tech. Run with -l/--list to see available technologies"
         );
         process.exit(5);
     }
 
     if (!directory) {
-        console.error(chalk.red("[!] Please specify a directory with -d/--directory"));
+        printMsg(MSG.Err, "[!] Please specify a directory with -d/--directory");
         process.exit(6);
     }
 
@@ -171,7 +170,7 @@ const map = async (
             const openapiJson = JSON.stringify(openapiSpec, null, 2);
             // write to file
             fs.writeFileSync(getOpenapiOutputFile(), openapiJson);
-            console.log(chalk.green(`[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`));
+            printMsg(MSG.Run, `[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`);
 
             // Also emit a Postman Collection v2.1 — Bruno/Insomnia/Postman use its
             // nested `item` arrays to render real folder hierarchies on import,
@@ -182,7 +181,7 @@ const map = async (
                 ? openapiOutputFile.replace(/\.json$/, ".postman_collection.json")
                 : `${openapiOutputFile}.postman_collection.json`;
             fs.writeFileSync(postmanOutputFile, JSON.stringify(postmanCollection, null, 2));
-            console.log(chalk.green(`[✓] Generated Postman Collection at ${postmanOutputFile}`));
+            printMsg(MSG.Run, `[✓] Generated Postman Collection at ${postmanOutputFile}`);
         }
     } else if (tech === "vue") {
         let chunks: Chunks;
@@ -213,7 +212,7 @@ const map = async (
             const openapiSpec = generateOpenapiV3Spec(getOpenapiOutput(), chunks);
             const openapiJson = JSON.stringify(openapiSpec, null, 2);
             fs.writeFileSync(getOpenapiOutputFile(), openapiJson);
-            console.log(chalk.green(`[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`));
+            printMsg(MSG.Run, `[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`);
 
             const postmanCollection = generatePostmanCollection(getOpenapiOutput());
             const openapiOutputFile = getOpenapiOutputFile();
@@ -221,7 +220,7 @@ const map = async (
                 ? openapiOutputFile.replace(/\.json$/, ".postman_collection.json")
                 : `${openapiOutputFile}.postman_collection.json`;
             fs.writeFileSync(postmanOutputFile, JSON.stringify(postmanCollection, null, 2));
-            console.log(chalk.green(`[✓] Generated Postman Collection at ${postmanOutputFile}`));
+            printMsg(MSG.Run, `[✓] Generated Postman Collection at ${postmanOutputFile}`);
         }
     } else if (tech === "react") {
         let chunks: Chunks;
@@ -250,7 +249,7 @@ const map = async (
             const openapiSpec = generateOpenapiV3Spec(getOpenapiOutput(), chunks);
             const openapiJson = JSON.stringify(openapiSpec, null, 2);
             fs.writeFileSync(getOpenapiOutputFile(), openapiJson);
-            console.log(chalk.green(`[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`));
+            printMsg(MSG.Run, `[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`);
 
             const postmanCollection = generatePostmanCollection(getOpenapiOutput());
             const openapiOutputFile = getOpenapiOutputFile();
@@ -258,7 +257,7 @@ const map = async (
                 ? openapiOutputFile.replace(/\.json$/, ".postman_collection.json")
                 : `${openapiOutputFile}.postman_collection.json`;
             fs.writeFileSync(postmanOutputFile, JSON.stringify(postmanCollection, null, 2));
-            console.log(chalk.green(`[✓] Generated Postman Collection at ${postmanOutputFile}`));
+            printMsg(MSG.Run, `[✓] Generated Postman Collection at ${postmanOutputFile}`);
         }
     } else if (tech === "svelte") {
         let chunks: Chunks;
@@ -288,7 +287,7 @@ const map = async (
             const openapiSpec = generateOpenapiV3Spec(getOpenapiOutput(), chunks);
             const openapiJson = JSON.stringify(openapiSpec, null, 2);
             fs.writeFileSync(getOpenapiOutputFile(), openapiJson);
-            console.log(chalk.green(`[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`));
+            printMsg(MSG.Run, `[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`);
 
             const postmanCollection = generatePostmanCollection(getOpenapiOutput());
             const openapiOutputFile = getOpenapiOutputFile();
@@ -296,7 +295,7 @@ const map = async (
                 ? openapiOutputFile.replace(/\.json$/, ".postman_collection.json")
                 : `${openapiOutputFile}.postman_collection.json`;
             fs.writeFileSync(postmanOutputFile, JSON.stringify(postmanCollection, null, 2));
-            console.log(chalk.green(`[✓] Generated Postman Collection at ${postmanOutputFile}`));
+            printMsg(MSG.Run, `[✓] Generated Postman Collection at ${postmanOutputFile}`);
         }
     } else if (tech === "angular") {
         let chunks: Chunks;
@@ -325,7 +324,7 @@ const map = async (
             const openapiSpec = generateOpenapiV3Spec(getOpenapiOutput(), chunks);
             const openapiJson = JSON.stringify(openapiSpec, null, 2);
             fs.writeFileSync(getOpenapiOutputFile(), openapiJson);
-            console.log(chalk.green(`[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`));
+            printMsg(MSG.Run, `[✓] Generated OpenAPI spec at ${getOpenapiOutputFile()}`);
 
             const postmanCollection = generatePostmanCollection(getOpenapiOutput());
             const openapiOutputFile = getOpenapiOutputFile();
@@ -333,7 +332,7 @@ const map = async (
                 ? openapiOutputFile.replace(/\.json$/, ".postman_collection.json")
                 : `${openapiOutputFile}.postman_collection.json`;
             fs.writeFileSync(postmanOutputFile, JSON.stringify(postmanCollection, null, 2));
-            console.log(chalk.green(`[✓] Generated Postman Collection at ${postmanOutputFile}`));
+            printMsg(MSG.Run, `[✓] Generated Postman Collection at ${postmanOutputFile}`);
         }
     }
 };

@@ -5,7 +5,7 @@ const traverse = (_traverse as any).default ?? _traverse;
 import _generator from "@babel/generator";
 const generator: any = (_generator as any).default ?? _generator;
 import { Node } from "@babel/types";
-import { Chunks } from "../../../utility/interfaces.js";
+import { Chunks } from "../../utility/interfaces.js";
 
 /**
  * Escape a string so it can be safely embedded inside a double-quoted

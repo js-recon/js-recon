@@ -1,6 +1,6 @@
-import chalk from "chalk";
 import { writeFile } from "fs/promises";
 import path from "path";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Generates an OpenAPI v3 file based on the provided paths.
@@ -11,7 +11,7 @@ import path from "path";
  * @returns {Promise<void>} - Promise that resolves when the OpenAPI file is saved
  */
 const openapi = async (paths, output_file) => {
-    console.log(chalk.cyan("[i] Generating OpenAPI v3 file"));
+    printMsg(MSG.Header, "[i] Generating OpenAPI v3 file");
 
     const openapiData = {
         openapi: "3.0.0",
@@ -49,9 +49,9 @@ const openapi = async (paths, output_file) => {
 
     try {
         await writeFile(`${output_file}-openapi.json`, JSON.stringify(openapiData, null, 2));
-        console.log(chalk.green(`[✓] OpenAPI v3 file saved to: ${output_file}-openapi.json`));
+        printMsg(MSG.Run, `[✓] OpenAPI v3 file saved to: ${output_file}-openapi.json`);
     } catch (error) {
-        console.error(chalk.red(`[!] Error writing OpenAPI file: ${error.message}`));
+        printMsg(MSG.Err, `[!] Error writing OpenAPI file: ${error.message}`);
     }
 };
 

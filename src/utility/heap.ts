@@ -1,6 +1,7 @@
 import * as v8 from "v8";
 import * as os from "os";
 import { spawnSync } from "child_process";
+import { printMsg, MSG } from "./printMsg.js";
 
 /**
  * Re-execs the current process with the desired V8 heap limit applied via
@@ -28,7 +29,7 @@ export function applyHeapLimit(heapMb: number): void {
         env: { ...process.env, JS_RECON_HEAP_SET: "1" },
     });
     if (result.error) {
-        console.error(`[!] Failed to re-exec with heap limit: ${result.error.message}`);
+        printMsg(MSG.Err, `[!] Failed to re-exec with heap limit: ${result.error.message}`);
         process.exit(1);
     }
     if (result.signal) {

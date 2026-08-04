@@ -1,8 +1,8 @@
 import makeRequest from "../../utility/makeReq.js";
 import * as cheerio from "cheerio";
 import resolvePath from "../../utility/resolvePath.js";
-import chalk from "chalk";
 import { getJsUrls, pushToJsUrls } from "../globals.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Finds all the lazy loaded JavaScript files from a webpage by parsing the page source.
@@ -13,7 +13,7 @@ import { getJsUrls, pushToJsUrls } from "../globals.js";
  * @returns {Promise<string[]>} - A promise that resolves to an array of absolute URLs pointing to JavaScript files found in the page.
  */
 const svelte_getFromPageSource = async (url) => {
-    console.log(chalk.cyan("[i] Analyzing page source"));
+    printMsg(MSG.Header, "[i] Analyzing page source");
     let foundUrls = [];
     const pageSource = await makeRequest(url, {});
     const body = await pageSource.text();
@@ -80,10 +80,10 @@ const svelte_getFromPageSource = async (url) => {
     }
 
     if (foundUrls.length === 0) {
-        console.error(chalk.red("[!] No JS files found from the page source"));
+        printMsg(MSG.Err, "[!] No JS files found from the page source");
         return [];
     } else {
-        console.log(chalk.green(`[✓] Found ${foundUrls.length} JS files from the page source`));
+        printMsg(MSG.Run, `[✓] Found ${foundUrls.length} JS files from the page source`);
     }
 
     // iterate through the foundUrls and resolve the paths
