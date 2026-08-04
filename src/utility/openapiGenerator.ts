@@ -2,7 +2,7 @@ import { OpenapiOutputItem } from "./globals.js";
 import { Chunks } from "./interfaces.js";
 import * as globalsUtil from "./globals.js";
 import replacePlaceholders from "./replaceUrlPlaceholders.js";
-import chalk from "chalk";
+import { printMsg, MSG } from "./printMsg.js";
 
 export interface Parameter {
     name: string;
@@ -232,10 +232,9 @@ export const generateOpenapiV3Spec = (items: OpenapiOutputItem[], _chunks: Chunk
             });
         } catch (_e) {
             // unparseable placeholder URLs
-            console.error(
-                chalk.red(
-                    `[!] Failed to parse: ${item.path} as URL for query parameter extraction, skipping query params.`
-                )
+            printMsg(
+                MSG.Err,
+                `[!] Failed to parse: ${item.path} as URL for query parameter extraction, skipping query params.`
             );
         }
 

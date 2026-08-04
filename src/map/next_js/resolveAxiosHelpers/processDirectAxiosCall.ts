@@ -2,13 +2,13 @@ import { NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import { Chunks } from "../../../utility/interfaces.js";
 import * as fs from "fs";
-import chalk from "chalk";
 import { resolveNodeValue, resolveStringOps, substituteVariablesInString } from "../utils.js";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
 import { resolveBodyArg } from "./traceBody.js";
 import * as globals from "../../../utility/globals.js";
 import globalConfig from "../../../globalConfig.js";
 import { getThirdArg, getGlobalInterceptorHeaders } from "../resolveAxios.js";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 const getHttpMethod = (methodName: string): string | null => {
     const upperCaseMethod = methodName.toUpperCase();
@@ -127,16 +127,14 @@ export const processDirectAxiosCall = (
     const interceptorHeaders = getGlobalInterceptorHeaders();
     const mergedHeaders: { [key: string]: string } = { ...interceptorHeaders, ...callHeaders };
 
-    console.log(
-        chalk.blue(`[+] Found direct axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`)
-    );
-    console.log(chalk.green(`    URL: ${callUrl}`));
-    console.log(chalk.green(`    Method: ${callMethod}`));
+    printMsg(MSG.Info, `[+] Found direct axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`);
+    printMsg(MSG.Run, `    URL: ${callUrl}`);
+    printMsg(MSG.Run, `    Method: ${callMethod}`);
     if (callBody) {
-        console.log(chalk.green(`    Body: ${callBody}`));
+        printMsg(MSG.Run, `    Body: ${callBody}`);
     }
     if (Object.keys(mergedHeaders).length > 0) {
-        console.log(chalk.green(`    Headers: ${JSON.stringify(mergedHeaders)}`));
+        printMsg(MSG.Run, `    Headers: ${JSON.stringify(mergedHeaders)}`);
     }
 
     globals.addOpenapiOutput({

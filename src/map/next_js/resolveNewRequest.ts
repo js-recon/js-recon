@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import parser from "@babel/parser";
@@ -8,6 +7,7 @@ import { resolveNodeValue, substituteVariablesInString } from "./utils.js";
 import { astNodeToJsonString } from "./resolveAxiosHelpers/astNodeToJsonString.js";
 import { getThirdArg } from "./resolveAxios.js";
 import * as globals from "../../utility/globals.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -568,16 +568,16 @@ const traceDoCallAcrossChunks = (
  * webpack chunk, then resolves the URL, method, and body schema.
  */
 const resolveNewRequest = async (chunks: Chunks, directory: string) => {
-    console.log(chalk.cyan("[i] Resolving wrapper-class HTTP requests (new X({url, method, ...}))"));
+    printMsg(MSG.Header, "[i] Resolving wrapper-class HTTP requests (new X({url, method, ...}))");
 
     const wrappers = findWrapperClasses(chunks);
     if (wrappers.size === 0) {
-        console.error(chalk.yellow("    [!] No HTTP-wrapper classes detected"));
+        printMsg(MSG.Warn, "    [!] No HTTP-wrapper classes detected");
         return;
     }
 
     for (const [chunkId, exports] of wrappers.entries()) {
-        console.log(chalk.green(`    [✓] Wrapper class chunk ${chunkId} exports: ${Array.from(exports).join(", ")}`));
+        printMsg(MSG.Run, `    [✓] Wrapper class chunk ${chunkId} exports: ${Array.from(exports).join(", ")}`);
     }
 
     // Also collect, per wrapper chunk, the set of "factory" export bindings
@@ -722,7 +722,7 @@ const resolveNewRequest = async (chunks: Chunks, directory: string) => {
 
             const lineNo = findLineInFile(fileContent, chunk.code, newPath.node);
 
-            console.log(chalk.blue(`[+] Found wrapped HTTP request in chunk ${chunk.id} ("${filePath}":${lineNo})`));
+            printMsg(MSG.Info, `[+] Found wrapped HTTP request in chunk ${chunk.id} ("${filePath}":${lineNo})`);
             // For dataType="query", attach the resolved arg keys as a query string
             // to the URL so the OpenAPI generator surfaces them as `in: query` params.
             let finalUrl = typeof url === "string" ? url : String(url ?? "");
@@ -731,14 +731,14 @@ const resolveNewRequest = async (chunks: Chunks, directory: string) => {
                 if (qs) finalUrl = finalUrl + (finalUrl.includes("?") ? "&" : "?") + qs;
             }
 
-            console.log(chalk.green(`    URL: ${finalUrl}`));
-            console.log(chalk.green(`    Method: ${method}`));
-            console.log(chalk.gray(`    dataType: ${dataType}`));
+            printMsg(MSG.Run, `    URL: ${finalUrl}`);
+            printMsg(MSG.Run, `    Method: ${method}`);
+            printMsg(MSG.Info, `    dataType: ${dataType}`);
             if (bodyJson) {
                 if (dataType === "query") {
-                    console.log(chalk.green(`    Query params: ${bodyJson}`));
+                    printMsg(MSG.Run, `    Query params: ${bodyJson}`);
                 } else {
-                    console.log(chalk.green(`    Body: ${bodyJson}`));
+                    printMsg(MSG.Run, `    Body: ${bodyJson}`);
                 }
             }
 

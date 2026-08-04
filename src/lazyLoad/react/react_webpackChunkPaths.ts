@@ -1,127 +1,9 @@
 import makeRequest from "../../utility/makeReq.js";
-import chalk from "chalk";
-import _traverse from "@babel/traverse";
-import parser from "@babel/parser";
-import execFunc from "../../utility/runSandboxed.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
+import { extractWebpackChunkUrls } from "../shared/webpackChunkParsers.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 export const deduplicateWebpackChunkPaths = (paths: readonly string[]): string[] => [...new Set(paths)];
-
-/**
- * Pure parser: extracts `[chunkId, chunkName]` entries from webpack's
- * FunctionExpression object-map pattern:
- *   function(e) { return ({123: "name", ...}[e] || e) + ".js"; }
- * Returns entries from the first qualifying object map (≥ 3 numeric-keyed string entries).
- */
-export const extractObjectMapChunkEntries = (jsContent: string): Array<[number, string]> => {
-    const result: Array<[number, string]> = [];
-    let ast: any;
-    try {
-        ast = parser.parse(jsContent, {
-            sourceType: "unambiguous",
-            plugins: ["jsx", "typescript"],
-            errorRecovery: true,
-        });
-    } catch {
-        return result;
-    }
-
-    traverse(ast, {
-        FunctionExpression(path) {
-            const start = path.node.start ?? 0;
-            const end = path.node.end ?? jsContent.length;
-            const source = jsContent.slice(start, end);
-            if (!source.match(/\|\|\s*e/) || !source.includes('".js"')) return;
-
-            path.traverse({
-                ObjectExpression(objPath) {
-                    const props = objPath.node.properties;
-                    if (props.length < 3) return;
-
-                    const entries: Array<[number, string]> = [];
-                    for (const prop of props) {
-                        if (prop.type !== "ObjectProperty") continue;
-                        const key = prop.key;
-                        const value = prop.value;
-                        if (value.type !== "StringLiteral") continue;
-
-                        let keyNum: number | null = null;
-                        if (key.type === "NumericLiteral") keyNum = key.value;
-                        else if (key.type === "StringLiteral" && /^\d+$/.test(key.value)) keyNum = parseInt(key.value);
-                        else if (key.type === "Identifier" && /^\d+$/.test(key.name)) keyNum = parseInt(key.name);
-
-                        if (keyNum === null) continue;
-                        entries.push([keyNum, value.value]);
-                    }
-
-                    if (entries.length >= 3) {
-                        result.push(...entries);
-                        objPath.stop();
-                        path.stop();
-                    }
-                },
-            });
-        },
-    });
-
-    return result;
-};
-
-/**
- * Pure parser: extracts chunk filenames from webpack's ArrowFunctionExpression
- * if-chain pattern:
- *   (e) => { if (123 === e) return "name.js"; if (456 === e) return "other.js"; ... }
- * Returns filenames only when there are at least 3 qualifying if-statements.
- */
-export const extractIfChainChunkFilenames = (jsContent: string): string[] => {
-    const result: string[] = [];
-    let ast: any;
-    try {
-        ast = parser.parse(jsContent, {
-            sourceType: "unambiguous",
-            plugins: ["jsx", "typescript"],
-            errorRecovery: true,
-        });
-    } catch {
-        return result;
-    }
-
-    traverse(ast, {
-        ArrowFunctionExpression(path) {
-            const body = path.node.body;
-            if (body.type !== "BlockStatement") return;
-
-            // skip expression-body arrows (handled by execFunc path)
-            const start = path.node.start ?? 0;
-            const end = path.node.end ?? jsContent.length;
-            const source = jsContent.slice(start, end);
-            if (source.match(/"\.js".{0,15}$/)) return;
-
-            const filenames: string[] = [];
-            for (const stmt of body.body) {
-                if (stmt.type !== "IfStatement") continue;
-                const test = stmt.test;
-                if (test.type !== "BinaryExpression" || test.operator !== "===") continue;
-                const { left, right } = test;
-                const isNumericEqParam =
-                    (left.type === "NumericLiteral" && right.type === "Identifier") ||
-                    (right.type === "NumericLiteral" && left.type === "Identifier");
-                if (!isNumericEqParam) continue;
-                const consequent = stmt.consequent;
-                if (consequent.type !== "ReturnStatement" || !consequent.argument) continue;
-                const arg = consequent.argument;
-                if (arg.type !== "StringLiteral" || !arg.value.endsWith(".js")) continue;
-                filenames.push(arg.value);
-            }
-
-            if (filenames.length >= 3) result.push(...filenames);
-        },
-    });
-
-    return result;
-};
 
 // url param kept for API consistency with other react_* functions
 const react_webpackChunkPaths = async (
@@ -140,103 +22,30 @@ const react_webpackChunkPaths = async (
 
             const contentLength = req.headers.get("content-length");
             if (contentLength && parseInt(contentLength) > maxJsSizeMb * 1024 * 1024) {
-                console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
+                printMsg(MSG.Warn, `[!] Skipping ${jsFile} (too large)`);
                 return;
             }
 
             const jsContent = await req.text();
 
             if (jsContent.length > maxJsSizeMb * 1024 * 1024) {
-                console.error(chalk.yellow(`[!] Skipping ${jsFile} (too large)`));
+                printMsg(MSG.Warn, `[!] Skipping ${jsFile} (too large)`);
                 return;
             }
 
-            // pattern 3: FunctionExpression with object map
-            const objectMapEntries = extractObjectMapChunkEntries(jsContent);
-            if (objectMapEntries.length > 0) {
-                console.log(chalk.green(`[✓] Found webpack object-map chunk path builder in ${jsFile}`));
-                for (const [, chunkName] of objectMapEntries) {
-                    try {
-                        const finalUrl = new URL("../" + chunkName + ".js", jsFile).href;
-                        toReturn.push(finalUrl);
-                    } catch {
-                        // skip filenames that fail URL resolution
-                    }
-                }
+            const urls = extractWebpackChunkUrls(jsContent, jsFile);
+            if (urls.length > 0) {
+                printMsg(MSG.Run, `[✓] Found ${urls.length} webpack chunk JS file(s) in ${jsFile}`);
+                toReturn.push(...urls);
             }
-
-            // pattern 2: ArrowFunctionExpression if-chain
-            const ifChainFilenames = extractIfChainChunkFilenames(jsContent);
-            if (ifChainFilenames.length > 0) {
-                console.log(chalk.green(`[✓] Found webpack if-chain chunk path builder in ${jsFile}`));
-                for (const filename of ifChainFilenames) {
-                    try {
-                        const output =
-                            filename.startsWith("/") ||
-                            filename.startsWith("http") ||
-                            filename.startsWith("./") ||
-                            filename.startsWith("../")
-                                ? filename
-                                : "../" + filename;
-                        const finalUrl = new URL(output, jsFile).href;
-                        toReturn.push(finalUrl);
-                    } catch {
-                        // skip filenames that fail URL resolution
-                    }
-                }
-            }
-
-            // pattern 1: ArrowFunctionExpression expression body via execFunc
-            const ast = parser.parse(jsContent, {
-                sourceType: "unambiguous",
-                plugins: ["jsx", "typescript"],
-                errorRecovery: true,
-            });
-
-            traverse(ast, {
-                ArrowFunctionExpression(path) {
-                    const start = path.node.start ?? 0;
-                    const end = path.node.end ?? jsContent.length;
-                    const source = jsContent.slice(start, end);
-
-                    if (!source.match(/"\.js".{0,15}$/)) return;
-
-                    console.log(chalk.green(`[✓] Found webpack chunk path builder in ${jsFile}`));
-                    console.log(chalk.yellow(source.slice(0, 200) + (source.length > 200 ? "..." : "")));
-
-                    const urlBuilderFunc = `(() => (${source}))()`;
-                    const integers = source.match(/\d+/g);
-                    if (!integers) return;
-
-                    for (const i of integers) {
-                        try {
-                            let output = execFunc(urlBuilderFunc, parseInt(i));
-                            if (typeof output !== "string" || output.includes("undefined")) continue;
-
-                            if (!(
-                                output.startsWith("/") ||
-                                output.startsWith("http") ||
-                                output.startsWith("./") ||
-                                output.startsWith("../")
-                            )) {
-                                output = "../" + output;
-                            }
-                            const finalUrl = new URL(output, jsFile).href;
-                            toReturn.push(finalUrl);
-                        } catch {
-                            // skip integers that cause errors in sandboxed execution
-                        }
-                    }
-                },
-            });
         } catch (err) {
-            console.error(chalk.red(`[!] Error processing ${jsFile}:`, err));
+            printMsg(MSG.Err, `[!] Error processing ${jsFile}: ${err}`);
         }
     });
 
     toReturn = deduplicateWebpackChunkPaths(toReturn);
     if (toReturn.length > 0) {
-        console.log(chalk.green(`[✓] Found ${toReturn.length} webpack chunk JS files`));
+        printMsg(MSG.Run, `[✓] Found ${toReturn.length} webpack chunk JS files`);
     }
 
     return toReturn;

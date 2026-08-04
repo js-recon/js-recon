@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import Database from "better-sqlite3";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 /**
  * Populates the endpoints table in the database with the given endpoints.
@@ -24,7 +24,7 @@ const populateEndpoints = async (db: Database.Database, endpoints: any) => {
             } catch (error) {
                 // Ignore unique constraint errors if a URL is already present
                 if (!error.message.includes("UNIQUE constraint failed")) {
-                    console.error(`Error inserting ${fullUrl}:`, error);
+                    printMsg(MSG.Err, `Error inserting ${fullUrl}: ${error}`);
                 }
             }
 
@@ -41,7 +41,7 @@ const populateEndpoints = async (db: Database.Database, endpoints: any) => {
         }
     })();
 
-    console.log(chalk.green("[✓] Populated endpoints into the database..."));
+    printMsg(MSG.Run, "[✓] Populated endpoints into the database...");
 };
 
 export default populateEndpoints;

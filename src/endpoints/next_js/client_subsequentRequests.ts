@@ -1,9 +1,9 @@
-import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import makeRequest from "../../utility/makeReq.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 let toReturn = [];
@@ -190,7 +190,7 @@ const checkSlug = async (files, url) => {
 
 const client_subsequentRequests = async (subsequentRequestsDir, url) => {
     //   let report = `## Subsequent Requests\n`;
-    console.log(chalk.cyan("[i] Using subsequent requests file method"));
+    printMsg(MSG.Header, "[i] Using subsequent requests file method");
 
     // get all the files in the directory
     const walkSync = (dir, files = []) => {

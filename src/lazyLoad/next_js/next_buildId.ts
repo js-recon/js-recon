@@ -2,7 +2,7 @@ import { readdir, readFile } from "fs/promises";
 import path from "path";
 import * as next_globals from "./next_globals.js";
 import { Dirent } from "fs";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 export const next_buildId_RSC = async (rsc_directory: string): Promise<string | null> => {
     const traverseDirectory = async (directory: string): Promise<boolean> => {
@@ -10,10 +10,9 @@ export const next_buildId_RSC = async (rsc_directory: string): Promise<string | 
         try {
             dirents = await readdir(directory, { withFileTypes: true });
         } catch {
-            console.error(
-                chalk.red(
-                    `[!] Can't read subsequent requests directory. Skipping build ID extraction using this method...`
-                )
+            printMsg(
+                MSG.Err,
+                `[!] Can't read subsequent requests directory. Skipping build ID extraction using this method...`
             );
             return false;
         }

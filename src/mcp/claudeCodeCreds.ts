@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import chalk from "chalk";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -114,7 +114,7 @@ export const refreshClaudeCodeCreds = async (
         );
     }
 
-    console.error(chalk.yellow("[!] Refreshing Claude Code OAuth token (use --no-refresh-claude-creds to disable)."));
+    printMsg(MSG.Warn, "[!] Refreshing Claude Code OAuth token (use --no-refresh-claude-creds to disable).");
 
     const body = {
         grant_type: "refresh_token",
@@ -157,7 +157,7 @@ export const refreshClaudeCodeCreds = async (
     try {
         await writeCreds(refreshed, source);
     } catch (err: any) {
-        console.error(chalk.yellow(`[!] Refreshed token, but failed to persist it back to ${source}: ${err.message}`));
+        printMsg(MSG.Warn, `[!] Refreshed token, but failed to persist it back to ${source}: ${err.message}`);
     }
 
     return refreshed;
@@ -177,10 +177,9 @@ export const getUsableAccessToken = async (opts: GetTokenOptions): Promise<strin
     }
 
     if (!opts.allowRefresh) {
-        console.error(
-            chalk.red(
-                "[!] Claude Code OAuth token is expired and --no-refresh-claude-creds was set. Run 'claude' to re-authenticate."
-            )
+        printMsg(
+            MSG.Err,
+            "[!] Claude Code OAuth token is expired and --no-refresh-claude-creds was set. Run 'claude' to re-authenticate."
         );
         return null;
     }
@@ -189,7 +188,7 @@ export const getUsableAccessToken = async (opts: GetTokenOptions): Promise<strin
         const refreshed = await refreshClaudeCodeCreds(read.creds, read.source, opts.clientId);
         return refreshed.claudeAiOauth.accessToken;
     } catch (err: any) {
-        console.error(chalk.red(`[!] ${err.message}`));
+        printMsg(MSG.Err, `[!] ${err.message}`);
         return null;
     }
 };

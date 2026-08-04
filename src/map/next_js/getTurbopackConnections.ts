@@ -3,13 +3,13 @@ import path from "path";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-import chalk from "chalk";
 
 import { Chunks } from "../../utility/interfaces.js";
 
 import * as globals from "../../utility/globals.js";
 import { getCompletion } from "../../utility/ai.js";
 import { File } from "@babel/types";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Gets the turbopack connections for a given directory and output file name.
@@ -34,7 +34,7 @@ const getTurbopackConnections = async (
 ): Promise<Chunks> => {
     const maxAiThreads = globals.getAiThreads();
 
-    console.log(chalk.cyan("[i] Getting turbopack connections"));
+    printMsg(MSG.Header, "[i] Getting turbopack connections");
 
     let files = fs.readdirSync(directory, {
         recursive: true,
@@ -144,7 +144,7 @@ const getTurbopackConnections = async (
 
     // populate imports for turbopack chunks: e.i(<id>) calls inside the function body,
     // where `e` is the first parameter of the module function.
-    console.log(chalk.cyan("[i] Finding imports for turbopack chunks"));
+    printMsg(MSG.Header, "[i] Finding imports for turbopack chunks");
     for (const [key, value] of Object.entries(chunks)) {
         // only re-process chunks that look like turbopack output (skip webpack chunks already populated)
         if (!value.code.startsWith(`func_${key} = `)) {
@@ -213,7 +213,7 @@ const getTurbopackConnections = async (
 
     // optional AI descriptions for turbopack chunks (mirrors the webpack path)
     if (globals.getAi() && globals.getAi().includes("description")) {
-        console.log(chalk.cyan("[i] Generating descriptions for turbopack chunks"));
+        printMsg(MSG.Header, "[i] Generating descriptions for turbopack chunks");
         const turbopackEntries = Object.entries(chunks).filter(
             ([k, v]) => v.code.startsWith(`func_${k} = `) && v.description === "none"
         );
@@ -234,7 +234,7 @@ const getTurbopackConnections = async (
                     const description = await getCompletion(value.code, systemPrompt);
                     return { key, description };
                 } catch (err) {
-                    console.error(chalk.red(`[!] Error generating description for chunk ${key}: ${err.message}`));
+                    printMsg(MSG.Err, `[!] Error generating description for chunk ${key}: ${err.message}`);
                     return { key, description: "none" };
                 } finally {
                     activeThreads--;
@@ -248,17 +248,17 @@ const getTurbopackConnections = async (
         results.forEach(({ key, description }) => {
             if (chunks[key]) {
                 chunks[key].description = description || "none";
-                console.log(chalk.green(`[✓] Generated description for ${key}: ${chunks[key].description}`));
+                printMsg(MSG.Run, `[✓] Generated description for ${key}: ${chunks[key].description}`);
             }
         });
     }
 
-    console.log(chalk.green(`[✓] Found ${newChunkCount} turbopack functions`));
+    printMsg(MSG.Run, `[✓] Found ${newChunkCount} turbopack functions`);
 
     if (formats.includes("json")) {
         const chunks_json = JSON.stringify(chunks, null, 2);
         fs.writeFileSync(`${output}.json`, chunks_json);
-        console.log(chalk.green(`[✓] Saved turbopack connections to ${output}.json`));
+        printMsg(MSG.Run, `[✓] Saved turbopack connections to ${output}.json`);
     }
 
     return chunks;

@@ -158,6 +158,7 @@ test.yaml
 analyze.json
 js-recon.db
 report.html
+swagger-jacker-results.json
 js_recon_run_output/
 urls.txt
 extracted/

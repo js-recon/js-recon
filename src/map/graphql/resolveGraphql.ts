@@ -1,8 +1,8 @@
-import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import {
     parse as gqlParse,
     print as gqlPrint,
@@ -184,19 +184,19 @@ const printOperationStandalone = (
  * transport URL in the bundle.
  */
 const resolveGraphql = async (directory: string): Promise<void> => {
-    console.log(chalk.cyan("[i] Scanning for embedded GraphQL operations"));
+    printMsg(MSG.Header, "[i] Scanning for embedded GraphQL operations");
 
     let files: string[];
     try {
         files = fs.readdirSync(directory, { recursive: true, encoding: "utf8" }) as string[];
     } catch {
-        console.error(chalk.red(`[!] Could not read directory: ${directory}`));
+        printMsg(MSG.Err, `[!] Could not read directory: ${directory}`);
         return;
     }
 
     files = files.filter((f) => f.endsWith(".js") || f.endsWith(".mjs"));
     const total = files.length;
-    console.log(chalk.cyan(`[i] Scanning ${total} JS file(s) for GraphQL operations`));
+    printMsg(MSG.Header, `[i] Scanning ${total} JS file(s) for GraphQL operations`);
 
     // Two-phase to handle fragment-only files: first collect ALL fragments
     // across all files, then emit operations with their fragment closures.
@@ -216,10 +216,9 @@ const resolveGraphql = async (directory: string): Promise<void> => {
         const pct = total === 0 ? 100 : Math.floor(((i + 1) * 100) / total);
         if (pct !== lastPct && (pct % 10 === 0 || pct === 100)) {
             const elapsed = ((Date.now() - startTs) / 1000).toFixed(1);
-            console.log(
-                chalk.gray(
-                    `    [scan] ${pct}% (${i + 1}/${total}) ops=${pendingOps.length} fragments=${allFragments.size} elapsed=${elapsed}s`
-                )
+            printMsg(
+                MSG.Info,
+                `    [scan] ${pct}% (${i + 1}/${total}) ops=${pendingOps.length} fragments=${allFragments.size} elapsed=${elapsed}s`
             );
             lastPct = pct;
         }
@@ -297,10 +296,9 @@ const resolveGraphql = async (directory: string): Promise<void> => {
         emitted++;
     }
 
-    console.log(
-        chalk.green(
-            `[✓] GraphQL: emitted ${emitted} operation(s) from ${allFragments.size} fragment(s) and ${pendingOps.length} parsed operation(s)`
-        )
+    printMsg(
+        MSG.Run,
+        `[✓] GraphQL: emitted ${emitted} operation(s) from ${allFragments.size} fragment(s) and ${pendingOps.length} parsed operation(s)`
     );
 };
 

@@ -1,6 +1,6 @@
 import { Widgets } from "blessed";
 import chalk from "chalk";
-import { State } from "../interactive.js";
+import { State } from "./interactive.js";
 
 /**
  * Setup keybindings for the interactive mode.

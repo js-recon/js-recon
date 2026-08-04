@@ -61,4 +61,4 @@ while IFS= read -r src; do
     ln -sf "$src" "$dest"
 done < <(find "$AGENTIC_REPO_PATH" \( -name "CLAUDE.md" -o -path "*/.claude/skills/*" -o -path "*/.claude/agents/*" \) -type f -not -path "*/.git/*")
 
-echo "[claude-sync] synced CLAUDE.md files for branch '$CURRENT_BRANCH'"
+echo "[claude-sync] synced CLAUDE.md / skills / agents files for branch '$CURRENT_BRANCH'"

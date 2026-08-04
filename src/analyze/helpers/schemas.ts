@@ -61,6 +61,7 @@ export const ruleSchema = z.object({
     author: z.string(),
     description: z.string(),
     js_recon_version: z.string(),
+    js_recon_max_version: z.string().optional(),
     tech: z.array(z.enum(["next", "vue", "react", "svelte", "angular", "all"])),
     severity: z.enum(["info", "low", "medium", "high"]),
     type: z.enum(["request", "ast", "cs-mast-s"]),

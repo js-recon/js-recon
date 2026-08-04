@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import { resolveNodeValue, substituteVariablesInString } from "./utils.js";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
@@ -9,6 +8,7 @@ import { getThirdArg } from "./resolveAxios.js";
 import { Node } from "@babel/types";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import * as globals from "../../utility/globals.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Finds the function name that wraps a fetch call.
@@ -141,8 +141,9 @@ const traceFetchFunctionCalls = (
         // Check if this chunk imports our fetch chunk
         if (!callerChunk.imports.includes(fetchChunkId)) continue;
 
-        console.log(
-            chalk.cyan(`    [\u2192] Chunk ${callerChunkId} imports fetch chunk ${fetchChunkId}, tracing calls...`)
+        printMsg(
+            MSG.Header,
+            `    [\u2192] Chunk ${callerChunkId} imports fetch chunk ${fetchChunkId}, tracing calls...`
         );
 
         // Load the caller chunk code
@@ -216,10 +217,9 @@ const traceFetchFunctionCalls = (
         });
 
         if (callArguments.length > 0) {
-            console.log(
-                chalk.green(
-                    `    [\u2713] Found ${callArguments.length} call(s) to ${exportName} in chunk ${callerChunkId}`
-                )
+            printMsg(
+                MSG.Run,
+                `    [\u2713] Found ${callArguments.length} call(s) to ${exportName} in chunk ${callerChunkId}`
             );
             // Return the first argument (usually the body object)
             return callArguments[0];
@@ -287,7 +287,7 @@ const isNextJsFrameworkChunk = (code: string): boolean => {
 };
 
 const resolveFetch = async (chunks: Chunks, directory: string) => {
-    console.log(chalk.cyan("[i] Resolving fetch instances"));
+    printMsg(MSG.Header, "[i] Resolving fetch instances");
 
     for (const chunk of Object.values(chunks)) {
         if (!chunk.containsFetch || !chunk.file) {
@@ -296,7 +296,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
 
         // Skip Next.js framework-internal chunks to avoid noise
         if (isNextJsFrameworkChunk(chunk.code || "")) {
-            console.log(chalk.gray(`    [i] Skipping Next.js framework chunk ${chunk.id}`));
+            printMsg(MSG.Info, `    [i] Skipping Next.js framework chunk ${chunk.id}`);
             continue;
         }
 
@@ -308,7 +308,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
         try {
             fileContent = fs.readFileSync(filePath, "utf-8");
         } catch (error) {
-            console.error(chalk.red(`[!] Could not read file: ${filePath}`));
+            printMsg(MSG.Err, `[!] Could not read file: ${filePath}`);
             continue;
         }
 
@@ -321,7 +321,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                 errorRecovery: true,
             });
         } catch (err) {
-            console.error(chalk.red(`[!] Failed to parse file: ${filePath}. Error: ${err.message}`));
+            printMsg(MSG.Err, `[!] Failed to parse file: ${filePath}. Error: ${err.message}`);
             continue;
         }
 
@@ -366,10 +366,9 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                 }
 
                 if (isFetchCall) {
-                    console.log(
-                        chalk.blue(
-                            `[+] Found fetch call in chunk ${chunk.id} ("${filePath}":${path.node.loc.start.line})`
-                        )
+                    printMsg(
+                        MSG.Info,
+                        `[+] Found fetch call in chunk ${chunk.id} ("${filePath}":${path.node.loc.start.line})`
                     );
                     functionFileLine = path.node.loc.start.line;
                     const args = path.node.arguments;
@@ -393,9 +392,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                         if (typeof url === "string" && (url.includes("[var ") || url.includes("[MemberExpression"))) {
                             const substitutedUrl = substituteVariablesInString(url, chunk.code, chunks, thirdArgName);
                             if (substitutedUrl !== url) {
-                                console.log(
-                                    chalk.cyan(`    [i] Resolved variables in URL: ${url} -> ${substitutedUrl}`)
-                                );
+                                printMsg(MSG.Header, `    [i] Resolved variables in URL: ${url} -> ${substitutedUrl}`);
                                 url = substitutedUrl;
                             }
                         }
@@ -429,9 +426,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                         const varMatch = url.match(/\[var ([^\]]+)\]/);
                                         if (varMatch) {
                                             url = url.replace(varMatch[0], firstArgResolved);
-                                            console.log(
-                                                chalk.cyan(`    [i] Resolved URL from internal caller: ${url}`)
-                                            );
+                                            printMsg(MSG.Header, `    [i] Resolved URL from internal caller: ${url}`);
                                         }
                                     }
                                 }
@@ -462,8 +457,9 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                         !firstArgResolved.startsWith("[")
                                     ) {
                                         url = url.replace(/\[param:[^\]]+\]/g, firstArgResolved);
-                                        console.log(
-                                            chalk.cyan(`    [i] Resolved [param] URL from internal caller: ${url}`)
+                                        printMsg(
+                                            MSG.Header,
+                                            `    [i] Resolved [param] URL from internal caller: ${url}`
                                         );
                                     }
                                 }
@@ -495,10 +491,9 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                                 !callerUrl.startsWith("[error") &&
                                                 (callerUrl.includes("/") || callerUrl.includes("://"))
                                             ) {
-                                                console.log(
-                                                    chalk.cyan(
-                                                        `    [i] Resolved [param] URL from exported caller: ${callerUrl}`
-                                                    )
+                                                printMsg(
+                                                    MSG.Header,
+                                                    `    [i] Resolved [param] URL from exported caller: ${callerUrl}`
                                                 );
                                                 url = callerUrl;
                                             }
@@ -509,7 +504,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                         }
 
                         callUrl = url;
-                        console.log(chalk.green(`    URL: ${url}`));
+                        printMsg(MSG.Run, `    URL: ${url}`);
 
                         if (args.length > 1) {
                             let options = resolveNodeValue(
@@ -525,18 +520,16 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                             // Try to trace fetch function exports for better body resolution
                             const functionName = getFunctionNameForFetchCall(path);
                             if (functionName && chunk.exports && chunk.exports.length > 0) {
-                                console.log(
-                                    chalk.cyan(
-                                        `    [i] Fetch is wrapped in function '${functionName}', checking for exports...`
-                                    )
+                                printMsg(
+                                    MSG.Header,
+                                    `    [i] Fetch is wrapped in function '${functionName}', checking for exports...`
                                 );
 
                                 const exportName = findExportForFunction(fileContent, functionName, chunk.exports);
                                 if (exportName) {
-                                    console.log(
-                                        chalk.cyan(
-                                            `    [i] Function '${functionName}' exported as '${exportName}', tracing calls...`
-                                        )
+                                    printMsg(
+                                        MSG.Header,
+                                        `    [i] Function '${functionName}' exported as '${exportName}', tracing calls...`
                                     );
 
                                     const actualCallArg = traceFetchFunctionCalls(
@@ -551,10 +544,9 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                         // Resolve the actual call argument to get the real body
                                         const resolvedArg = resolveNodeValue(actualCallArg, path.scope, "", "fetch");
                                         if (resolvedArg && typeof resolvedArg === "object") {
-                                            console.log(
-                                                chalk.green(
-                                                    `    [✓] Resolved actual body from caller: ${JSON.stringify(resolvedArg)}`
-                                                )
+                                            printMsg(
+                                                MSG.Run,
+                                                `    [✓] Resolved actual body from caller: ${JSON.stringify(resolvedArg)}`
                                             );
                                             // Update options.body with the resolved value
                                             if (typeof options === "object" && options !== null) {
@@ -596,11 +588,11 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                     options.body = resolvedBody;
                                 }
 
-                                console.log(chalk.green(`    Method: ${options.method || "UNKNOWN"}`));
+                                printMsg(MSG.Run, `    Method: ${options.method || "UNKNOWN"}`);
                                 callMethod = options.method || "UNKNOWN";
                                 if (options.headers)
-                                    console.log(chalk.green(`    Headers: ${JSON.stringify(options.headers)}`));
-                                if (options.body) console.log(chalk.green(`    Body: ${JSON.stringify(options.body)}`));
+                                    printMsg(MSG.Run, `    Headers: ${JSON.stringify(options.headers)}`);
+                                if (options.body) printMsg(MSG.Run, `    Body: ${JSON.stringify(options.body)}`);
                                 callHeaders =
                                     typeof options.headers === "object" && options.headers !== null
                                         ? options.headers
@@ -610,7 +602,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                         ? JSON.stringify(options.body)
                                         : options.body || "";
                             } else {
-                                console.log(chalk.green(`    Options: ${options}`));
+                                printMsg(MSG.Run, `    Options: ${options}`);
                             }
 
                             globals.addOpenapiOutput({
@@ -638,10 +630,9 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                 if (functionName && chunk.exports && chunk.exports.length > 0) {
                                     const exportName = findExportForFunction(fileContent, functionName, chunk.exports);
                                     if (exportName) {
-                                        console.log(
-                                            chalk.cyan(
-                                                `    [i] Fetch is wrapped in function '${functionName}', checking for exports...`
-                                            )
+                                        printMsg(
+                                            MSG.Header,
+                                            `    [i] Fetch is wrapped in function '${functionName}', checking for exports...`
                                         );
                                         const actualCallArg = traceFetchFunctionCalls(
                                             chunk.id,
@@ -667,9 +658,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                                 !callerUrl.startsWith("[error") &&
                                                 (callerUrl.includes("/") || callerUrl.includes("://"))
                                             ) {
-                                                console.log(
-                                                    chalk.cyan(`    [i] Resolved URL from caller: ${callerUrl}`)
-                                                );
+                                                printMsg(MSG.Header, `    [i] Resolved URL from caller: ${callerUrl}`);
                                                 resolvedUrl = callerUrl;
                                             }
                                         }
@@ -677,7 +666,7 @@ const resolveFetch = async (chunks: Chunks, directory: string) => {
                                 }
                             }
 
-                            console.log(chalk.green(`    Method: GET`));
+                            printMsg(MSG.Run, `    Method: GET`);
                             globals.addOpenapiOutput({
                                 url: resolvedUrl,
                                 method: "GET",

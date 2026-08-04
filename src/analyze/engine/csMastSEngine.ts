@@ -1,9 +1,9 @@
-import chalk from "chalk";
 import { cs_mast_init, parseSignature, ParseError } from "@shriyanss/cs-mast";
 import type { CsMastConfig, ScatCategory, AdapterNode } from "@shriyanss/cs-mast";
 import { Chunks } from "../../utility/interfaces.js";
 import { Rule } from "../types/index.js";
 import { EngineOutput } from "../helpers/outputHelper.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Walk all AdapterNode descendants post-order and check if any node's
@@ -57,10 +57,9 @@ const csMastSEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
             const { signature } = step.csMastS;
             const parsed = parseSignature(signature);
             if (!parsed) {
-                console.log(
-                    chalk.yellow(
-                        `[!] cs-mast-s step "${step.name}" in rule "${rule.id}" has an invalid signature — skipping`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] cs-mast-s step "${step.name}" in rule "${rule.id}" has an invalid signature — skipping`
                 );
                 continue;
             }
@@ -105,13 +104,13 @@ const csMastSEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
             const message = `[+] "${rule.name}" found in chunk ${chunk.id}`;
 
             if (rule.severity === "info") {
-                console.log(chalk.cyan(message));
+                printMsg(MSG.Header, message);
             } else if (rule.severity === "low") {
-                console.log(chalk.yellow(message));
+                printMsg(MSG.Warn, message);
             } else if (rule.severity === "medium") {
-                console.log(chalk.magenta(message));
+                printMsg(MSG.Info, message);
             } else if (rule.severity === "high") {
-                console.error(chalk.red(message));
+                printMsg(MSG.Err, message);
             }
 
             findings.push({

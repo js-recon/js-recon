@@ -15,7 +15,6 @@
  *   5. Inlines _export_sfc as a local helper when used
  */
 
-import chalk from "chalk";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import { NodePath } from "@babel/traverse";
@@ -26,6 +25,7 @@ import path from "path";
 import { Chunks } from "../../utility/interfaces.js";
 import { analyzeVueIndexChunk, VueExportMap, VUE_PUBLIC_API } from "./vendor-analyze-vue.js";
 import { applyModuleCleanupPasses } from "../react/transform.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const traverse = (_traverse as any).default ?? _traverse;
 const generate = (_generate as any).default ?? _generate;
@@ -163,10 +163,11 @@ export async function refactorVueVite(chunks: Chunks): Promise<Record<string, st
         if (isMainIndexChunk(chunk.file ?? id, code)) {
             indexChunkId = id;
             indexFilename = chunk.file ?? id;
-            console.log(chalk.cyan(`[i] Analysing Vue index chunk: ${id}`));
+            printMsg(MSG.Header, `[i] Analysing Vue index chunk: ${id}`);
             vueExportMap = analyzeVueIndexChunk(code);
-            console.log(
-                chalk.cyan(`[i] Mapped ${vueExportMap.size} Vue export aliases: `) +
+            printMsg(
+                MSG.Header,
+                `[i] Mapped ${vueExportMap.size} Vue export aliases: ` +
                     Array.from(vueExportMap.entries())
                         .map(([a, c]) => `${a}→${c}`)
                         .join(", ")
@@ -176,7 +177,7 @@ export async function refactorVueVite(chunks: Chunks): Promise<Record<string, st
     }
 
     if (vueExportMap.size === 0) {
-        console.log(chalk.yellow("[~] No Vue index chunk found — processing all chunks as standalone"));
+        printMsg(MSG.Warn, "[~] No Vue index chunk found — processing all chunks as standalone");
     }
 
     // Step 2: Process page chunks.
@@ -187,7 +188,7 @@ export async function refactorVueVite(chunks: Chunks): Promise<Record<string, st
         if (!rawCode.trim()) continue;
 
         const filename = chunk.file ?? id;
-        console.log(chalk.cyan(`[i] Processing Vue (vite) chunk: ${id}`));
+        printMsg(MSG.Header, `[i] Processing Vue (vite) chunk: ${id}`);
 
         let ast: t.File;
         try {
@@ -197,7 +198,7 @@ export async function refactorVueVite(chunks: Chunks): Promise<Record<string, st
                 errorRecovery: true,
             });
         } catch {
-            console.log(chalk.yellow(`[!] Failed to parse chunk ${id} — skipping`));
+            printMsg(MSG.Warn, `[!] Failed to parse chunk ${id} — skipping`);
             continue;
         }
 

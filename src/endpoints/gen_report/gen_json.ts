@@ -1,6 +1,6 @@
 import fs from "fs";
-import chalk from "chalk";
 import iterate_n_store from "./utility/iterate_n_store.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Generates a JSON report from a list of URLs.
@@ -17,7 +17,7 @@ const gen_json = async (url: string, hrefs: string[], output: string) => {
     const finalJSON = JSON.stringify(result, null, 2);
     fs.writeFileSync(`${output}.json`, finalJSON);
 
-    console.log(chalk.green(`[✓] Generated JSON report at ${output}.json`));
+    printMsg(MSG.Run, `[✓] Generated JSON report at ${output}.json`);
     return finalJSON;
 };
 

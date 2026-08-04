@@ -1,3 +1,5 @@
+import { printMsg, MSG } from "./printMsg.js";
+
 /**
  * Resolves a relative path with a given base URL.
  *
@@ -33,7 +35,7 @@ const resolvePath = (url: string, path: string) => {
         const resolvedUrl = new URL(path, url);
         return resolvedUrl.href;
     } catch (e) {
-        console.error(`Error resolving path "${path}" with base URL "${url}": ${e.message}`);
+        printMsg(MSG.Err, `Error resolving path "${path}" with base URL "${url}": ${e.message}`);
         // Rethrowing the error to signal failure to the caller.
         // Alternative error handling (e.g., returning null) can be implemented if required.
         throw e;

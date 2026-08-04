@@ -1,8 +1,8 @@
-import chalk from "chalk";
 import { loadConfig } from "./config.js";
 import { startCli } from "./cli.js";
 import { runChatOneShot } from "./chatOneShot.js";
 import { startMcpServer } from "./mcpServer.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 export interface McpOptions {
     cli: boolean;
@@ -29,7 +29,7 @@ const mcp = async (opts: McpOptions): Promise<void> => {
         return;
     }
 
-    console.log(chalk.cyan("[i] Loading 'MCP' module"));
+    printMsg(MSG.Header, "[i] Loading 'MCP' module");
     const config = loadConfig(opts.configFile);
 
     if (opts.chat && opts.chat.length > 0) {
@@ -48,11 +48,11 @@ const mcp = async (opts: McpOptions): Promise<void> => {
         return;
     }
 
-    console.error(chalk.yellow("[!] MCP module requires a mode flag."));
-    console.log(chalk.cyan("[i] Usage:"));
-    console.log("    js-recon mcp --cli                  Interactive TUI");
-    console.log('    js-recon mcp -c "<prompt>"          One-shot chat');
-    console.log("    js-recon mcp --server               Model Context Protocol server (stdio)");
+    printMsg(MSG.Warn, "[!] MCP module requires a mode flag.");
+    printMsg(MSG.Header, "[i] Usage:");
+    printMsg(MSG.Plain, "    js-recon mcp --cli                  Interactive TUI");
+    printMsg(MSG.Plain, '    js-recon mcp -c "<prompt>"          One-shot chat');
+    printMsg(MSG.Plain, "    js-recon mcp --server               Model Context Protocol server (stdio)");
 };
 
 export default mcp;

@@ -16,6 +16,7 @@ import { detectIntent, handleToolExecution } from "./intent.js";
 import { getUsableAccessToken } from "./claudeCodeCreds.js";
 import { getJobManager, buildJobContext, JobSummary } from "./jobs.js";
 import { loadSkills, findSkill, parseSkillArgs, renderSkill } from "./skills.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 export const SYSTEM_PROMPT = `You are js-recon MCP, an AI assistant for JavaScript reconnaissance and security analysis.
 You help users analyze websites by running js-recon modules against target URLs.
@@ -55,7 +56,7 @@ interface CliSession {
  * Prompts user to configure MCP settings interactively.
  */
 const promptConfiguration = async (): Promise<{ provider: "openai" | "anthropic"; apiKey: string; model: string }> => {
-    console.error(chalk.yellow("\n[!] No API key configured. Let's set up MCP.\n"));
+    printMsg(MSG.Warn, "\n[!] No API key configured. Let's set up MCP.\n");
 
     const { provider } = await inquirer.prompt([
         {
@@ -121,7 +122,7 @@ export const startCli = async (
             providerName = "anthropic";
             model = cliModel || getDefaultModel("anthropic");
             provider = createAnthropicOAuthProvider(token, model);
-            console.log(chalk.cyan("[i] Using existing Claude Code credentials (Anthropic OAuth)."));
+            printMsg(MSG.Header, "[i] Using existing Claude Code credentials (Anthropic OAuth).");
         }
     }
 
@@ -139,10 +140,10 @@ export const startCli = async (
             config.anthropic_api_key = apiKey;
         }
         saveConfig(config);
-        console.log(chalk.green("\n[✓] Configuration saved to ~/.js-recon/mcp.yaml\n"));
+        printMsg(MSG.Run, "\n[✓] Configuration saved to ~/.js-recon/mcp.yaml\n");
     } else if (!provider && cliApiKey && !cliModel) {
         model = getDefaultModel(providerName);
-        console.log(chalk.cyan(`[i] Auto-detected model: ${model}\n`));
+        printMsg(MSG.Header, `[i] Auto-detected model: ${model}\n`);
     }
 
     if (!provider) {
@@ -189,7 +190,7 @@ export const startCli = async (
     process.on("SIGINT", () => {
         try {
             if (session.currentAbortController) {
-                console.error(chalk.yellow("\n\n[!] Stopping current process...\n"));
+                printMsg(MSG.Warn, "\n\n[!] Stopping current process...\n");
                 session.currentAbortController.abort();
                 session.currentAbortController = undefined;
                 ctrlCCount = 0;
@@ -198,38 +199,38 @@ export const startCli = async (
             }
             const cancelled = getJobManager().cancelMostRecentRunning();
             if (cancelled) {
-                console.error(chalk.yellow(`\n\n[!] Cancelling job ${cancelled.id} (${cancelled.name})...\n`));
+                printMsg(MSG.Warn, `\n\n[!] Cancelling job ${cancelled.id} (${cancelled.name})...\n`);
                 ctrlCCount = 0;
                 reprompt();
                 return;
             }
             ctrlCCount++;
             if (ctrlCCount === 1) {
-                console.error(chalk.yellow("\n\n[!] Press Ctrl-C again to exit, or type /exit\n"));
+                printMsg(MSG.Warn, "\n\n[!] Press Ctrl-C again to exit, or type /exit\n");
                 setTimeout(() => {
                     ctrlCCount = 0;
                 }, 2000);
                 reprompt();
             } else {
-                console.log(chalk.yellow("\nGoodbye!\n"));
+                printMsg(MSG.Warn, "\nGoodbye!\n");
                 if (session.configChanged) {
-                    console.log(chalk.cyan("[i] Config changes were made. Use /save to persist them.\n"));
+                    printMsg(MSG.Header, "[i] Config changes were made. Use /save to persist them.\n");
                 }
                 rl.close();
                 process.exit(0);
             }
         } catch (err: any) {
-            console.error(chalk.red(`\n[!] SIGINT handler error: ${err?.message || err}\n`));
+            printMsg(MSG.Err, `\n[!] SIGINT handler error: ${err?.message || err}\n`);
         }
     });
 
-    console.log(chalk.bold.cyan("\n  ╔══════════════════════════════════════╗"));
-    console.log(chalk.bold.cyan("  ║         js-recon MCP CLI             ║"));
-    console.log(chalk.bold.cyan("  ╚══════════════════════════════════════╝\n"));
-    console.log(chalk.gray(`  Provider: ${providerName} | Model: ${model}`));
-    console.log(chalk.gray(`  Working directory: ${launchCwd}`));
-    console.log(chalk.gray(`  Artifacts are preserved across runs.`));
-    console.log(chalk.gray(`  Type /help for commands, or chat naturally.\n`));
+    printMsg(MSG.Header, "\n  ╔══════════════════════════════════════╗");
+    printMsg(MSG.Header, "  ║         js-recon MCP CLI             ║");
+    printMsg(MSG.Header, "  ╚══════════════════════════════════════╝\n");
+    printMsg(MSG.Info, `  Provider: ${providerName} | Model: ${model}`);
+    printMsg(MSG.Info, `  Working directory: ${launchCwd}`);
+    printMsg(MSG.Info, `  Artifacts are preserved across runs.`);
+    printMsg(MSG.Info, `  Type /help for commands, or chat naturally.\n`);
 
     // Announce job completions between prompts.
     getJobManager().on("done", (job: JobSummary) => {
@@ -257,12 +258,12 @@ export const startCli = async (
             const response = await sess.provider.chat(sess.history);
             sess.usage.addUsage(response.promptTokens, response.completionTokens);
             sess.history.push({ role: "assistant", content: response.content });
-            console.log(chalk.white("\n" + response.content + "\n"));
+            printMsg(MSG.Plain, "\n" + response.content + "\n");
         } catch (err: any) {
             if (err.name !== "AbortError") {
-                console.error(chalk.red(`\n[!] ${err.message}\n`));
+                printMsg(MSG.Err, `\n[!] ${err.message}\n`);
             } else {
-                console.error(chalk.yellow("\n[!] Response generation stopped.\n"));
+                printMsg(MSG.Warn, "\n[!] Response generation stopped.\n");
             }
         } finally {
             clearInterval(spinnerInterval);
@@ -300,12 +301,12 @@ export const startCli = async (
                             session.providerName,
                             resolveApiKey(session.providerName, session.cliApiKey, config)
                         );
-                        console.log(chalk.cyan(`\n  Available models for ${session.providerName}:\n`));
+                        printMsg(MSG.Header, `\n  Available models for ${session.providerName}:\n`);
                         models.forEach((m) => {
                             const marker = m === session.model ? chalk.green(" ← current") : "";
-                            console.log(`    ${m}${marker}`);
+                            printMsg(MSG.Plain, `    ${m}${marker}`);
                         });
-                        console.log("");
+                        printMsg(MSG.Plain, "");
                     } else if (cmdResult.output.startsWith("__SWITCH_MODEL__")) {
                         const newModel = cmdResult.output.replace("__SWITCH_MODEL__", "");
                         session.model = newModel;
@@ -317,13 +318,13 @@ export const startCli = async (
                         session.usage = new SessionUsage(newModel);
                         session.config.model = newModel;
                         session.configChanged = true;
-                        console.log(chalk.green(`\n[✓] Switched model to: ${newModel}\n`));
+                        printMsg(MSG.Run, `\n[✓] Switched model to: ${newModel}\n`);
                     } else if (cmdResult.output.startsWith("__SWITCH_PROVIDER__")) {
                         const newProvider = cmdResult.output.replace("__SWITCH_PROVIDER__", "") as
                             "openai" | "anthropic";
                         const newKey = resolveApiKey(newProvider, session.cliApiKey, config);
                         if (!newKey) {
-                            console.error(chalk.red(`\n[!] No API key configured for ${newProvider}.\n`));
+                            printMsg(MSG.Err, `\n[!] No API key configured for ${newProvider}.\n`);
                         } else {
                             session.providerName = newProvider;
                             const autoModel = getDefaultModel(newProvider);
@@ -333,13 +334,13 @@ export const startCli = async (
                             session.config.provider = newProvider;
                             session.config.model = autoModel;
                             session.configChanged = true;
-                            console.log(chalk.green(`\n[✓] Switched provider to: ${newProvider}\n`));
-                            console.log(chalk.cyan(`[i] Auto-selected model: ${autoModel}\n`));
+                            printMsg(MSG.Run, `\n[✓] Switched provider to: ${newProvider}\n`);
+                            printMsg(MSG.Header, `[i] Auto-selected model: ${autoModel}\n`);
                         }
                     } else if (cmdResult.output === "__SAVE_CONFIG__") {
                         saveConfig(session.config);
                         session.configChanged = false;
-                        console.log(chalk.green("\n[✓] Configuration saved to ~/.js-recon/mcp.yaml\n"));
+                        printMsg(MSG.Run, "\n[✓] Configuration saved to ~/.js-recon/mcp.yaml\n");
                     } else if (cmdResult.output.startsWith("__INVOKE_SKILL__")) {
                         const raw = cmdResult.output.replace("__INVOKE_SKILL__", "").trim();
                         const spaceIdx = raw.indexOf(" ");
@@ -347,18 +348,18 @@ export const startCli = async (
                         const argsStr = spaceIdx === -1 ? "" : raw.substring(spaceIdx + 1);
                         const skill = findSkill(skillName);
                         if (!skill) {
-                            console.error(chalk.red(`\n[!] Skill not found: ${skillName}\n`));
+                            printMsg(MSG.Err, `\n[!] Skill not found: ${skillName}\n`);
                             prompt();
                             return;
                         }
                         const parsed = parseSkillArgs(argsStr, skill);
                         const rendered = renderSkill(skill, parsed);
                         if (!rendered.ok) {
-                            console.error(chalk.red(`\n[!] ${rendered.error}\n`));
+                            printMsg(MSG.Err, `\n[!] ${rendered.error}\n`);
                             prompt();
                             return;
                         }
-                        console.log(chalk.cyan(`\n[i] Invoking skill: ${skillName}\n`));
+                        printMsg(MSG.Header, `\n[i] Invoking skill: ${skillName}\n`);
                         const skillMessage = rendered.prompt!;
                         const jobContext = buildJobContext(2048);
                         session.history.push({
@@ -369,7 +370,7 @@ export const startCli = async (
                         prompt();
                         return;
                     } else {
-                        console.log(cmdResult.output);
+                        printMsg(MSG.Plain, cmdResult.output);
                     }
                 }
 
@@ -380,7 +381,7 @@ export const startCli = async (
 
                 if (cmdResult.exit) {
                     if (session.configChanged) {
-                        console.log(chalk.cyan("[i] Config changes were made. Use /save to persist them.\n"));
+                        printMsg(MSG.Header, "[i] Config changes were made. Use /save to persist them.\n");
                     }
                     rl.close();
                     return;
@@ -399,13 +400,13 @@ export const startCli = async (
                     if (toolOutput) {
                         // Echo to the user immediately so they see what happened, even if the LLM
                         // call later fails (e.g. quota / network).
-                        console.log(chalk.cyan(`\n${toolOutput}\n`));
+                        printMsg(MSG.Header, `\n${toolOutput}\n`);
                         toolContext = `\n\n[Tool Output - ${intent.action}]:\n${toolOutput}`;
                     } else if ((intent.action === "lazyload" || intent.action === "run") && !intent.url) {
                         toolContext = "\n\n[System: No URL detected in the message. Ask the user for the target URL.]";
                     }
                 } catch (err: any) {
-                    console.error(chalk.red(`\n[!] Tool error: ${err.message}\n`));
+                    printMsg(MSG.Err, `\n[!] Tool error: ${err.message}\n`);
                 }
             }
 

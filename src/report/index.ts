@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import initReportDb from "./utility/initReportDb.js";
 import fs from "fs";
 import { Chunks } from "../utility/interfaces.js";
@@ -9,6 +8,9 @@ import { populateAnalysisFindings } from "./utility/populateDb/populateAnalysisF
 import populateEndpoints from "./utility/populateDb/populateEndpoints.js";
 import populateMappedOpenapi from "./utility/populateDb/populateMappedOpenapi.js";
 import genHtml from "./utility/genHtml.js";
+import path from "path";
+import { runSwaggerJacker } from "./swaggerJacker.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Generates comprehensive HTML reports from analysis results.
@@ -23,6 +25,9 @@ import genHtml from "./utility/genHtml.js";
  * @param endpointsJsonFilePath - Path to the endpoints JSON file
  * @param mappedOpenapiJsonFilePath - Path to the mapped OpenAPI specification file
  * @param reportFileName - Base filename for the generated HTML report (without extension)
+ * @param swaggerJacker - Whether to run sj (swagger-jacker) against the mapped OpenAPI spec
+ * @param sjBin - Path/name of the sj binary
+ * @param sjArgs - Extra arguments passed through to `sj automate`
  * @returns Promise that resolves when report generation is complete
  */
 const report = async (
@@ -31,14 +36,17 @@ const report = async (
     analyzeJsonFilePath: string | undefined,
     endpointsJsonFilePath: string | undefined,
     mappedOpenapiJsonFilePath: string | undefined,
-    reportFileName: string | undefined
+    reportFileName: string | undefined,
+    swaggerJacker: boolean = false,
+    sjBin: string = "sj",
+    sjArgs: string = ""
 ): Promise<void> => {
-    console.log(chalk.cyan("[i] Running 'report' module"));
+    printMsg(MSG.Header, "[i] Running 'report' module");
 
     // check if db exists. if not, init
     if (!fs.existsSync(sqliteDbPath)) {
         await initReportDb(sqliteDbPath);
-        console.log(chalk.green("[✓] Report database initialized successfully"));
+        printMsg(MSG.Run, "[✓] Report database initialized successfully");
     }
 
     const db = new Database(sqliteDbPath);
@@ -70,6 +78,20 @@ const report = async (
     // finally, generate HTML report
     if (reportFileName) {
         await genHtml(`${reportFileName}.html`, db);
+    }
+
+    // optionally, run sj (swagger-jacker) against the mapped OpenAPI spec
+    if (swaggerJacker) {
+        if (mappedOpenapiJsonFilePath) {
+            await runSwaggerJacker(
+                mappedOpenapiJsonFilePath,
+                sjBin,
+                sjArgs,
+                path.dirname(path.resolve(mappedOpenapiJsonFilePath))
+            );
+        } else {
+            printMsg(MSG.Warn, "[!] --sj was set but no mapped OpenAPI JSON file was provided, skipping");
+        }
     }
 };
 

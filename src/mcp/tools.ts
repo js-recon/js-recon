@@ -1,10 +1,10 @@
 import fs from "fs";
 import path from "path";
-import chalk from "chalk";
 import lazyLoad from "../lazyLoad/index.js";
 import run from "../run/index.js";
 import * as globalsUtil from "../utility/globals.js";
 import configureSandbox from "../utility/configureSandbox.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 export interface ToolResult {
     success: boolean;
@@ -51,7 +51,7 @@ export const runLazyload = async (
     sourcemapDir: string = "extracted"
 ): Promise<ToolResult> => {
     try {
-        console.log(chalk.cyan(`\n[mcp] Running lazyload against ${url}...`));
+        printMsg(MSG.Header, `\n[mcp] Running lazyload against ${url}...`);
         await lazyLoad(
             url,
             outputDir,
@@ -83,7 +83,7 @@ export const runFullPipeline = async (
     sourcemapDir: string = "extracted"
 ): Promise<ToolResult> => {
     try {
-        console.log(chalk.cyan(`\n[mcp] Running full pipeline against ${url}...`));
+        printMsg(MSG.Header, `\n[mcp] Running full pipeline against ${url}...`);
 
         const cmd = {
             url,
@@ -92,6 +92,7 @@ export const runFullPipeline = async (
             scope: "*",
             threads: String(threads),
             proxyConfig: ".proxy_config.json",
+            ignoreProxyEnv: false,
             cacheFile: ".resp_cache.json",
             disableCache: false,
             yes: false,
@@ -100,7 +101,7 @@ export const runFullPipeline = async (
             aiThreads: "5",
             aiProvider: "openai",
             aiEndpoint: undefined,
-            openaiApiKey: undefined,
+            aiApiKey: undefined,
             model: "gpt-4o-mini",
             mapOpenapiChunkTag: false,
             timeout: "30000",

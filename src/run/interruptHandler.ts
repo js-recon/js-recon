@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import readline from "readline";
+import { lockPrintMsg, unlockPrintMsg } from "../utility/printMsg.js";
 
 let isBatchMode = false;
 let handling = false;
@@ -15,6 +16,11 @@ const showMenu = async (): Promise<void> => {
 
     // Temporarily remove so a second Ctrl-C falls through to default exit
     process.removeListener("SIGINT", sigintHandler);
+
+    // Discard any printMsg() output from the step that was interrupted while the
+    // menu is up — otherwise its still-running promise (Promise.race doesn't cancel
+    // the loser) interleaves stray output with the menu/prompt.
+    lockPrintMsg();
 
     process.stdout.write("\n");
     console.error(chalk.yellow("[!] Interrupted. What would you like to do?"));
@@ -56,6 +62,7 @@ const showMenu = async (): Promise<void> => {
                 console.error(chalk.yellow("[!] Invalid choice. Continuing..."));
             }
 
+            unlockPrintMsg();
             resolve();
         });
     });
@@ -111,4 +118,17 @@ export const shouldSkipTarget = (): boolean => skipTarget;
 
 export const resetSkipTarget = (): void => {
     skipTarget = false;
+};
+
+/**
+ * Programmatic equivalent of choosing "skip the current target" from the SIGINT
+ * menu — used by the web dashboard's skip button (../dashboard/server.ts) so it
+ * can cancel the in-flight target without going through the terminal prompt.
+ */
+export const requestSkipCurrentTarget = (): void => {
+    skipTarget = true;
+    if (skipStepResolver) {
+        skipStepResolver();
+        skipStepResolver = null;
+    }
 };

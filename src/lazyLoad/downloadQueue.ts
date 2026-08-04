@@ -8,6 +8,7 @@ import { getScope } from "./globals.js";
 import { progressLog, progressError, progressWarn } from "../utility/progressLog.js";
 import { getDownloadedAssetKind, readDownloadedAssetResponse } from "./downloadResponse.js";
 import { getSanitizedAssetFilename, resolveAssetOutputDirectory } from "./outputPath.js";
+import * as globalsUtil from "../utility/globals.js";
 
 export interface DownloadQueueOptions {
     /** Called whenever unique work is queued or a URL finishes processing. */
@@ -326,7 +327,10 @@ export class DownloadQueue {
                 fs.writeFileSync(filePath, formatted);
             } catch (writeErr) {
                 this.recordFailure("write");
-                this.reportError(chalk.red(`[!] Failed to write file: ${filePath} : ${writeErr}`));
+                if (globalsUtil.getVerbose()) {
+                    const shortErr = String(writeErr).split("\n")[0];
+                    this.reportError(chalk.red(`[!] Failed to write file: ${filePath} : ${shortErr}`));
+                }
                 return;
             }
             this.downloadCount++;

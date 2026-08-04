@@ -3,11 +3,11 @@ import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import execFunc from "../../utility/runSandboxed.js";
 import makeRequest from "../../utility/makeReq.js";
-import chalk from "chalk";
 import inquirer from "inquirer";
 import t from "@babel/types";
 import resolvePath from "../../utility/resolvePath.js";
 import * as globals from "../../utility/globals.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 export type ChunkBuilderFunction = {
     name: string;
@@ -72,7 +72,7 @@ const nuxt_astParse = async (url: string) => {
     const functions = extractChunkBuilderFunctions(body);
 
     if (functions.length === 0) {
-        console.error(chalk.red("[!] Error parsing JS file: ", url));
+        printMsg(MSG.Err, `[!] Error parsing JS file: ${url}`);
         return filesFound;
     }
 
@@ -85,14 +85,14 @@ const nuxt_astParse = async (url: string) => {
             errorRecovery: true,
         });
     } catch (error) {
-        console.error(chalk.red("[!] Error parsing JS file: ", url));
+        printMsg(MSG.Err, `[!] Error parsing JS file: ${url}`);
         return filesFound;
     }
 
     for (const func of functions) {
         {
-            console.log(chalk.green(`[✓] Found JS chunk having the following source:`));
-            console.log(chalk.yellow(func.source));
+            printMsg(MSG.Run, `[✓] Found JS chunk having the following source:`);
+            printMsg(MSG.Warn, func.source);
 
             let user_verified;
             if (!globals.getYes()) {
@@ -113,9 +113,9 @@ const nuxt_astParse = async (url: string) => {
                 user_verified = true;
             }
             if (user_verified === true) {
-                console.log(chalk.cyan("[i] Proceeding with the selected function to fetch files"));
+                printMsg(MSG.Header, "[i] Proceeding with the selected function to fetch files");
             } else {
-                console.error(chalk.red("[!] Not executing function."));
+                printMsg(MSG.Err, "[!] Not executing function.");
                 continue;
             }
             // get the value of the unknown vars
@@ -194,7 +194,7 @@ const nuxt_astParse = async (url: string) => {
                     }
                 }
             } catch (error) {
-                console.error(chalk.red("[!] Error executing function: ", error));
+                printMsg(MSG.Err, `[!] Error executing function: ${error}`);
             }
 
             if (js_paths.length > 0) {
@@ -208,7 +208,7 @@ const nuxt_astParse = async (url: string) => {
     }
 
     if (filesFound.length > 0) {
-        console.log(chalk.green(`[✓] Found ${filesFound.length} JS chunks`));
+        printMsg(MSG.Run, `[✓] Found ${filesFound.length} JS chunks`);
     }
 
     return filesFound;

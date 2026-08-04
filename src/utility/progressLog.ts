@@ -1,4 +1,5 @@
 import type { Options, SingleBar } from "cli-progress";
+import { printMsg, MSG } from "./printMsg.js";
 
 interface BarLogger {
     log(data: string): void;
@@ -104,7 +105,7 @@ export const progressLog = (message: string): void => {
     if (activeBarLogger) {
         activeBarLogger.log(message + "\n");
     } else {
-        console.log(message);
+        printMsg(MSG.Plain, message);
     }
 };
 
@@ -113,7 +114,7 @@ export const progressError = (message: string): void => {
     if (activeBarLogger) {
         activeBarLogger.log(message + "\n");
     } else {
-        console.error(message);
+        printMsg(MSG.Err, message);
     }
 };
 
@@ -122,6 +123,6 @@ export const progressWarn = (message: string): void => {
     if (activeBarLogger) {
         activeBarLogger.log(message + "\n");
     } else {
-        console.warn(message);
+        printMsg(MSG.Warn, message);
     }
 };

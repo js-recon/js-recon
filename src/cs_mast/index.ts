@@ -2,7 +2,7 @@ import { cs_mast_init, ParseError, buildSignatureFromConfig } from "@shriyanss/c
 import type { CsMastConfig, ScatCategory } from "@shriyanss/cs-mast";
 import * as fs from "fs";
 import * as path from "path";
-import chalk from "chalk";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 const CS_MAST_CONFIG: CsMastConfig = {
     hash: "sha256",
@@ -105,7 +105,7 @@ export default async (
     permConcurrency: number = 0
 ): Promise<void> => {
     if (collisionOutput && !["json", "csv"].includes(collisionFormat)) {
-        console.log(chalk.red(`[!] Invalid format: "${collisionFormat}". Use "json" or "csv".`));
+        printMsg(MSG.Err, `[!] Invalid format: "${collisionFormat}". Use "json" or "csv".`);
         process.exit(1);
     }
 
@@ -121,7 +121,7 @@ export default async (
     }
 
     if (!fs.existsSync(outputDir)) {
-        console.log(chalk.red(`[!] Output directory not found: ${outputDir}`));
+        printMsg(MSG.Err, `[!] Output directory not found: ${outputDir}`);
         process.exit(1);
     }
 
@@ -140,21 +140,21 @@ export default async (
         : [];
     const activeConfig: CsMastConfig = { ...CS_MAST_CONFIG, scat: activeScat, sinc: activeSinc };
 
-    console.log(chalk.cyan(`[*] Scanning JS files in: ${outputDir}`));
+    printMsg(MSG.Header, `[*] Scanning JS files in: ${outputDir}`);
     const jsFiles = findJsFiles(outputDir);
-    console.log(chalk.cyan(`[*] Found ${jsFiles.length} JS file(s)`));
+    printMsg(MSG.Header, `[*] Found ${jsFiles.length} JS file(s)`);
 
     // --all-scat-permutations mode
     if (allPermutations) {
         if (!permOutput) {
-            console.log(chalk.red("[!] --perm-output <dir> is required with --all-scat-permutations"));
+            printMsg(MSG.Err, "[!] --perm-output <dir> is required with --all-scat-permutations");
             process.exit(1);
         }
         if (!fs.existsSync(permOutput)) fs.mkdirSync(permOutput, { recursive: true });
         const subsets = allScatSubsets();
         const concurrency =
             permConcurrency > 0 ? permConcurrency : Math.max(1, Math.floor(require("os").cpus().length / 2));
-        console.log(chalk.cyan(`[*] Running ${subsets.length} scat permutations (concurrency: ${concurrency})`));
+        printMsg(MSG.Header, `[*] Running ${subsets.length} scat permutations (concurrency: ${concurrency})`);
         let done = 0;
         for (let i = 0; i < subsets.length; i += concurrency) {
             const batch = subsets.slice(i, i + concurrency);
@@ -166,7 +166,7 @@ export default async (
             done += batch.length;
             process.stdout.write(`\r[*] ${done}/${subsets.length} permutations done`);
         }
-        console.log(chalk.green(`\n[+] All permutations written to: ${permOutput}`));
+        printMsg(MSG.Run, `\n[+] All permutations written to: ${permOutput}`);
         return;
     }
 
@@ -186,13 +186,13 @@ export default async (
             parsed++;
         } catch (e) {
             if (e instanceof ParseError) {
-                console.log(chalk.yellow(`[!] Skipping (parse error): ${file}`));
+                printMsg(MSG.Warn, `[!] Skipping (parse error): ${file}`);
             }
             skipped++;
         }
     }
 
-    console.log(chalk.green(`[+] Processed ${parsed} file(s), skipped ${skipped}, unique hashes: ${sigMap.size}`));
+    printMsg(MSG.Run, `[+] Processed ${parsed} file(s), skipped ${skipped}, unique hashes: ${sigMap.size}`);
 
     if (!collisionTable && !collisionOutput) return;
 
@@ -202,22 +202,20 @@ export default async (
         .map(([signature, files]) => ({ signature, count: files.length, files }));
 
     if (collisions.length === 0) {
-        console.log(chalk.yellow(`[!] No collisions found with --min-collisions ${minCollisions}`));
+        printMsg(MSG.Warn, `[!] No collisions found with --min-collisions ${minCollisions}`);
         return;
     }
 
     if (collisionTable) {
-        console.log(
-            chalk.green(`\n[+] ${collisions.length} collision group(s) found (min-collisions: ${minCollisions}):\n`)
-        );
+        printMsg(MSG.Run, `\n[+] ${collisions.length} collision group(s) found (min-collisions: ${minCollisions}):\n`);
 
         const sigColWidth = 60;
         const countColWidth = 7;
         const header = "Signature".padEnd(sigColWidth) + "Count".padEnd(countColWidth) + "Files";
         const separator = "─".repeat(sigColWidth) + "─".repeat(countColWidth) + "─".repeat(40);
 
-        console.log(chalk.bold(header));
-        console.log(separator);
+        printMsg(MSG.Plain, header);
+        printMsg(MSG.Plain, separator);
 
         for (const entry of collisions) {
             // Truncate at the hash boundary: show params + first 12 hex chars
@@ -226,7 +224,7 @@ export default async (
                     ? entry.signature.slice(0, sigColWidth - 4) + "..."
                     : entry.signature;
             const fileList = entry.files.join(", ");
-            console.log(truncated.padEnd(sigColWidth) + String(entry.count).padEnd(countColWidth) + fileList);
+            printMsg(MSG.Plain, truncated.padEnd(sigColWidth) + String(entry.count).padEnd(countColWidth) + fileList);
         }
     }
 
@@ -242,5 +240,5 @@ export default async (
         fs.writeFileSync(collisionOutput, rows.join("\n"));
     }
 
-    console.log(chalk.green(`[+] Collision data written to: ${collisionOutput}`));
+    printMsg(MSG.Run, `[+] Collision data written to: ${collisionOutput}`);
 };

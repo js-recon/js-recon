@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import parser from "@babel/parser";
@@ -7,6 +6,7 @@ import secrets from "./secrets.js";
 import permutate from "./permutate.js";
 import openapi from "./openapi.js";
 import { runTrufflehog } from "./trufflehog.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Recursively extracts all string literals from a given AST node.
@@ -78,15 +78,15 @@ const strings = async (
     openapi_option: boolean,
     trufflehog: boolean = false
 ): Promise<undefined> => {
-    console.log(chalk.cyan("[i] Loading 'Strings' module"));
+    printMsg(MSG.Header, "[i] Loading 'Strings' module");
 
     // check if the directory exists
     if (!fs.existsSync(directory)) {
-        console.error(chalk.red("[!] Directory does not exist"));
+        printMsg(MSG.Err, "[!] Directory does not exist");
         process.exit(15);
     }
 
-    console.log(chalk.cyan(`[i] Scanning ${directory} directory`));
+    printMsg(MSG.Header, `[i] Scanning ${directory} directory`);
 
     // get all files in the directory and sub-directories
     const files = fs.readdirSync(directory, {
@@ -109,7 +109,7 @@ const strings = async (
         }
     }
 
-    console.log(chalk.cyan(`[i] Found ${js_files_path.length} JS files`));
+    printMsg(MSG.Header, `[i] Found ${js_files_path.length} JS files`);
 
     // read all JS files
     let all_strings = {};
@@ -149,7 +149,10 @@ const strings = async (
         } else {
             const fileContent = fs.readFileSync(file, "utf-8");
 
-            // parse the file contents with babel
+            // parse the file contents with babel. errorRecovery only recovers from
+            // certain error classes — a file that isn't valid JS at all (e.g. JSON-LD
+            // or speculation-rules content saved with a .js extension) still throws.
+            // One bad file must not abort extraction for every other file.
             let ast;
             try {
                 ast = parser.parse(fileContent, {
@@ -158,7 +161,7 @@ const strings = async (
                     errorRecovery: true,
                 });
             } catch (err) {
-                console.error(chalk.yellow(`[!] Skipping unparseable file: ${file}`));
+                printMsg(MSG.Warn, `[!] Skipping ${file}: failed to parse (${err?.message || err})`);
                 continue;
             }
 
@@ -171,7 +174,7 @@ const strings = async (
         strings_count += all_strings[file].length;
     }
 
-    console.log(chalk.cyan(`[i] Extracted ${strings_count} strings`));
+    printMsg(MSG.Header, `[i] Extracted ${strings_count} strings`);
 
     // write to a JSON file
     const formatted = await prettier.format(JSON.stringify(all_strings), {
@@ -181,17 +184,17 @@ const strings = async (
     });
     fs.writeFileSync(output_file, formatted);
 
-    console.log(chalk.green(`[✓] Extracted strings to ${output_file}`));
+    printMsg(MSG.Run, `[✓] Extracted strings to ${output_file}`);
 
     // if -p is enabled, but not -e, or the same case with the --openapi flag
     if ((permutate_option && !extract_urls) || (openapi_option && !extract_urls)) {
-        console.error(chalk.red("[!] Please enable -e flag for -p or --openapi flag"));
+        printMsg(MSG.Err, "[!] Please enable -e flag for -p or --openapi flag");
         process.exit(16);
     }
 
     // if the -e flag is enabled, extract the URLs also
     if (extract_urls) {
-        console.log(chalk.cyan("[i] Extracting URLs and paths from strings"));
+        printMsg(MSG.Header, "[i] Extracting URLs and paths from strings");
 
         let urls = [];
         let paths = [];
@@ -230,7 +233,7 @@ const strings = async (
         urls = [...new Set(urls)];
         paths = [...new Set(paths)];
 
-        console.log(chalk.cyan(`[i] Found ${urls.length} URLs and ${paths.length} paths`));
+        printMsg(MSG.Header, `[i] Found ${urls.length} URLs and ${paths.length} paths`);
 
         // write to a JSON file
         const formatted_urls = await prettier.format(JSON.stringify({ urls, paths }), {
@@ -240,7 +243,7 @@ const strings = async (
         });
         fs.writeFileSync(`${extracted_url_path}.json`, formatted_urls);
 
-        console.log(chalk.green(`[✓] Written URLs and paths to ${extracted_url_path}.json`));
+        printMsg(MSG.Run, `[✓] Written URLs and paths to ${extracted_url_path}.json`);
 
         if (permutate_option) {
             await permutate(urls, paths, extracted_url_path);
@@ -252,7 +255,7 @@ const strings = async (
     }
 
     if (scan_secrets) {
-        console.log(chalk.cyan("[i] Scanning for secrets"));
+        printMsg(MSG.Header, "[i] Scanning for secrets");
 
         let total_secrets = 0;
 
@@ -261,17 +264,17 @@ const strings = async (
             const foundSecrets = await secrets(fileContent);
             if (foundSecrets.length > 0) {
                 for (const foundSecret of foundSecrets) {
-                    console.log(chalk.green(`[✓] Found ${foundSecret.name} in ${file}`));
-                    console.log(chalk.bgGreen(foundSecret.value));
+                    printMsg(MSG.Run, `[✓] Found ${foundSecret.name} in ${file}`);
+                    printMsg(MSG.Run, foundSecret.value);
                     total_secrets++;
                 }
             }
         }
 
         if (total_secrets === 0) {
-            console.error(chalk.yellow(`[!] No secrets found`));
+            printMsg(MSG.Warn, `[!] No secrets found`);
         } else {
-            console.log(chalk.green(`[✓] Found ${total_secrets} secrets`));
+            printMsg(MSG.Run, `[✓] Found ${total_secrets} secrets`);
         }
     }
 

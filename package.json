@@ -1,6 +1,6 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "1.4.4",
+    "version": "2.0.1",
     "description": "JS Recon Tool",
     "main": "build/index.js",
     "type": "module",
@@ -14,8 +14,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:build": "node build/index.js -h",
-        "postinstall": "patch-package",
-        "cleanup": "rm -rf build output output_refactored .resp_cache.json .resp_cache.json.entries endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* && tsc"
+        "postinstall": "patch-package || true; node scripts/postinstall-completion.mjs",
+        "cleanup": "rm -rf build output output_refactored .resp_cache.json .resp_cache.json.entries endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* swagger-jacker-results.json && tsc"
     },
     "keywords": [],
     "author": "Shriyans Sudhi",
@@ -41,6 +41,7 @@
         "datatables.net": "^2.3.6",
         "datatables.net-dt": "^2.3.6",
         "esquery": "^1.6.0",
+        "express": "^5.2.1",
         "extract-zip": "^2.0.1",
         "fs": "^0.0.2",
         "graphql": "^16.14.1",
@@ -58,7 +59,8 @@
         "puppeteer-extra-plugin-stealth": "^2.11.2",
         "readline": "^1.3.0",
         "ses": "^1.13.0",
-        "undici": "^7.28.0",
+        "shell-quote": "^1.10.0",
+        "undici": "^7.29.0",
         "yaml": "^2.8.0",
         "zod": "^3.23.8"
     },
@@ -78,8 +80,11 @@
         "@types/babel__traverse": "^7.28.0",
         "@types/better-sqlite3": "^7.6.13",
         "@types/blessed": "^0.1.25",
+        "@types/express": "^5.0.6",
         "@types/graphql": "^14.2.3",
         "@types/node": "^24.12.4",
+        "@types/shell-quote": "^1.7.5",
+        "patch-package": "^8.0.1",
         "ts-node": "^10.9.2",
         "tsconfig-paths": "^4.2.0",
         "typescript": "^5.9.2",

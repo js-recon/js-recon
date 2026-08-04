@@ -3,8 +3,8 @@ import _traverse from "@babel/traverse";
 import * as fs from "fs";
 import parser from "@babel/parser";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
-import chalk from "chalk";
 import pathModule from "path";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -144,12 +144,11 @@ export const findCrossChunkParameters = (
                             }
 
                             // Log the found parameter usage
-                            console.log(
-                                chalk.cyan(
-                                    `[+] Found ${context} parameter usage for '${exportName}' in chunk ${importingChunkName} ("${functionFile}":${functionFileLine})`
-                                )
+                            printMsg(
+                                MSG.Header,
+                                `[+] Found ${context} parameter usage for '${exportName}' in chunk ${importingChunkName} ("${functionFile}":${functionFileLine})`
                             );
-                            console.log(chalk.magenta(`    Params: ${params}`));
+                            printMsg(MSG.Info, `    Params: ${params}`);
 
                             // Add to result
                             result.push({
@@ -360,12 +359,11 @@ export const findCrossChunkParameters = (
                                                 prop.value.object.name === "e"
                                             ) {
                                                 // This is likely a parameter derived from our export
-                                                console.log(
-                                                    chalk.cyan(
-                                                        `[+] Found conditional branch parameter usage for '${exportName}' in chunk ${importingChunkName} ("${functionFile}":${functionFileLine})`
-                                                    )
+                                                printMsg(
+                                                    MSG.Header,
+                                                    `[+] Found conditional branch parameter usage for '${exportName}' in chunk ${importingChunkName} ("${functionFile}":${functionFileLine})`
                                                 );
-                                                console.log(chalk.magenta(`    Params: ${params}`));
+                                                printMsg(MSG.Info, `    Params: ${params}`);
 
                                                 result.push({
                                                     chunkId: importingChunkName,
