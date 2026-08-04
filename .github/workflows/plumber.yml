@@ -3,6 +3,7 @@ name: Plumber
 on:
   push: {}
   pull_request: null
+  workflow_dispatch: null
 
 permissions:
   contents: read
