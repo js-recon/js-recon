@@ -1,9 +1,7 @@
 name: Plumber
 
 on:
-  push:
-    branches-ignore:
-      - main
+  push: {}
   pull_request: null
 
 permissions:
