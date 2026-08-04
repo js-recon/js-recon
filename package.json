@@ -1,6 +1,6 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "1.4.4",
+    "version": "2.0.1",
     "description": "JS Recon Tool",
     "main": "build/index.js",
     "type": "module",
