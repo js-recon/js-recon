@@ -1,0 +1,21 @@
+name: Plumber
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request: null
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+
+jobs:
+  plumber:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: getplumber/plumber@ef9864df81f444647d95889d98695434f6fa9732 # v0.4.12, 2026-07-20
+        with:
+          score-push: true

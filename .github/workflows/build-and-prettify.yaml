@@ -5,6 +5,9 @@ on:
     branches-ignore:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   version_check:
     if: |
@@ -56,6 +59,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: audit
     environment: commit-signing
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -64,7 +69,7 @@ jobs:
           ref: ${{ github.ref_name }}
 
       - name: Configure SSH commit signing
-        uses: shriyanss/verified-commit-action@v1
+        uses: shriyanss/verified-commit-action@1d7638e44a6bab6d3ac35653af7ef9f343074662 # v1.0.2
         with:
           ssh-private-key: ${{ secrets.JS_RECON_SIGNING_KEY }}
           commit-name: "js-recon-bot"
@@ -224,7 +229,7 @@ jobs:
 
       - name: Upload analyze.json on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: analyze-json-docker
           path: output/**/analyze.json
@@ -258,7 +263,7 @@ jobs:
 
       - name: Upload w-rules analyze.json on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: analyze-json-docker-w-rules
           path: output-w-rules/**/analyze.json
@@ -351,7 +356,7 @@ jobs:
 
       - name: Upload analyze.json on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: analyze-json-macos
           path: output/**/analyze.json
