@@ -137,7 +137,11 @@ export function buildProgram(): Command {
         .option("--research-output <file>", "Output file for research mode", "research.json")
         .option("--max-iterations <iterations>", "Maximum number of recursive crawl iterations", "10")
         .option("--max-js-size <mb>", "Maximum JS file size in MB to parse (Vue only)", "2")
-        .option("--lazyload-timeout <minutes>", "Hard timeout for the lazyload module in minutes (0 = no timeout)", "30")
+        .option(
+            "--lazyload-timeout <minutes>",
+            "Hard timeout for the lazyload module in minutes (0 = no timeout)",
+            "30"
+        )
         .option(
             "--detection-timeout <seconds>",
             "Timeout for front-end framework detection in seconds (0 = no timeout)",
@@ -472,7 +476,15 @@ export function buildProgram(): Command {
                 process.exit(1);
             }
             globalsUtil.setMaxRecursionDepth(maxRecursionDepth);
-            await map(cmd.directory, cmd.output, cmd.format.split(","), cmd.tech, cmd.list, cmd.interactive, cmd.command || []);
+            await map(
+                cmd.directory,
+                cmd.output,
+                cmd.format.split(","),
+                cmd.tech,
+                cmd.list,
+                cmd.interactive,
+                cmd.command || []
+            );
         });
 
     program
@@ -562,7 +574,11 @@ export function buildProgram(): Command {
         .option("-l, --list", "List available technologies", false)
         .option("--validate", "Validate the rules", false)
         .option("-o, --output <file>", "Output JSON file name", "analyze.json")
-        .option("--disable-rules-version-check", "Skip the GitHub rules version check and use cached rules as-is", false)
+        .option(
+            "--disable-rules-version-check",
+            "Skip the GitHub rules version check and use cached rules as-is",
+            false
+        )
         .option(
             "--determine-compatible-version",
             "Report the js_recon_version/js_recon_max_version each rule actually requires, based on the features it uses",
@@ -677,7 +693,11 @@ export function buildProgram(): Command {
         .option("--ai-endpoint <endpoint>", "Endpoint to use for AI service (for Ollama, etc)")
         .option("--ai-api-key <key>", "API key for the configured AI provider")
         .option("--model <model>", "AI model to use", "gpt-4o-mini")
-        .option("--map-openapi-chunk-tag", "Add chunk ID tag to OpenAPI spec for each request found (map module)", false)
+        .option(
+            "--map-openapi-chunk-tag",
+            "Add chunk ID tag to OpenAPI spec for each request found (map module)",
+            false
+        )
         .option("--no-graphql", "Disable GraphQL operation extraction during OpenAPI generation")
         .option("--ngql", "Alias for --no-graphql")
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
@@ -920,7 +940,11 @@ export function buildProgram(): Command {
         .option("--min-collisions <n>", "Minimum times a hash must appear to be reported", "2")
         .option("--co, --collision-output <file>", "Write collision results to a file")
         .option("--cf, --collision-format <format>", "Output format for collision file: json or csv", "csv")
-        .option("--scat <categories>", "Comma-separated scat categories (e.g. lit,decl,loop,cond)", "lit,decl,loop,cond")
+        .option(
+            "--scat <categories>",
+            "Comma-separated scat categories (e.g. lit,decl,loop,cond)",
+            "lit,decl,loop,cond"
+        )
         .option("--sinc <nodes>", "Comma-separated exact node types to include via sinc (e.g. IfStatement)", "")
         .option(
             "--all-scat-permutations",
