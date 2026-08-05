@@ -17,9 +17,9 @@ const client_mappedJsonFile = async (filePath: string): Promise<string[]> => {
     // open the file and load the chunks
     const chunks: Chunks = JSON.parse(fs.readFileSync(filePath, "utf-8"));
 
-    let chunksCopy = chunks;
+    const chunksCopy = chunks;
 
-    let foundPaths: string[] = [];
+    const foundPaths: string[] = [];
 
     // iterate over the chunks
     for (const [key, value] of Object.entries(chunks)) {

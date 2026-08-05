@@ -58,11 +58,11 @@ export const handleAxiosCreate = (
     // We want 'p', not 'e'
 
     // First, traverse up to find if we're inside a function
-    let wrapperFunction = path.findParent((p) => p.isArrowFunctionExpression() || p.isFunctionExpression());
+    const wrapperFunction = path.findParent((p) => p.isArrowFunctionExpression() || p.isFunctionExpression());
 
     if (wrapperFunction) {
         // Now check if this function is assigned to a variable or wrapped in a call expression
-        let assignmentParent = wrapperFunction.findParent(
+        const assignmentParent = wrapperFunction.findParent(
             (p) => p.isAssignmentExpression() || p.isVariableDeclarator()
         );
 

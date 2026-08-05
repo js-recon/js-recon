@@ -95,13 +95,13 @@ const strings = async (
     });
 
     // filter out non JS files
-    let jsFiles = files.filter((file) => file.endsWith(".js") || file.endsWith(".mjs"));
+    const jsFiles = files.filter((file) => file.endsWith(".js") || file.endsWith(".mjs"));
 
     // filter out subsequent requests files
     // jsFiles = jsFiles.filter((file) => !file.startsWith("___subsequent_requests"));
 
     // read all JS files
-    let js_files_path = [];
+    const js_files_path = [];
     for (const file of jsFiles) {
         const filePath = path.join(directory, file);
         if (!fs.lstatSync(filePath).isDirectory()) {
@@ -112,12 +112,12 @@ const strings = async (
     printMsg(MSG.Header, `[i] Found ${js_files_path.length} JS files`);
 
     // read all JS files
-    let all_strings = {};
+    const all_strings = {};
     for (const file of js_files_path) {
         if (file.includes("___subsequent_requests")) {
             // iterate through the file line by line
             const lines = fs.readFileSync(file, "utf-8").split("\n");
-            let strings = [];
+            const strings = [];
             for (const line of lines) {
                 // if the line matches with a particular regex, then extract the JS snippet
                 if (line.match(/^[0-9a-z]+:\[.+/)) {

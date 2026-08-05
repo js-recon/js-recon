@@ -24,7 +24,7 @@ const findStaticFiles = async (js_content) => {
     const matches = [...js_content.matchAll(/\/?static\/chunks\/[a-zA-Z0-9\._\-\/~]+\.js/g)];
     // return matches
 
-    let toReturn = [];
+    const toReturn = [];
 
     for (const match of matches) {
         toReturn.push(match[0]);
@@ -97,7 +97,7 @@ const subsequentRequests = async (
     const stopBarWatcher = watchBarResize(progressBar, 73);
     const releaseBarLogger = activateBarLogger(multiBar, process.stdout.isTTY === true);
 
-    let js_contents = {};
+    const js_contents = {};
     let jsFilesFromPageHtml: string[] = [];
 
     await withProgressResources(

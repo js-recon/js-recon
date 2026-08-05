@@ -276,6 +276,7 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
 
         let publicPath = "";
         if (pVarName) {
+            // eslint-disable-next-line security/detect-non-literal-regexp -- pVarName is captured from \w* only (no regex metacharacters possible) — not exploitable
             const assignRe = new RegExp(`\\b${pVarName}\\.p\\s*=\\s*["']([^"']*)["']`);
             const assignMatch = jsContent.match(assignRe);
             if (assignMatch) publicPath = assignMatch[1];

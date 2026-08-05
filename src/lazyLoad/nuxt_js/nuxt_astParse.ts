@@ -65,7 +65,7 @@ export const extractChunkBuilderFunctions = (jsContent: string): ChunkBuilderFun
  * Finds all the lazy loaded JS files from a given URL using a Nuxt.js specific approach.
  */
 const nuxt_astParse = async (url: string) => {
-    let filesFound = [];
+    const filesFound = [];
     const resp = await makeRequest(url, {});
     const body = await resp.text();
 
@@ -125,7 +125,7 @@ const nuxt_astParse = async (url: string) => {
                 plugins: ["jsx", "typescript"],
                 errorRecovery: true,
             });
-            let memberExpressions = [];
+            const memberExpressions = [];
             traverse(unknownVarAst, {
                 MemberExpression(path) {
                     // Only collect identifiers like f.p (not obj["x"])
@@ -170,13 +170,14 @@ const nuxt_astParse = async (url: string) => {
 
             // replace the unknown var with the value
             const funcSource = func.source.replace(
+                // eslint-disable-next-line security/detect-non-literal-regexp -- unknownVar values are AST-derived identifier/property names, which cannot contain regex metacharacters
                 new RegExp(`${unknownVar[0]}.${unknownVar[1]}`),
                 `"${unknownVarValue}"`
             );
 
             // continue to executing the function with all possible numbers
             const urlBuilderFunc = `(() => (${funcSource}))()`;
-            let js_paths = [];
+            const js_paths = [];
 
             try {
                 // rather than fuzzing, grep the integers from the func code

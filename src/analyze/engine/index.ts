@@ -27,7 +27,7 @@ export const engine = async (
 ): Promise<EngineOutput[] | undefined> => {
     // first of all check what is rule type, and then check if the data for that is available or is undefined
 
-    let findings: EngineOutput[] = [];
+    const findings: EngineOutput[] = [];
 
     if (rule.type === "request") {
         if (!openapiData) {

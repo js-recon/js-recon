@@ -12,8 +12,8 @@ import { printMsg, MSG } from "../../../utility/printMsg.js";
 export const findAxiosClients = (
     chunks: Chunks
 ): { axiosExportedFrom: string[]; axiosImportedTo: { [key: string]: string } } => {
-    let axiosExportedFrom: string[] = [];
-    let axiosImportedTo: { [key: string]: string } = {};
+    const axiosExportedFrom: string[] = [];
+    const axiosImportedTo: { [key: string]: string } = {};
 
     // first get those which have axios client
     for (const chunkName of Object.keys(chunks)) {

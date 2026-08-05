@@ -4,7 +4,7 @@ import * as cheerio from "cheerio";
 import { progressError } from "../../utility/progressLog.js";
 
 const vue_pageSrc = async (url: string) => {
-    let toReturn: string[] = [];
+    const toReturn: string[] = [];
 
     // first, get the contents of the homepage
     const req = await makeRequest(url);

@@ -217,7 +217,6 @@ const processUrl = async (
 
         printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",
@@ -338,7 +337,6 @@ const processUrl = async (
 
         printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",
@@ -439,7 +437,6 @@ const processUrl = async (
 
         printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",
@@ -538,7 +535,6 @@ const processUrl = async (
 
         printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",
@@ -616,7 +612,6 @@ const processUrl = async (
 
         printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",

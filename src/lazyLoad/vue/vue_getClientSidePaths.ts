@@ -23,7 +23,7 @@ const vue_getClientSidePaths = async (
     showProgress: boolean = true
 ): Promise<string[]> => {
     const MAX_JS_SIZE_BYTES = maxJsSizeMb * 1024 * 1024;
-    let toReturn: string[] = [];
+    const toReturn: string[] = [];
 
     const baseOrigin = new URL(url).origin;
     const addClientPath = (pathValue: string, jsFileOrigin: string): void => {

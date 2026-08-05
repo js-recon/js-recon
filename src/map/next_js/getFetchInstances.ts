@@ -47,10 +47,10 @@ const isFetchFallback = (node: any): boolean => {
  */
 const getFetchInstances = async (chunks: Chunks, output: string, formats: string[]): Promise<Chunks> => {
     printMsg(MSG.Header, "[i] Running 'getFetchInstances' module");
-    let chunk_copy: Chunks = { ...chunks };
+    const chunk_copy: Chunks = { ...chunks };
 
     //   iterate through the chunks, and check fetch instances
-    for (let chunk of Object.values(chunks)) {
+    for (const chunk of Object.values(chunks)) {
         let chunkAst;
         try {
             chunkAst = parser.parse(chunk.code, {
@@ -106,7 +106,7 @@ const getFetchInstances = async (chunks: Chunks, output: string, formats: string
 
         // -------- Pass 2:  report the call-sites (aliases) --------
         for (const binding of fetchAliases) {
-            // @ts-ignore
+            // @ts-expect-error -- Babel's Binding type doesn't expose referencePaths in this @babel/traverse version
             binding.referencePaths.forEach((ref) => {
                 const parent = ref.parent;
                 if (parent.type === "CallExpression" && parent.callee === ref.node) {
@@ -123,7 +123,7 @@ const getFetchInstances = async (chunks: Chunks, output: string, formats: string
         for (const call of fetchCalls) {
             printMsg(
                 MSG.Info,
-                // @ts-ignore
+                // @ts-expect-error -- Babel's Binding type doesn't expose referencePaths in this @babel/traverse version
                 `[fetch] Webpack ID ${chunk.id}: fetch() called at ${call.line}:${call.column}`
             );
         }

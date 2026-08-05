@@ -6,7 +6,7 @@ import { progressError, progressLog } from "../../utility/progressLog.js";
 const vue_reconstructSourceMaps = async (url: string, jsFilesToDownload: string[], threads: number = 1) => {
     // get the contents of first file, and check if it has the sourceMappingURL
 
-    let sourceMapUrls: string[] = [];
+    const sourceMapUrls: string[] = [];
     // guard against empty input
     if (jsFilesToDownload.length === 0) {
         return sourceMapUrls;
@@ -36,7 +36,7 @@ const vue_reconstructSourceMaps = async (url: string, jsFilesToDownload: string[
         const content = await req.text();
 
         // get the sourceMappingURL
-        let sourceMappingURL_reg = content.match(/sourceMappingURL=([^"]+)/);
+        const sourceMappingURL_reg = content.match(/sourceMappingURL=([^"]+)/);
         if (sourceMappingURL_reg) {
             // strip the newline, and assign to a new var
             const sourceMappingURL = sourceMappingURL_reg[1].replace(/\n/g, "");

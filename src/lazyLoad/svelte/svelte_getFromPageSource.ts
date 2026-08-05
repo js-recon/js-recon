@@ -14,7 +14,7 @@ import { printMsg, MSG } from "../../utility/printMsg.js";
  */
 const svelte_getFromPageSource = async (url) => {
     printMsg(MSG.Header, "[i] Analyzing page source");
-    let foundUrls = [];
+    const foundUrls = [];
     const pageSource = await makeRequest(url, {});
     const body = await pageSource.text();
 

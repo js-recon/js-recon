@@ -83,7 +83,7 @@ const endpoints = async (
         printMsg(MSG.Header, "[i] Checking for client-side paths for Next.JS");
 
         // var to store all the paths found
-        let final_client_side: string[] = [];
+        const final_client_side: string[] = [];
 
         if (directory) {
             const subsequentRequestsDir = directory + "/___subsequent_requests";

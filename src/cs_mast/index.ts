@@ -1,6 +1,7 @@
 import { cs_mast_init, ParseError, buildSignatureFromConfig } from "@shriyanss/cs-mast";
 import type { CsMastConfig, ScatCategory } from "@shriyanss/cs-mast";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { printMsg, MSG } from "../utility/printMsg.js";
 
@@ -153,7 +154,7 @@ export default async (
         if (!fs.existsSync(permOutput)) fs.mkdirSync(permOutput, { recursive: true });
         const subsets = allScatSubsets();
         const concurrency =
-            permConcurrency > 0 ? permConcurrency : Math.max(1, Math.floor(require("os").cpus().length / 2));
+            permConcurrency > 0 ? permConcurrency : Math.max(1, Math.floor(os.cpus().length / 2));
         printMsg(MSG.Header, `[*] Running ${subsets.length} scat permutations (concurrency: ${concurrency})`);
         let done = 0;
         for (let i = 0; i < subsets.length; i += concurrency) {

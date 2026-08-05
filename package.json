@@ -13,7 +13,10 @@
         "start": "node --max-old-space-size=8192 build/index.js",
         "test": "vitest run",
         "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage",
+        "test:fuzz": "vitest run --config vitest.fuzz.config.ts",
         "test:build": "node build/index.js -h",
+        "lint": "eslint src",
         "postinstall": "patch-package || true; node scripts/postinstall-completion.mjs",
         "cleanup": "rm -rf build output output_refactored .resp_cache.json .resp_cache.json.entries endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* swagger-jacker-results.json && tsc"
     },
@@ -84,10 +87,15 @@
         "@types/graphql": "^14.2.3",
         "@types/node": "^24.12.4",
         "@types/shell-quote": "^1.7.5",
+        "@vitest/coverage-v8": "^4.1.10",
+        "eslint": "^10.8.0",
+        "eslint-plugin-security": "^4.0.1",
+        "fast-check": "^4.9.0",
         "patch-package": "^8.0.1",
         "ts-node": "^10.9.2",
         "tsconfig-paths": "^4.2.0",
         "typescript": "^5.9.2",
+        "typescript-eslint": "^8.66.0",
         "vitest": "^4.1.10"
     }
 }

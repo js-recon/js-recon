@@ -10,7 +10,7 @@ import { FoundJsFiles } from "../../utility/interfaces.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
-let analyzedFiles = [];
+const analyzedFiles = [];
 let filesFound = [];
 let mapFilesFound = [];
 
@@ -30,7 +30,7 @@ export const parseJSFileContent = async (content) => {
             errorRecovery: true,
         });
 
-        let foundJsFiles = {};
+        const foundJsFiles = {};
 
         traverse(ast, {
             StringLiteral(path) {

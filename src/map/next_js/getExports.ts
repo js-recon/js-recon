@@ -13,7 +13,7 @@ import { printMsg, MSG } from "../../utility/printMsg.js";
 const getExports = async (chunks: Chunks): Promise<Chunks> => {
     printMsg(MSG.Header, "[i] Getting exports");
 
-    let chunkCopy = chunks;
+    const chunkCopy = chunks;
 
     // iterate through the chunks
     for (const chunk of Object.values(chunks)) {
@@ -70,7 +70,7 @@ const getExports = async (chunks: Chunks): Promise<Chunks> => {
             continue;
         }
 
-        let chunkExports: string[] = [];
+        const chunkExports: string[] = [];
 
         // first of all, it is exported something like this:
         // chunkThirdArg.<something>(secondArg, {default: ..., key2: ...})

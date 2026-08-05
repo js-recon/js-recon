@@ -99,7 +99,7 @@ const commandHelpers = {
             returnText += "\n";
             // get functions which import this particular function
             // iterate over the function
-            let exported_to_chunks = [];
+            const exported_to_chunks = [];
             for (const chunk of Object.values(chunks)) {
                 // get the imports
                 const chunk_imports = chunk.imports;

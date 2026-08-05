@@ -8,7 +8,7 @@ import { progressError, progressLog, progressWarn } from "../../utility/progress
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 const vue_singleJsFileOnHome = async (url: string) => {
-    let jsFilesFound: string[] = [];
+    const jsFilesFound: string[] = [];
 
     // first, get the home page content
     const req = await makeRequest(url, {});
@@ -68,7 +68,7 @@ const vue_singleJsFileOnHome = async (url: string) => {
     });
 
     // traverse the AST
-    let initialFoundJsPaths: string[] = [];
+    const initialFoundJsPaths: string[] = [];
     traverse(ast, {
         ArrayExpression(path) {
             const elements = path.node.elements;
