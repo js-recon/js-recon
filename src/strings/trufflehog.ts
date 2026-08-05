@@ -1,13 +1,67 @@
 import { execSync, spawn } from "child_process";
+import inquirer from "inquirer";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import { downloadTrufflehog } from "./trufflehogDownload.js";
+import { isConsentGiven, giveConsent } from "./trufflehogConfig.js";
 
-const isTrufflehogInstalled = (): boolean => {
+const isTrufflehogInstalled = (bin: string): boolean => {
     try {
-        execSync("which trufflehog", { stdio: "pipe" });
+        execSync(`which ${bin}`, { stdio: "pipe" });
         return true;
     } catch {
         return false;
     }
+};
+
+/**
+ * Resolves the trufflehog binary to invoke: an explicit `--trufflehog-bin`/PATH binary if
+ * present, otherwise auto-downloads from TruffleHog's official GitHub releases after
+ * obtaining one-time consent (interactive prompt, or `--trufflehog-accept-terms` for CI).
+ */
+const resolveTrufflehogBin = async (trufflehogBin: string, acceptTerms: boolean): Promise<string> => {
+    if (isTrufflehogInstalled(trufflehogBin)) {
+        return trufflehogBin;
+    }
+
+    if (!isConsentGiven()) {
+        if (acceptTerms) {
+            giveConsent();
+        } else if (process.stdin.isTTY) {
+            printMsg(MSG.Header, "[i] --trufflehog was set but the trufflehog binary was not found.");
+            printMsg(
+                MSG.Warn,
+                "    JS Recon can download it directly from trufflesecurity/trufflehog's official GitHub releases"
+            );
+            printMsg(MSG.Warn, "    and run it as a separate process. TruffleHog is licensed under AGPL-3.0.");
+            const { confirmed } = await inquirer.prompt([
+                {
+                    type: "confirm",
+                    name: "confirmed",
+                    message: "Download and run TruffleHog?",
+                    default: true,
+                },
+            ]);
+            if (!confirmed) {
+                printMsg(MSG.Err, "[!] TruffleHog download declined.");
+                printMsg(
+                    MSG.Warn,
+                    "    Re-run with --trufflehog-accept-terms, or point --trufflehog-bin at an existing install."
+                );
+                process.exit(32);
+            }
+            giveConsent();
+        } else {
+            printMsg(MSG.Err, "[!] trufflehog not found and terms not accepted.");
+            printMsg(
+                MSG.Warn,
+                "    Re-run with --trufflehog-accept-terms to allow auto-download in non-interactive contexts,"
+            );
+            printMsg(MSG.Warn, "    or point --trufflehog-bin at an existing install.");
+            process.exit(32);
+        }
+    }
+
+    return downloadTrufflehog(process.env.HOME || "~");
 };
 
 const maskSecret = (value: string): string => {
@@ -15,22 +69,17 @@ const maskSecret = (value: string): string => {
     return value.slice(0, 4) + "****";
 };
 
-export const runTrufflehog = (directory: string): Promise<void> => {
-    return new Promise((resolve) => {
-        if (!isTrufflehogInstalled()) {
-            printMsg(MSG.Err, "[!] trufflehog not found in PATH.");
-            printMsg(
-                MSG.Warn,
-                "    Install: curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh"
-            );
-            printMsg(MSG.Warn, "    Or: brew install trufflehog");
-            printMsg(MSG.Warn, "    Then re-run with --trufflehog.");
-            process.exit(1);
-        }
+export const runTrufflehog = async (
+    directory: string,
+    trufflehogBin: string = "trufflehog",
+    acceptTerms: boolean = false
+): Promise<void> => {
+    const resolvedBin = await resolveTrufflehogBin(trufflehogBin, acceptTerms);
 
+    return new Promise((resolve) => {
         printMsg(MSG.Header, "[i] Running TruffleHog on output directory");
 
-        const proc = spawn("trufflehog", ["filesystem", directory, "--json", "--no-update"], {
+        const proc = spawn(resolvedBin, ["filesystem", directory, "--json", "--no-update"], {
             stdio: ["ignore", "pipe", "pipe"],
         });
 

@@ -722,7 +722,18 @@ const processUrl = async (
     printMsg(MSG.Header, "[4/8] Running strings again to extract endpoints...");
     resetSkipStep();
     await Promise.race([
-        strings(outputDir, stringsFile, true, extractedUrlsFile, cmd.secrets, true, true, cmd.trufflehog),
+        strings(
+            outputDir,
+            stringsFile,
+            true,
+            extractedUrlsFile,
+            cmd.secrets,
+            true,
+            true,
+            cmd.trufflehog,
+            cmd.trufflehogBin,
+            cmd.trufflehogAcceptTerms
+        ),
         getSkipStepPromise(),
     ]);
     printMsg(MSG.Run, "[+] Strings complete.");
@@ -773,7 +784,18 @@ const processUrl = async (
     printMsg(MSG.Header, "[4.6/8] Re-running strings for chunks from the re-pass...");
     resetSkipStep();
     await Promise.race([
-        strings(outputDir, stringsFile, true, extractedUrlsFile, cmd.secrets, true, true, cmd.trufflehog),
+        strings(
+            outputDir,
+            stringsFile,
+            true,
+            extractedUrlsFile,
+            cmd.secrets,
+            true,
+            true,
+            cmd.trufflehog,
+            cmd.trufflehogBin,
+            cmd.trufflehogAcceptTerms
+        ),
         getSkipStepPromise(),
     ]);
     printMsg(MSG.Run, "[+] Strings re-pass complete.");

@@ -329,6 +329,12 @@ export function buildProgram(): Command {
         .option("--openapi", "Generate OpenAPI specification from the paths found", false)
         .option("-s, --scan-secrets", "Scan for secrets", false)
         .option("--trufflehog", "Run TruffleHog secret scanner on the output directory", false)
+        .option("--trufflehog-bin <path>", "Path to the trufflehog binary (skips auto-download)", "trufflehog")
+        .option(
+            "--trufflehog-accept-terms",
+            "Accept TruffleHog's AGPL-3.0 license terms non-interactively so it can be auto-downloaded (required in non-TTY/CI contexts on first use)",
+            false
+        )
         .action(async (cmd) => {
             await strings(
                 cmd.directory,
@@ -338,7 +344,9 @@ export function buildProgram(): Command {
                 cmd.scanSecrets,
                 cmd.permutate,
                 cmd.openapi,
-                cmd.trufflehog
+                cmd.trufflehog,
+                cmd.trufflehogBin,
+                cmd.trufflehogAcceptTerms
             );
         });
 
@@ -680,6 +688,12 @@ export function buildProgram(): Command {
         .option("-y, --yes", "Auto-approve executing JS code from the target", false)
         .option("--secrets", "Scan for secrets", false)
         .option("--trufflehog", "Run TruffleHog secret scanner on the output directory", false)
+        .option("--trufflehog-bin <path>", "Path to the trufflehog binary (skips auto-download)", "trufflehog")
+        .option(
+            "--trufflehog-accept-terms",
+            "Accept TruffleHog's AGPL-3.0 license terms non-interactively so it can be auto-downloaded (required in non-TTY/CI contexts on first use)",
+            false
+        )
         .option("--sj", "Run sj (swagger-jacker) against the mapped OpenAPI spec", false)
         .option("--sj-bin <path>", "Path to the sj binary", "sj")
         .option("--sj-args <args>", "Extra arguments passed through to `sj automate`", "")

@@ -76,7 +76,9 @@ const strings = async (
     scan_secrets: boolean,
     permutate_option: boolean,
     openapi_option: boolean,
-    trufflehog: boolean = false
+    trufflehog: boolean = false,
+    trufflehogBin: string = "trufflehog",
+    trufflehogAcceptTerms: boolean = false
 ): Promise<undefined> => {
     printMsg(MSG.Header, "[i] Loading 'Strings' module");
 
@@ -279,7 +281,7 @@ const strings = async (
     }
 
     if (trufflehog) {
-        await runTrufflehog(directory);
+        await runTrufflehog(directory, trufflehogBin, trufflehogAcceptTerms);
     }
 };
 
