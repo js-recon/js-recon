@@ -93,6 +93,7 @@ const BASELINE_SCAT_DIR: Record<string, string> = {
     "react-webpack": "lit-decl-loop-cond",
     "react-vite": "lit-decl-loop-cond",
     "next-webpack": "lit-decl-loop-cond",
+    "next-turbopack": "lit-decl-loop-cond",
 };
 
 // Canonical ordering of scat categories (matches ALL_SCAT_CATEGORIES in csmast.mjs).
@@ -842,8 +843,15 @@ const refactor = async (
 
     // iterate through the chunks
     if (tech === "next-turbopack") {
+        if (remoteOpts?.scat) {
+            printMsg(MSG.Header, `[i] Using custom scat config: ${remoteOpts.scat.join(",")}`);
+        }
         for (const [, value] of Object.entries(chunks)) {
-            const moduleFiles = await refactorNext(value);
+            const moduleFiles = await refactorNext(
+                value,
+                libSigs,
+                remoteOpts?.scat as import("@shriyanss/cs-mast").ScatCategory[] | undefined
+            );
             for (const [moduleId, rawCode] of Object.entries(moduleFiles)) {
                 const formatted = await prettier.format(rawCode, {
                     parser: "babel",

@@ -191,7 +191,11 @@ const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
  *
  * Returns a map { [chunkId]: code } or {} if the chunk cannot be processed.
  */
-const refactorNextTurbopack = async (chunk: Chunk): Promise<Record<string, string>> => {
+const refactorNextTurbopack = async (
+    chunk: Chunk,
+    libSigs?: Set<string>,
+    scatOverride?: ScatCategory[]
+): Promise<Record<string, string>> => {
     printMsg(MSG.Header, `[i] Processing Next.js (Turbopack) chunk: ${chunk.id}`);
 
     const ast = parser.parse(chunk.code, {
@@ -206,9 +210,9 @@ const refactorNextTurbopack = async (chunk: Chunk): Promise<Record<string, strin
     const isTurbopackFormat = /^\s*func_\d+\s*=/.test(chunk.code);
 
     if (isTurbopackFormat) {
-        return refactorTurbopackModule(chunk, ast);
+        return refactorTurbopackModule(chunk, ast, libSigs, scatOverride);
     } else {
-        return refactorWebpackModule(chunk, ast);
+        return refactorWebpackModule(chunk, ast, libSigs, scatOverride);
     }
 };
 
@@ -216,7 +220,12 @@ const refactorNextTurbopack = async (chunk: Chunk): Promise<Record<string, strin
  * Handles `func_NNN = (module, exports, require) => { ... }` format.
  * Looks for the top-level assignment and extracts the arrow function params.
  */
-async function refactorTurbopackModule(chunk: Chunk, ast: t.File): Promise<Record<string, string>> {
+async function refactorTurbopackModule(
+    chunk: Chunk,
+    ast: t.File,
+    libSigs?: Set<string>,
+    scatOverride?: ScatCategory[]
+): Promise<Record<string, string>> {
     let captured: TurboModuleEntry | null = null;
 
     traverse(ast, {
@@ -253,6 +262,15 @@ async function refactorTurbopackModule(chunk: Chunk, ast: t.File): Promise<Recor
         return {};
     }
 
+    // CS-MAST library classification: skip modules that match the cross-app baseline.
+    if (libSigs && libSigs.size > 0) {
+        const fnNode = (captured as TurboModuleEntry).fnPath.node;
+        if (moduleIsLibrary(fnNode, libSigs, scatOverride)) {
+            printMsg(MSG.Info, `[-] Module ${chunk.id} matches library baseline — skipping`);
+            return {};
+        }
+    }
+
     const statements = transformModule(captured);
     const code = validateAndFix(statements, chunk.id);
     if (code === null) {
@@ -267,7 +285,12 @@ async function refactorTurbopackModule(chunk: Chunk, ast: t.File): Promise<Recor
  * Handles webpack-style `(module, exports, require) => { ... }` format.
  * The chunk code IS the module function itself (no func_NNN= prefix).
  */
-async function refactorWebpackModule(chunk: Chunk, ast: t.File): Promise<Record<string, string>> {
+async function refactorWebpackModule(
+    chunk: Chunk,
+    ast: t.File,
+    libSigs?: Set<string>,
+    scatOverride?: ScatCategory[]
+): Promise<Record<string, string>> {
     let captured: WebpackModuleEntry | null = null;
 
     traverse(ast, {
@@ -302,6 +325,15 @@ async function refactorWebpackModule(chunk: Chunk, ast: t.File): Promise<Record<
     if (!captured) {
         printMsg(MSG.Warn, `[!] No module function found in webpack chunk ${chunk.id} — skipping`);
         return {};
+    }
+
+    // CS-MAST library classification: skip modules that match the cross-app baseline.
+    if (libSigs && libSigs.size > 0) {
+        const fnNode = (captured as WebpackModuleEntry).fnPath.node;
+        if (moduleIsLibrary(fnNode, libSigs, scatOverride)) {
+            printMsg(MSG.Info, `[-] Module ${chunk.id} matches library baseline — skipping`);
+            return {};
+        }
     }
 
     const statements = transformWebpackModule(captured);
