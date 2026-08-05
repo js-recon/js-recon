@@ -40,19 +40,19 @@ const checkVueJS = async ($, url: string) => {
         if (attribs) {
             for (const [attrName, attrValue] of Object.entries(attribs)) {
                 if (attrName === "src") {
-                    // @ts-ignore
+                    // @ts-expect-error -- attribs value type is untyped in this cheerio overload
                     if (attrValue.includes("app.js")) {
                         // get the URL of the app.js file
-                        // @ts-ignore
+                        // @ts-expect-error -- attribs value type is untyped in this cheerio overload
                         if (attrValue.startsWith("/")) {
-                            // @ts-ignore
+                            // @ts-expect-error -- attribs value type is untyped in this cheerio overload
                             appJsURL = new URL(attrValue, url).href;
-                            // @ts-ignore
+                            // @ts-expect-error -- attribs value type is untyped in this cheerio overload
                         } else if (attrValue.startsWith("http")) {
-                            // @ts-ignore
+                            // @ts-expect-error -- attribs value type is untyped in this cheerio overload
                             appJsURL = attrValue;
                         } else {
-                            // @ts-ignore
+                            // @ts-expect-error -- attribs value type is untyped in this cheerio overload
                             appJsURL = new URL(attrValue, url).href;
                         }
                     }

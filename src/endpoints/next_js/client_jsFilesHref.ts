@@ -17,7 +17,7 @@ const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
  */
 const client_jsFilesHref = async (directory: string): Promise<string[]> => {
     printMsg(MSG.Header, "[i] Searching for `href` in the JS chunks");
-    let discoveredPaths = [];
+    const discoveredPaths = [];
     // index all the files in the directory
     let files;
     files = fs.readdirSync(directory, { recursive: true });

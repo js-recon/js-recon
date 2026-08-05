@@ -32,7 +32,6 @@ export const checkSvelte = async ($) => {
         if (!attribs) return;
         for (const [attrName, attrValue] of Object.entries(attribs)) {
             if (attrName === "class" || attrName === "id") {
-                // @ts-ignore
                 if ((attrValue as string).includes("svelte-")) {
                     detected = true;
                     evidence = `${attrName} :: ${attrValue}`;

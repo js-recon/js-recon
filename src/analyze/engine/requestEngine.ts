@@ -15,7 +15,7 @@ import { printMsg, MSG } from "../../utility/printMsg.js";
  * @returns Promise that resolves to an array of analysis findings
  */
 const engine = async (rule: Rule, openapiData: OpenAPISpec): Promise<EngineOutput[]> => {
-    let findings: EngineOutput[] = [];
+    const findings: EngineOutput[] = [];
 
     for (const path in openapiData.paths) {
         const methods = openapiData.paths[path];

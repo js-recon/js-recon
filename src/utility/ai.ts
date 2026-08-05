@@ -78,7 +78,7 @@ async function getCompletion(prompt, systemPrompt = "You are a helpful assistant
     }
 
     if (provider === "openai") {
-        // @ts-ignore
+        // @ts-expect-error -- openai SDK types don't yet cover the Responses API shape used here
         const completion = await client.responses.create({
             input: [
                 { role: "system", content: systemPrompt },
@@ -108,7 +108,7 @@ async function getCompletion(prompt, systemPrompt = "You are a helpful assistant
     }
 
     if (provider === "anthropic") {
-        // @ts-ignore
+        // @ts-expect-error -- openai SDK types don't yet cover the Responses API shape used here
         const response = await client.messages.create({
             model: model || "claude-haiku-4-5-20251001",
             max_tokens: 4096,

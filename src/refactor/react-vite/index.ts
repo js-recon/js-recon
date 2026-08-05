@@ -598,7 +598,7 @@ export default async function refactorVite(
             continue;
         }
 
-        let statements: t.Statement[] = ast.program.body as t.Statement[];
+        const statements: t.Statement[] = ast.program.body as t.Statement[];
 
         // Step 3a: Find rolldown-runtime import to identify __toESM local name
         let toEsmLocalName: string | null = null;

@@ -336,7 +336,7 @@ const lazyLoad = async (
 
                     const firstBatch = [...new Set([...jsFilesFromPageSource, ...jsFilesFromStringAnalysis])];
 
-                    let jsFilesFromAST = [];
+                    const jsFilesFromAST = [];
                     if (shouldRunMethod("nuxt_astParse", includeMethods, excludeMethods)) {
                         printMsg(MSG.Header, "[i] Analyzing functions in the files found");
                         for (const jsFile of firstBatch) {

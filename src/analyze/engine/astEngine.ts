@@ -28,7 +28,7 @@ import { printMsg, MSG } from "../../utility/printMsg.js";
  * @returns Promise that resolves to an array of analysis findings
  */
 const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<EngineOutput[]> => {
-    let findings: EngineOutput[] = [];
+    const findings: EngineOutput[] = [];
 
     for (const chunk of Object.values(mappedJsonData)) {
         // first of all, load the code in ast
@@ -43,7 +43,7 @@ const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
             continue;
         }
 
-        let matchList: { [key: string]: { node: Node; scope: Node; allNodes?: Node[] } } = {};
+        const matchList: { [key: string]: { node: Node; scope: Node; allNodes?: Node[] } } = {};
         const completedSteps: Set<string> = new Set();
         // Cache taint info per "source step name" so we don't recompute when several
         // sink steps share the same source step.
@@ -145,6 +145,7 @@ const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
                 }
             } else if (step.regexMatch) {
                 // Scan all StringLiteral/TemplateLiteral nodes in the chunk for values matching the regex
+                // eslint-disable-next-line security/detect-non-literal-regexp -- pattern comes from a loaded rule YAML file — same trust model as the rest of the rule engine, not user/network input
                 const pattern = new RegExp(step.regexMatch.pattern);
                 const foundNodes: Node[] = [];
                 _traverseDefault(ast, {

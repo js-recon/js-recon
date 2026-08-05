@@ -17,7 +17,7 @@ Include in your report:
 - Affected version(s)
 - Any suggested mitigations, if known
 
-You can expect an acknowledgement within **72 hours**. If a vulnerability is confirmed, a fix will be prioritized based on severity.
+You can expect an acknowledgement within **72 hours**, and no later than **14 days** from the initial report. If a vulnerability is confirmed, a fix will be prioritized based on severity, with a target of **60 days** to ship a patch for confirmed vulnerabilities affecting a publicly released version.
 
 ## Scope
 

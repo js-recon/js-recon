@@ -262,7 +262,7 @@ class NextJsCrawler {
     private async recursivePass(jsUrls: string[]): Promise<string[]> {
         const inc = this.includeMethods;
         const exc = this.excludeMethods;
-        let newInThisPass: string[] = [];
+        const newInThisPass: string[] = [];
 
         // Promise.all pattern analysis on JS file contents
         if (shouldRunMethod("next_promiseResolve", inc, exc)) {

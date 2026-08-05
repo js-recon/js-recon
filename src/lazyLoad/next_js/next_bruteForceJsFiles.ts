@@ -7,7 +7,7 @@ const next_bruteForceJsFiles = async (urls: string[], threads: number = 1) => {
     console.log(chalk.cyan("[i] Bruteforcing .map files"));
     const mapFiles = urls.map((url) => url + ".map");
 
-    let foundSourceMaps: string[] = [];
+    const foundSourceMaps: string[] = [];
 
     await runWithConcurrency(mapFiles, threads, async (mapFile) => {
         const req = await makeRequest(mapFile);

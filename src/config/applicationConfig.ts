@@ -411,6 +411,7 @@ const findCliConfigPath = (program: Command, argv: readonly string[]): string | 
 
     for (let index = 2; index < argv.length; index += 1) {
         const token = argv[index];
+        // eslint-disable-next-line security/detect-possible-timing-attacks -- comparing CLI argument/command-name strings, not secrets or credentials — timing is not security-relevant here
         if (token === "--config") {
             if (index + 1 >= argv.length) {
                 throw new ApplicationConfigError("--config requires a file path");

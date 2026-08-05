@@ -164,7 +164,7 @@ interface CacheEntry {
     readonly responseHeaders: Readonly<Record<string, string>>;
 }
 
-const getCacheIdentityDigest = (url: string, headers: {}): string => {
+const getCacheIdentityDigest = (url: string, headers: HeadersInit): string => {
     const normalizedHeaders = [...new Headers(headers as HeadersInit).entries()].sort(([left], [right]) =>
         left.localeCompare(right)
     );
@@ -173,7 +173,7 @@ const getCacheIdentityDigest = (url: string, headers: {}): string => {
         .digest("hex");
 };
 
-const getCacheEntryPath = (url: string, headers: {}): string => {
+const getCacheEntryPath = (url: string, headers: HeadersInit): string => {
     const digest = getCacheIdentityDigest(url, headers);
     return `${globals.getRespCacheFile()}.entries/${digest}.json`;
 };
@@ -192,7 +192,7 @@ const getCacheEntryPath = (url: string, headers: {}): string => {
  * @param headers - Request headers that were used
  * @returns A Promise that resolves to a Response object if the cache is found, or null if not
  */
-const readCache = async (url: string, headers: {}): Promise<Response | null> => {
+const readCache = async (url: string, headers: HeadersInit): Promise<Response | null> => {
     const identityDigest = getCacheIdentityDigest(url, headers);
     const entryPath = getCacheEntryPath(url, headers);
     if (fs.existsSync(entryPath)) {
@@ -261,7 +261,7 @@ const readCache = async (url: string, headers: {}): Promise<Response | null> => 
  */
 const writeCache = async (
     url: string,
-    headers: {},
+    headers: HeadersInit,
     response: Response,
     reportErrors: boolean = true,
     signal?: AbortSignal
@@ -277,7 +277,12 @@ const writeCache = async (
     }
 };
 
-const writeCacheUnsafe = async (url: string, headers: {}, response: Response, signal?: AbortSignal): Promise<void> => {
+const writeCacheUnsafe = async (
+    url: string,
+    headers: HeadersInit,
+    response: Response,
+    signal?: AbortSignal
+): Promise<void> => {
     if (signal?.aborted) return;
     const identityDigest = getCacheIdentityDigest(url, headers);
     const entryPath = getCacheEntryPath(url, headers);

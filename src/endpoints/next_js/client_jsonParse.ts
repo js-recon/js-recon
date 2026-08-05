@@ -16,7 +16,7 @@ import { printMsg, MSG } from "../../utility/printMsg.js";
  * @returns Promise that resolves to an array of discovered paths from JSON.parse() calls
  */
 const client_jsonParse = async (directory: string): Promise<string[]> => {
-    let foundUrls = [];
+    const foundUrls = [];
     printMsg(MSG.Header, "[i] Searching for client-side paths in JSON.parse()");
 
     // filter out the directories

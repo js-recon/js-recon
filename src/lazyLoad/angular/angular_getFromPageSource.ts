@@ -6,7 +6,7 @@ import { printMsg, MSG } from "../../utility/printMsg.js";
 const angular_getFromPageSource = async (url: string) => {
     printMsg(MSG.Header, "[i] Analyzing page source");
 
-    let foundUrls: string[] = [];
+    const foundUrls: string[] = [];
 
     const pageSource = await makeRequest(url, {});
     const body = await pageSource.text();

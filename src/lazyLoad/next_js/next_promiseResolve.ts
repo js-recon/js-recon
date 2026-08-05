@@ -70,7 +70,7 @@ const next_promiseResolveWorker = async (url: string, jsDirBase: string): Promis
 const next_promiseResolve = async (urls: string[], threads: number = 1) => {
     console.log(chalk.cyan("[i] Check for Promise.all pattern"));
 
-    let toReturn: string[] = [];
+    const toReturn: string[] = [];
 
     // go through all the URLs, and find which which one has `static/chunks/` in it
     let jsDirBase: string | null = null;

@@ -31,6 +31,7 @@ const extractPagePaths = (content: string): string[] => {
 
     // Template literal path prefixes: `/post/${...}` → try `/post/1`
     // Matches backtick template literals starting with "/" that have at least one ${} segment
+    // eslint-disable-next-line security/detect-unsafe-regex -- single unambiguous greedy run + required literals, no nested quantifiers — not exploitable
     const TEMPLATE_RE = /`(\/[a-zA-Z0-9_\-/]+)\$\{[^`}]+\}(?:\/[a-zA-Z0-9_\-]*)*`/g;
     while ((m = TEMPLATE_RE.exec(content)) !== null) {
         const prefix = m[1]; // e.g. "/post/"

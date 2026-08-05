@@ -29,7 +29,7 @@ export const runChatOneShot = async (
 ): Promise<void> => {
     let providerName = (cliProvider || config.provider) as "openai" | "anthropic";
     let model = cliModel || config.model;
-    let apiKey = resolveApiKey(providerName, cliApiKey, config);
+    const apiKey = resolveApiKey(providerName, cliApiKey, config);
 
     let provider: LLMProvider | null = null;
 

@@ -164,7 +164,7 @@ const analyze = async (
     }
 
     // iterate over the ruleFiles
-    let ruleFindings: EngineOutput[] = [];
+    const ruleFindings: EngineOutput[] = [];
     for (const ruleFile of compatibleRuleFiles) {
         // load the rule
         const rule: Rule = yaml.parse(fs.readFileSync(ruleFile, "utf8"));

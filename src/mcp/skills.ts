@@ -89,6 +89,7 @@ export const findSkill = (name: string): Skill | undefined => {
 export const parseSkillArgs = (input: string, skill?: Skill): Record<string, string> => {
     const out: Record<string, string> = {};
     const positional: string[] = [];
+    // eslint-disable-next-line security/detect-unsafe-regex -- alternatives are mutually exclusive by first char and input is one bounded CLI command line — not exploitable
     const tokens = input.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
 
     for (let i = 0; i < tokens.length; i++) {

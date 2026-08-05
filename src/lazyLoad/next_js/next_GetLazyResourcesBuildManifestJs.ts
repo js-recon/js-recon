@@ -41,7 +41,7 @@ export const parseChunksFromBuildManifest = (content: string, buildManifestUrl: 
  */
 const next_getLazyResourcesBuildManifestJs = async (url: string): Promise<string[] | any> => {
     const foundUrls = globals.getJsUrls();
-    let toReturn: string[] = [];
+    const toReturn: string[] = [];
 
     let buildManifestUrl: string = "";
     for (const jsUrl of foundUrls) {

@@ -17,7 +17,7 @@ import { printMsg, MSG } from "../../utility/printMsg.js";
 const getAxiosInstances = async (chunks: Chunks, output: string, formats: string[]): Promise<Chunks> => {
     printMsg(MSG.Header, "[i] Getting axios instances");
 
-    let chunkCopy = structuredClone(chunks);
+    const chunkCopy = structuredClone(chunks);
     // iterate through all the chunks
     for (const chunk of Object.values(chunks)) {
         const chunkCode = chunk.code;
