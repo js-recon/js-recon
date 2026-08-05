@@ -277,7 +277,12 @@ const writeCache = async (
     }
 };
 
-const writeCacheUnsafe = async (url: string, headers: HeadersInit, response: Response, signal?: AbortSignal): Promise<void> => {
+const writeCacheUnsafe = async (
+    url: string,
+    headers: HeadersInit,
+    response: Response,
+    signal?: AbortSignal
+): Promise<void> => {
     if (signal?.aborted) return;
     const identityDigest = getCacheIdentityDigest(url, headers);
     const entryPath = getCacheEntryPath(url, headers);

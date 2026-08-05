@@ -153,8 +153,7 @@ export default async (
         }
         if (!fs.existsSync(permOutput)) fs.mkdirSync(permOutput, { recursive: true });
         const subsets = allScatSubsets();
-        const concurrency =
-            permConcurrency > 0 ? permConcurrency : Math.max(1, Math.floor(os.cpus().length / 2));
+        const concurrency = permConcurrency > 0 ? permConcurrency : Math.max(1, Math.floor(os.cpus().length / 2));
         printMsg(MSG.Header, `[*] Running ${subsets.length} scat permutations (concurrency: ${concurrency})`);
         let done = 0;
         for (let i = 0; i < subsets.length; i += concurrency) {

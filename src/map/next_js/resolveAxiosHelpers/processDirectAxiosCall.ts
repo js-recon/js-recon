@@ -55,10 +55,7 @@ export const processDirectAxiosCall = (
             // text: the nested `(\.concat\(.+\))+` quantifiers are catastrophically backtracking on
             // crafted input, so a maliciously long argument could hang the analysis pipeline.
             const MAX_CONCAT_PROBE_LENGTH = 2000;
-            if (
-                axiosFirstArgText.length <= MAX_CONCAT_PROBE_LENGTH &&
-                concatRegex.test(axiosFirstArgText)
-            ) {
+            if (axiosFirstArgText.length <= MAX_CONCAT_PROBE_LENGTH && concatRegex.test(axiosFirstArgText)) {
                 callUrl = resolveStringOps(axiosFirstArgText);
             } else if (t.isStringLiteral(axiosFirstArg)) {
                 callUrl = axiosFirstArg.value;
