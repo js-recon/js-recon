@@ -50,7 +50,7 @@ export const processDirectAxiosCall = (
             const axiosFirstArg = args[0];
             const axiosFirstArgText = chunkCode.slice(axiosFirstArg.start, axiosFirstArg.end);
 
-            const concatRegex = /\".*\"(\\.concat\(.+\))+/;
+            const concatRegex = /"[^"]*"(?:\.concat\([^()]*\))+/;
             // Bound the probe length before running this regex against attacker-controlled bundle
             // text: the nested `(\.concat\(.+\))+` quantifiers are catastrophically backtracking on
             // crafted input, so a maliciously long argument could hang the analysis pipeline.

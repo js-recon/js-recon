@@ -1551,7 +1551,7 @@ export const resolveNodeValue = (
                     const normalizedNodeCode = nodeCode.replace(/\n\s*/g, "");
                     if (
                         normalizedNodeCode.length <= MAX_CONCAT_PROBE_LENGTH &&
-                        normalizedNodeCode.match(/^"[^"]*"(\.concat\(.+\))+$/)
+                        normalizedNodeCode.match(/^"[^"]*"(?:\.concat\([^()]*\))+$/)
                     ) {
                         // parse it separately with ast
                         let ast;
