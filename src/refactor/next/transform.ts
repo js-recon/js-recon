@@ -75,13 +75,23 @@ function exprToJsxAttrValue(expr: t.Expression): t.JSXExpressionContainer | t.St
     return t.jsxExpressionContainer(expr);
 }
 
+// JSXText is emitted verbatim by the generator — it is not escaped the way a JS string
+// literal would be. A child string containing `<`, `>`, `{`, or `}` (e.g. a code sample
+// like "<script>") would be re-parsed as JSX markup and break the tree, so any child
+// containing those characters must stay wrapped in an expression container instead.
+const isSafeAsJsxText = (value: string): boolean => !/[<>{}]/.test(value);
+
 function childToJsxChild(
     child: t.Expression
 ): t.JSXElement | t.JSXFragment | t.JSXText | t.JSXExpressionContainer | t.JSXSpreadChild | null {
-    if (t.isStringLiteral(child)) return t.jsxText(child.value);
+    if (t.isStringLiteral(child)) {
+        return isSafeAsJsxText(child.value) ? t.jsxText(child.value) : t.jsxExpressionContainer(child);
+    }
     if (t.isTemplateLiteral(child) && child.expressions.length === 0 && child.quasis.length === 1) {
         const raw = child.quasis[0].value.cooked ?? child.quasis[0].value.raw;
-        if (raw !== undefined) return t.jsxText(raw);
+        if (raw !== undefined) {
+            return isSafeAsJsxText(raw) ? t.jsxText(raw) : t.jsxExpressionContainer(child);
+        }
     }
     if (t.isJSXElement(child) || t.isJSXFragment(child)) return child;
     if (t.isCallExpression(child)) {

@@ -62,6 +62,15 @@ const moduleIsLibrary = (
  *   - r(N) inline — replaced with hoisted identifier
  *   - r(N); standalone — becomes import './N.js' (side-effect)
  */
+// A node is the genuine top-level module wrapper only if its nearest enclosing
+// statement is a direct child of Program — this rejects arrow/function nodes
+// nested anywhere inside another function body, even when their immediate
+// parent happens to be an AssignmentExpression (e.g. an inner `n = () => {...}`).
+const isGenuineTopLevel = (path: NodePath): boolean => {
+    const statementParent = path.getStatementParent();
+    return !!statementParent?.parentPath?.isProgram();
+};
+
 export const refactorNextWebpack = async (
     chunk: Chunk,
     libSigs?: Set<string>,
@@ -82,15 +91,6 @@ export const refactorNextWebpack = async (
     }
 
     let captured: WebpackModuleEntry | null = null;
-
-    // A node is the genuine top-level module wrapper only if its nearest enclosing
-    // statement is a direct child of Program — this rejects arrow/function nodes
-    // nested anywhere inside another function body, even when their immediate
-    // parent happens to be an AssignmentExpression (e.g. an inner `n = () => {...}`).
-    const isGenuineTopLevel = (path: NodePath): boolean => {
-        const statementParent = path.getStatementParent();
-        return !!statementParent?.parentPath?.isProgram();
-    };
 
     traverse(ast, {
         // getWebpackConnections.ts synthesizes `function webpack_<chunk.id>(...)` whenever
@@ -294,6 +294,31 @@ async function refactorWebpackModule(
     let captured: WebpackModuleEntry | null = null;
 
     traverse(ast, {
+        // getWebpackConnections.ts synthesizes `function webpack_<chunk.id>(...)` whenever
+        // the original bundle module was itself a `function` expression (webpack 4/SWC
+        // output) — the dominant form on real-world bundles, same as refactorNextWebpack.
+        FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (captured) return;
+            if (path.node.id?.name !== `webpack_${chunk.id}`) return;
+            if (!isGenuineTopLevel(path)) return;
+
+            const params = path.node.params;
+            if (params.length > 3) return;
+
+            const moduleParam = params[0] && t.isIdentifier(params[0]) ? (params[0] as t.Identifier).name : "";
+            const exportsParam = params[1] && t.isIdentifier(params[1]) ? (params[1] as t.Identifier).name : "";
+            const requireParam = params[2] && t.isIdentifier(params[2]) ? (params[2] as t.Identifier).name : "";
+
+            captured = {
+                id: chunk.id,
+                fnPath: path,
+                runtimeParam: "",
+                moduleParam,
+                exportsParam,
+                requireParam,
+            };
+            path.stop();
+        },
         ArrowFunctionExpression(path: NodePath<t.ArrowFunctionExpression>) {
             // For webpack-style, the function may be at top level or inside an object property.
             // Accept any top-level arrow function.
