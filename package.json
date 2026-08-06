@@ -52,6 +52,7 @@
         "inquirer": "^12.6.3",
         "marked": "^16.1.2",
         "md5": "^2.3.0",
+        "ohash": "^2.0.11",
         "ollama": "^0.6.3",
         "openai": "^5.8.2",
         "patch-package": "^8.0.1",
@@ -65,6 +66,7 @@
         "shell-quote": "^1.10.0",
         "tar": "^7.5.22",
         "undici": "^7.29.0",
+        "ws": "^8.21.2",
         "yaml": "^2.8.0",
         "zod": "^3.23.8"
     },
@@ -88,6 +90,7 @@
         "@types/graphql": "^14.2.3",
         "@types/node": "^24.12.4",
         "@types/shell-quote": "^1.7.5",
+        "@types/ws": "^8.18.1",
         "@vitest/coverage-v8": "^4.1.10",
         "eslint": "^10.8.0",
         "eslint-plugin-security": "^4.0.1",

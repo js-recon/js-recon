@@ -28,6 +28,7 @@ import { printMsg, MSG } from "../utility/printMsg.js";
  * @param swaggerJacker - Whether to run sj (swagger-jacker) against the mapped OpenAPI spec
  * @param sjBin - Path/name of the sj binary
  * @param sjArgs - Extra arguments passed through to `sj automate`
+ * @param exploitJsonFilePath - Path to the exploit findings JSON file (EngineOutput-shaped, see `exploit --engine-output`)
  * @returns Promise that resolves when report generation is complete
  */
 const report = async (
@@ -39,7 +40,8 @@ const report = async (
     reportFileName: string | undefined,
     swaggerJacker: boolean = false,
     sjBin: string = "sj",
-    sjArgs: string = ""
+    sjArgs: string = "",
+    exploitJsonFilePath: string | undefined = undefined
 ): Promise<void> => {
     printMsg(MSG.Header, "[i] Running 'report' module");
 
@@ -57,10 +59,17 @@ const report = async (
         await populateMappedJson(db, chunks);
     }
 
-    // then, move to analyze.json
-    if (analyzeJsonFilePath) {
-        const findings: EngineOutput[] = JSON.parse(fs.readFileSync(analyzeJsonFilePath, "utf8"));
-        await populateAnalysisFindings(db, findings);
+    // then, move to analyze.json and (optionally) exploit findings — both are EngineOutput-shaped,
+    // so they're merged into a single populateAnalysisFindings() call rather than each REPLACEing
+    // the table in turn (populateAnalysisFindings does `DELETE FROM analysis_findings` before insert).
+    if (analyzeJsonFilePath || exploitJsonFilePath) {
+        const analyzeFindings: EngineOutput[] = analyzeJsonFilePath
+            ? JSON.parse(fs.readFileSync(analyzeJsonFilePath, "utf8"))
+            : [];
+        const exploitFindings: EngineOutput[] = exploitJsonFilePath
+            ? JSON.parse(fs.readFileSync(exploitJsonFilePath, "utf8"))
+            : [];
+        await populateAnalysisFindings(db, [...analyzeFindings, ...exploitFindings]);
     }
 
     // populate the endpoints

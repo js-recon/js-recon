@@ -13,6 +13,7 @@ import refactor from "./refactor/index.js";
 import run from "./run/index.js";
 import analyze from "./analyze/index.js";
 import report from "./report/index.js";
+import exploit, { printCveList } from "./exploit/index.js";
 import configureSandbox from "./utility/configureSandbox.js";
 import mcp from "./mcp/index.js";
 import load from "./load/index.js";
@@ -613,6 +614,56 @@ export function buildProgram(): Command {
         });
 
     program
+        .command("exploit")
+        .description("Attempt exploitation of known framework CVEs to discover new attack surface")
+        .option("-u, --url <url>", "Target URL")
+        .option("--cve <id>", "CVE ID to exploit (e.g. CVE-2025-29927)")
+        .option("--list-cve", "List all supported CVEs grouped by framework and exit", false)
+        .option("--exec-cmd <cmd>", "Command to execute for RCE-class CVE proof (read-only recommended)", "id")
+        .option("-o, --output <file>", "Output JSON file for exploit findings", "exploit.json")
+        .option(
+            "--engine-output <file>",
+            "Output JSON file in report-compatible EngineOutput format",
+            "exploit-engine.json"
+        )
+        .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` module)", ".proxy_config.json")
+        .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
+        .option("--timeout <timeout>", "Request timeout in ms", "30000")
+        .option("-k, --insecure", "Disable SSL certificate verification", false)
+        .action(async (cmd) => {
+            if (cmd.listCve) {
+                printCveList();
+                process.exit(0);
+            }
+
+            if (!cmd.cve) {
+                console.error(chalk.red("[!] Missing required option: --cve <id> (or use --list-cve)"));
+                process.exit(1);
+            }
+
+            if (!cmd.url) {
+                console.error(chalk.red("[!] Missing required option: -u, --url <url>"));
+                process.exit(1);
+            }
+
+            configureProxy(cmd);
+            validateAndSetTimeout(cmd.timeout);
+            if (cmd.insecure) {
+                globalsUtil.setInsecure(true);
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+                console.warn(chalk.yellow("[!] Running in insecure mode. SSL certificate verification disabled"));
+            }
+
+            await exploit(cmd.url, cmd.cve, {
+                execCmd: cmd.execCmd,
+                output: cmd.output,
+                engineOutput: cmd.engineOutput,
+                timeout: Number(cmd.timeout),
+                insecure: !!cmd.insecure,
+            });
+        });
+
+    program
         .command("report")
         .description("Generate a report")
         .option("-s, --sqlite-db <file>", "SQLite database file", "js-recon.db")
@@ -620,6 +671,10 @@ export function buildProgram(): Command {
         .option("-a, --analyze-json <file>", "Analyze JSON file")
         .option("-e, --endpoints-json <file>", "Endpoints JSON file")
         .option("--map-openapi, --mapped-openapi-json <file>", "Mapped OpenAPI JSON file")
+        .option(
+            "--exploit-json <file>",
+            "Exploit findings JSON file, in EngineOutput format (see `exploit --engine-output`)"
+        )
         .option("-o, --output <file>", "Output file name (without the extension)", "report")
         .option("--sj", "Run sj (swagger-jacker) against the mapped OpenAPI spec", false)
         .option("--sj-bin <path>", "Path to the sj binary", "sj")
@@ -634,7 +689,8 @@ export function buildProgram(): Command {
                 cmd.output,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                cmd.exploitJson
             );
         });
 
