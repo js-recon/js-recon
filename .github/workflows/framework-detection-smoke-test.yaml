@@ -1,0 +1,136 @@
+name: Framework Detection Smoke Test
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  framework-detection-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout js-recon
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Checkout js-recon-labs
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: js-recon/js-recon-labs
+          path: js-recon-labs
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install js-recon dependencies
+        run: npm ci
+
+      - name: Build js-recon
+        run: npm run build
+
+      - name: Start next_js detection app (port 3010)
+        working-directory: js-recon-labs/detection/next_js
+        run: |
+          npm ci
+          npm run build
+          npm start &
+          echo "Waiting for app on port 3010..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3010 > /dev/null; do sleep 2; done'
+
+      - name: Start vue detection app (port 3011)
+        working-directory: js-recon-labs/detection/vue
+        run: |
+          npm ci
+          npm run build
+          npm start &
+          echo "Waiting for app on port 3011..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3011 > /dev/null; do sleep 2; done'
+
+      - name: Start nuxt detection app (port 3012)
+        working-directory: js-recon-labs/detection/nuxt
+        run: |
+          npm ci
+          npm run build
+          npm start &
+          echo "Waiting for app on port 3012..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3012 > /dev/null; do sleep 2; done'
+
+      - name: Start svelte detection app (port 3013)
+        working-directory: js-recon-labs/detection/svelte
+        run: |
+          npm ci
+          npm run build
+          npm start &
+          echo "Waiting for app on port 3013..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3013 > /dev/null; do sleep 2; done'
+
+      - name: Start angular detection app (port 3014)
+        working-directory: js-recon-labs/detection/angular
+        run: |
+          npm ci
+          npm run build
+          npm start &
+          echo "Waiting for app on port 3014..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3014 > /dev/null; do sleep 2; done'
+
+      - name: Start react-vite detection app (port 3015)
+        working-directory: js-recon-labs/detection/react_vite
+        run: |
+          npm ci
+          npm run build
+          npm start &
+          echo "Waiting for app on port 3015..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3015 > /dev/null; do sleep 2; done'
+
+      - name: Start react-webpack detection app (port 3016)
+        working-directory: js-recon-labs/detection/react_webpack
+        run: |
+          npm ci
+          npm run build
+          npm start &
+          echo "Waiting for app on port 3016..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3016 > /dev/null; do sleep 2; done'
+
+      - name: Run js-recon fingerprint against all detection apps
+        run: |
+          cat > /tmp/framework-urls.txt << 'EOF'
+          http://localhost:3010
+          http://localhost:3011
+          http://localhost:3012
+          http://localhost:3013
+          http://localhost:3014
+          http://localhost:3015
+          http://localhost:3016
+          EOF
+          node --max-old-space-size=4096 build/index.js fingerprint \
+            -u /tmp/framework-urls.txt \
+            -f json \
+            -o /tmp/fingerprint-result \
+            -t 3 \
+            --no-sandbox
+
+      - name: Verify all frameworks detected correctly
+        run: node scripts/framework-detect-smoke-test.js /tmp/fingerprint-result.json
+
+      - name: Upload fingerprint result on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fingerprint-result
+          path: /tmp/fingerprint-result.json
+          if-no-files-found: ignore
