@@ -12,6 +12,7 @@
 - `run`: added `--sj`/`--sj-bin`/`--sj-args` to integrate [swagger-jacker](https://github.com/AlexPistola/swagger-jacker) against the generated OpenAPI output after `report`; also available standalone on `report`. Exits with code 31 if the `sj` binary can't be found and `--sj-bin` wasn't given. (`run`, `report`)
 - `run`: added `--web-stats-dashboard`/`--web-stats-port` — an optional local HTTP dashboard showing live per-target progress (current step, running/completed/skipped/errored) while a batch run is in flight. (`run`)
 - `map`/`run`: `--ai-provider` now accepts `anthropic` in addition to `openai`; the option and its API key flag are renamed `--ai-api-key` (was `--openai-api-key`) to reflect the broader provider choice. (`map`, `run`)
+- New CI workflow `.github/workflows/framework-detection-smoke-test.yaml` runs `fingerprint` against a matrix of lab apps (Next.js, Vue, Nuxt, SvelteKit, Angular, React/Vite, React/webpack) from `js-recon-labs/detection/*` and asserts each is correctly identified, verified by the new `scripts/framework-detect-smoke-test.js`. The existing `rules-smoke-test.yaml` only exercised the rule engine against a single Next.js app; this closes the gap for tech-detection regressions across every other supported framework/bundler. Runs on push/PR to `dev`/`main` and after a release is published. (`ci`)
 
 ### Fixed
 
