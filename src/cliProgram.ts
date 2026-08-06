@@ -650,6 +650,7 @@ export function buildProgram(): Command {
             validateAndSetTimeout(cmd.timeout);
             if (cmd.insecure) {
                 globalsUtil.setInsecure(true);
+                // codeql[js/disabling-certificate-validation]: opt-in via -k/--insecure, same as lazyload/run
                 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
                 console.warn(chalk.yellow("[!] Running in insecure mode. SSL certificate verification disabled"));
             }
