@@ -144,7 +144,9 @@ const next_routerStateForge = async (
 
         const recordChunks = (body: string) => {
             for (const chunkPath of extractChunkPathsFromFlightBody(body)) {
-                newJsUrls.push(new URL(chunkPath.startsWith("/") ? chunkPath : `/${chunkPath}`, parsed.origin).toString());
+                newJsUrls.push(
+                    new URL(chunkPath.startsWith("/") ? chunkPath : `/${chunkPath}`, parsed.origin).toString()
+                );
             }
         };
 
