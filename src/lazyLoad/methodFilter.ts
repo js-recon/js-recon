@@ -13,6 +13,7 @@ export const FRAMEWORK_METHODS: Record<string, string[]> = {
         "next_parseLayoutJs",
         "next_bruteForceJsFiles",
         "next_getClientSidePaths",
+        "next_routerStateForge",
     ],
     vue: [
         "vue_discoverJsFiles",

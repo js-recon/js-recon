@@ -9,6 +9,7 @@ import next_parseLayoutJs from "./next_parseLayoutJs.js";
 import next_scriptTagsSubsequentRequests from "./next_scriptTagsSubsequentRequests.js";
 import next_bruteForceJsFiles from "./next_bruteForceJsFiles.js";
 import next_getClientSidePaths from "./next_getClientSidePaths.js";
+import next_routerStateForge from "./next_routerStateForge.js";
 
 import * as lazyLoadGlobals from "../globals.js";
 import { shouldRunMethod } from "../methodFilter.js";
@@ -429,6 +430,26 @@ class NextJsCrawler {
             const jsFromBrute = await next_bruteForceJsFiles(allJsUrls, this.threads);
             this.techniqueEfficiencyMapping["next_bruteForceJsFiles"] = jsFromBrute;
             this.emitDownloadable(this.registerUrls(jsFromBrute));
+        }
+
+        // Phase 4 – retry any redirecting page URL with a forged next-router-state-tree
+        // claiming a known ancestor segment is already client-rendered. Some Next.js apps
+        // put auth checks inside a layout component instead of middleware; Next.js skips
+        // re-executing that layout when the client claims to already have it mounted,
+        // which can return protected content (and reveal JS chunks a plain crawl never
+        // sees) for a request with no session at all.
+        if (!this.stopped && shouldRunMethod("next_routerStateForge", this.includeMethods, this.excludeMethods)) {
+            const pageUrls = [...this.discoveredUrls].filter((u) => {
+                try {
+                    const p = new URL(u).pathname;
+                    return !p.endsWith(".js") && !p.endsWith(".js.map");
+                } catch {
+                    return false;
+                }
+            });
+            const { bypassedUrls, newJsUrls } = await next_routerStateForge(pageUrls, this.threads);
+            this.techniqueEfficiencyMapping["next_routerStateForge"] = bypassedUrls;
+            this.emitDownloadable(this.registerUrls(newJsUrls));
         }
 
         // Only return downloadable assets. Anchor-derived page URLs live in
