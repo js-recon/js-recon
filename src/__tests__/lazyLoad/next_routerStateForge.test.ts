@@ -91,9 +91,9 @@ describe("computeLegacyRscKey", () => {
     });
 
     it("is at most 5 characters", () => {
-        expect(computeLegacyRscKey("a-much-longer-state-tree-value", "/some/deep/nested/path").length).toBeLessThanOrEqual(
-            5
-        );
+        expect(
+            computeLegacyRscKey("a-much-longer-state-tree-value", "/some/deep/nested/path").length
+        ).toBeLessThanOrEqual(5);
     });
 
     it("differs from the strong key for the same inputs", () => {
