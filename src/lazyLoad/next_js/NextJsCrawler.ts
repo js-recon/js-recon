@@ -447,12 +447,11 @@ class NextJsCrawler {
                     return false;
                 }
             });
-            const { bypassedUrls, metadataOnlyBypassedUrls, newJsUrls } = await next_routerStateForge(
-                pageUrls,
-                this.threads
-            );
+            const { bypassedUrls, metadataOnlyBypassedUrls, legacyKeyAcceptedUrls, newJsUrls } =
+                await next_routerStateForge(pageUrls, this.threads);
             this.techniqueEfficiencyMapping["next_routerStateForge"] = bypassedUrls;
             this.techniqueEfficiencyMapping["next_routerStateForge_metadataOnly"] = metadataOnlyBypassedUrls;
+            this.techniqueEfficiencyMapping["next_routerStateForge_legacyKeyAccepted"] = legacyKeyAcceptedUrls;
             this.emitDownloadable(this.registerUrls(newJsUrls));
         }
 

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
     buildStateTreeHeader,
     computeStrongRscKey,
+    computeLegacyRscKey,
     buildAncestorAttempts,
     containsNextRedirectMarker,
     extractChunkPathsFromFlightBody,
@@ -59,6 +60,44 @@ describe("computeStrongRscKey", () => {
     it("never contains base64 padding or URL-unsafe characters", () => {
         const key = computeStrongRscKey("tree", "/dashboard");
         expect(key).not.toMatch(/[+/=]/);
+    });
+});
+
+describe("computeLegacyRscKey", () => {
+    const referenceDjb2Hash = (str: string): number => {
+        let hash = 5381;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) + hash + str.charCodeAt(i)) & 0xffffffff;
+        }
+        return hash >>> 0;
+    };
+
+    it("is deterministic for identical inputs", () => {
+        const a = computeLegacyRscKey("tree", "/dashboard");
+        const b = computeLegacyRscKey("tree", "/dashboard");
+        expect(a).toBe(b);
+    });
+
+    it("changes when the state tree changes", () => {
+        const a = computeLegacyRscKey("tree-a", "/dashboard");
+        const b = computeLegacyRscKey("tree-b", "/dashboard");
+        expect(a).not.toBe(b);
+    });
+
+    it("matches a manually computed djb2Hash/base36/5-char reference value", () => {
+        const input = ["0", "0", "tree", "/dashboard"].join(",");
+        const expected = referenceDjb2Hash(input).toString(36).slice(0, 5);
+        expect(computeLegacyRscKey("tree", "/dashboard")).toBe(expected);
+    });
+
+    it("is at most 5 characters", () => {
+        expect(computeLegacyRscKey("a-much-longer-state-tree-value", "/some/deep/nested/path").length).toBeLessThanOrEqual(
+            5
+        );
+    });
+
+    it("differs from the strong key for the same inputs", () => {
+        expect(computeLegacyRscKey("tree", "/dashboard")).not.toBe(computeStrongRscKey("tree", "/dashboard"));
     });
 });
 
