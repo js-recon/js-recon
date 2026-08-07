@@ -32,9 +32,7 @@ describe("buildStateTreeHeader", () => {
     });
 
     it("encodes a dynamic-segment ancestor as a [paramName, value, 'd'] tuple, matching Next.js's matchSegment", () => {
-        const decoded = JSON.parse(
-            decodeURIComponent(buildStateTreeHeader([{ paramName: "org", value: "acme" }]))
-        );
+        const decoded = JSON.parse(decodeURIComponent(buildStateTreeHeader([{ paramName: "org", value: "acme" }])));
         expect(decoded).toEqual(["", { children: [["org", "acme", "d"], { children: ["__PAGE__", {}] }] }]);
     });
 
@@ -45,10 +43,7 @@ describe("buildStateTreeHeader", () => {
         expect(decoded).toEqual([
             "",
             {
-                children: [
-                    "organizations",
-                    { children: [["org", "acme", "d"], { children: ["__PAGE__", {}] }] },
-                ],
+                children: ["organizations", { children: [["org", "acme", "d"], { children: ["__PAGE__", {}] }] }],
             },
         ]);
     });
