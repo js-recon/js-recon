@@ -30,6 +30,28 @@ describe("buildStateTreeHeader", () => {
             { children: ["dashboard", { children: ["__PAGE__", {}, null, "metadata-only"] }] },
         ]);
     });
+
+    it("encodes a dynamic-segment ancestor as a [paramName, value, 'd'] tuple, matching Next.js's matchSegment", () => {
+        const decoded = JSON.parse(
+            decodeURIComponent(buildStateTreeHeader([{ paramName: "org", value: "acme" }]))
+        );
+        expect(decoded).toEqual(["", { children: [["org", "acme", "d"], { children: ["__PAGE__", {}] }] }]);
+    });
+
+    it("mixes static and dynamic ancestor segments", () => {
+        const decoded = JSON.parse(
+            decodeURIComponent(buildStateTreeHeader(["organizations", { paramName: "org", value: "acme" }]))
+        );
+        expect(decoded).toEqual([
+            "",
+            {
+                children: [
+                    "organizations",
+                    { children: [["org", "acme", "d"], { children: ["__PAGE__", {}] }] },
+                ],
+            },
+        ]);
+    });
 });
 
 describe("computeStrongRscKey", () => {
@@ -110,15 +132,26 @@ describe("buildAncestorAttempts", () => {
         expect(buildAncestorAttempts(["dashboard", "secret"])).toEqual([["dashboard"]]);
     });
 
-    it("tries both first-segment and all-but-leaf for a deeper path", () => {
-        expect(buildAncestorAttempts(["organizations", "acme", "reports"])).toEqual([
-            ["organizations"],
-            ["organizations", "acme"],
-        ]);
+    it("tries first-segment, all-but-leaf, and dynamic-param guesses on the last ancestor for a deeper path", () => {
+        const attempts = buildAncestorAttempts(["organizations", "acme", "reports"]);
+        expect(attempts[0]).toEqual(["organizations"]);
+        expect(attempts[1]).toEqual(["organizations", "acme"]);
+        // Every subsequent attempt re-tries the same ancestor set with "acme" as a guessed
+        // dynamic param value instead of a literal static segment.
+        expect(attempts.slice(2)).toEqual(
+            attempts.slice(2).map((_, i) => ["organizations", { paramName: expect.any(String), value: "acme" }])
+        );
+        expect(attempts.length).toBeGreaterThan(2);
     });
 
     it("returns a single attempt for a single-segment path", () => {
         expect(buildAncestorAttempts(["dashboard"])).toEqual([["dashboard"]]);
+    });
+
+    it("guesses a dynamic param for a single-ancestor path when the leaf itself could be dynamic", () => {
+        // ["org", "reports"] -> allButLeaf = ["org"]; no static/dynamic distinction to make
+        // since allButLeaf === attempts[0], so only the plain-string attempt is produced.
+        expect(buildAncestorAttempts(["org", "reports"])).toEqual([["org"]]);
     });
 });
 
@@ -137,9 +170,17 @@ describe("containsNextRedirectMarker", () => {
 });
 
 describe("extractChunkPathsFromFlightBody", () => {
-    it("extracts a webpack chunk path", () => {
+    it("extracts a bare static/chunks/*.js path with no _next/ prefix (the real wire format)", () => {
+        // e.g. 4:I[3330,["614","static/chunks/app/dashboard/secret/page-<hash>.js"],"default"]
+        const body = '4:I[3330,["614","static/chunks/app/dashboard/secret/page-827315aa691298f6.js"],"default"]';
+        expect(extractChunkPathsFromFlightBody(body)).toEqual([
+            "static/chunks/app/dashboard/secret/page-827315aa691298f6.js",
+        ]);
+    });
+
+    it("extracts a webpack chunk path with a _next/ prefix", () => {
         const body = '2:I["/_next/static/chunks/app/dashboard/page-abc123.js",[],""]';
-        expect(extractChunkPathsFromFlightBody(body)).toEqual(["/_next/static/chunks/app/dashboard/page-abc123.js"]);
+        expect(extractChunkPathsFromFlightBody(body)).toEqual(["_next/static/chunks/app/dashboard/page-abc123.js"]);
     });
 
     it("extracts Turbopack ~-separated chunk names", () => {
@@ -149,7 +190,7 @@ describe("extractChunkPathsFromFlightBody", () => {
 
     it("dedupes repeated references", () => {
         const body = "/_next/static/chunks/a.js /_next/static/chunks/a.js";
-        expect(extractChunkPathsFromFlightBody(body)).toEqual(["/_next/static/chunks/a.js"]);
+        expect(extractChunkPathsFromFlightBody(body)).toEqual(["_next/static/chunks/a.js"]);
     });
 
     it("returns [] when no chunk paths are present", () => {

