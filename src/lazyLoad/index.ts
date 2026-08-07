@@ -8,6 +8,7 @@ import * as cheerio from "cheerio";
 
 // Next.js
 import NextJsCrawler from "./next_js/NextJsCrawler.js";
+import next_serverActionIdScan from "./next_js/next_serverActionIdScan.js";
 import { next_buildId_RSC } from "./next_js/next_buildId.js";
 
 // Nuxt.js
@@ -225,6 +226,21 @@ const lazyLoad = async (
                     if (hardTimeoutReached) return;
                     activeQueue.printSummary();
                     activeQueue = null;
+
+                    if (shouldRunMethod("next_serverActionIdScan", includeMethods, excludeMethods)) {
+                        const scanDir = resolveHostOutputDirectory(output, new URL(url).host, isBatch);
+                        const scanResult = await next_serverActionIdScan(scanDir);
+                        if (scanResult.allActionIds.length > 0) {
+                            printMsg(
+                                MSG.Run,
+                                `[✓] Found ${scanResult.allActionIds.length} Server Action ID(s) referenced in downloaded chunks (disclosure only — not invoked)`
+                            );
+                            fs.writeFileSync(
+                                path.join(scanDir, "server_action_ids.json"),
+                                JSON.stringify(scanResult, null, 4)
+                            );
+                        }
+                    }
 
                     if (buildId) {
                         // get the buildId
