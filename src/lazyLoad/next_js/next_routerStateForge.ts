@@ -406,7 +406,7 @@ const next_routerStateForge = async (
         if (!bypassed) bypassed = await tryAttempts(harvestBonusAttempts(), "page");
         if (bypassed) return;
 
-        let metadataBypassed = await tryAttempts(ancestorAttempts, "metadata-only");
+        const metadataBypassed = await tryAttempts(ancestorAttempts, "metadata-only");
         if (!metadataBypassed) await tryAttempts(harvestBonusAttempts(), "metadata-only");
     });
 
