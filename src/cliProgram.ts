@@ -149,6 +149,11 @@ export function buildProgram(): Command {
             "30"
         )
         .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
+        .option(
+            "--rsc-param-bruteforce-limit <n>",
+            "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
+            "20"
+        )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
             "--max-redirects <n>",
@@ -289,7 +294,8 @@ export function buildProgram(): Command {
                 Number(cmd.stringsMaxIterations),
                 Number(cmd.stagnationTimein) * 60 * 1000,
                 Number(cmd.stagnationPercentage),
-                Number(cmd.stagnationMonitor) * 60 * 1000
+                Number(cmd.stagnationMonitor) * 60 * 1000,
+                Number(cmd.rscParamBruteforceLimit)
             );
         });
 
@@ -786,6 +792,11 @@ export function buildProgram(): Command {
         )
         .option("--max-heap <mb>", "V8 heap size cap in MB (0 = all available RAM)")
         .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
+        .option(
+            "--rsc-param-bruteforce-limit <n>",
+            "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
+            "20"
+        )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
             "--max-redirects <n>",

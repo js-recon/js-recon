@@ -7,6 +7,7 @@ import {
     buildAncestorAttempts,
     containsNextRedirectMarker,
     extractChunkPathsFromFlightBody,
+    extractParamNameCandidatesFromFlightBody,
 } from "../../lazyLoad/next_js/next_routerStateForge.js";
 
 describe("buildStateTreeHeader", () => {
@@ -148,6 +149,15 @@ describe("buildAncestorAttempts", () => {
         // since allButLeaf === attempts[0], so only the plain-string attempt is produced.
         expect(buildAncestorAttempts(["org", "reports"])).toEqual([["org"]]);
     });
+
+    it("uses a custom candidate list instead of the default wordlist when provided", () => {
+        const attempts = buildAncestorAttempts(["organizations", "acme", "reports"], ["workspace"]);
+        expect(attempts).toEqual([
+            ["organizations"],
+            ["organizations", "acme"],
+            ["organizations", { paramName: "workspace", value: "acme" }],
+        ]);
+    });
 });
 
 describe("containsNextRedirectMarker", () => {
@@ -190,5 +200,42 @@ describe("extractChunkPathsFromFlightBody", () => {
 
     it("returns [] when no chunk paths are present", () => {
         expect(extractChunkPathsFromFlightBody('1:"$Sreact.fragment"')).toEqual([]);
+    });
+});
+
+describe("extractParamNameCandidatesFromFlightBody", () => {
+    it("extracts a param name anchored to a known value via the object-key pattern", () => {
+        const body = '3:{"workspace":"acme-corp","other":"x"}';
+        expect(extractParamNameCandidatesFromFlightBody(body, "acme-corp")).toEqual(["workspace"]);
+    });
+
+    it("dedupes multiple keys anchored to the same value", () => {
+        const body = '3:{"workspace":"acme-corp"} 5:{"workspace":"acme-corp"}';
+        expect(extractParamNameCandidatesFromFlightBody(body, "acme-corp")).toEqual(["workspace"]);
+    });
+
+    it("filters out noise keys like id, key, and children", () => {
+        const body = '3:{"id":"acme-corp","key":"acme-corp","children":"acme-corp","workspace":"acme-corp"}';
+        expect(extractParamNameCandidatesFromFlightBody(body, "acme-corp")).toEqual(["workspace"]);
+    });
+
+    it("extracts a param name from a dev-mode webpack module source path, independent of knownValue", () => {
+        const body = "webpack-internal:///(rsc)/./app/organizations/[workspace]/layout.tsx";
+        expect(extractParamNameCandidatesFromFlightBody(body, "irrelevant")).toEqual(["workspace"]);
+    });
+
+    it("returns [] when there is no match", () => {
+        expect(extractParamNameCandidatesFromFlightBody('1:"$Sreact.fragment"', "acme-corp")).toEqual([]);
+    });
+
+    it("returns [] for an empty knownValue instead of matching everything", () => {
+        expect(extractParamNameCandidatesFromFlightBody('3:{"workspace":""}', "")).toEqual([]);
+    });
+
+    it("escapes regex-special characters in knownValue and still matches literally", () => {
+        const body = '3:{"workspace":"acme.corp+1"}';
+        expect(extractParamNameCandidatesFromFlightBody(body, "acme.corp+1")).toEqual(["workspace"]);
+        // A regex-unsafe interpretation of "." would also match "acmeXcorp+1" — confirm it doesn't.
+        expect(extractParamNameCandidatesFromFlightBody('3:{"workspace":"acmeXcorp+1"}', "acme.corp+1")).toEqual([]);
     });
 });
