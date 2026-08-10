@@ -30,7 +30,7 @@
         "@babel/traverse": "^7.28.5",
         "@babel/types": "^7.27.6",
         "@modelcontextprotocol/sdk": "^1.29.0",
-        "@shriyanss/cli-print-img": "^1.1.0",
+        "@shriyanss/cli-print-img": "^1.1.1",
         "@shriyanss/cs-mast": "0.1.8",
         "@types/chalk": "^0.4.31",
         "@types/cli-progress": "^3.11.6",
