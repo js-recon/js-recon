@@ -1,5 +1,13 @@
 # Change Log
 
+## 2.0.1-alpha.2 - (unreleased)
+
+### Fixed
+
+- The response cache (`makeReq.ts`) is now backed by a single SQLite file (`.resp_cache.db`, via the existing `better-sqlite3` dependency) instead of the previous two coexisting JSON formats — a legacy whole-file cache and a later per-entry sidecar directory (`<file>.entries/<digest>.json`). One row per URL/request-header identity digest replaces both; lookups and writes go through a lazily-opened, path-keyed singleton connection (`src/utility/cacheDb.ts`) rather than synchronous `fs` calls on every request. This is a clean break, not an in-place migration: an existing `.resp_cache.json`/`.entries/` directory from a prior version is left untouched but never read again — the first run after upgrading simply starts with an empty cache, which is the intended (and only) migration path, matching how cache-write failures were already treated as non-fatal/best-effort. `--cache-file`'s default changed accordingly, from `.resp_cache.json` to `.resp_cache.db` (`lazyload`, `run`, `load`, `mcp`).
+- `load` (Caido/Burp import) now writes each imported entry directly into the SQLite cache instead of building one large in-memory JSON object and serializing it in a single `fs.writeFileSync` at the end. This also removes the "cache too large to serialize as one JSON string" `RangeError` failure mode entirely — SQLite has no equivalent whole-file size ceiling. (`load`)
+- `lazyload`'s cache pre-creation step now opens the SQLite cache DB up front (which also creates it and its schema if missing) instead of writing an empty `{}` JSON stub; a failure to open it is now a fatal error with a dedicated exit code (`32`), since this step's entire purpose is ensuring a writable cache exists before the crawl starts. (`lazyload`)
+
 ## 2.0.1-alpha.1 - (unreleased)
 
 ### Added
