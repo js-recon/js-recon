@@ -8,14 +8,14 @@ import checkFireWallBlocking from "../proxy/checkFireWallBlocking.js";
 import { parseProxyUrl } from "../proxy/genericProxy.js";
 import { buildOxylabsProxyUrl, composeOxylabsUsername } from "../proxy/oxylabsProxy.js";
 import type { ResolvedProxyConfig } from "../proxy/resolveProxyConfig.js";
-import fs from "fs";
 import { EventEmitter } from "events";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { progressError, progressLog } from "./progressLog.js";
 import { isSigintHandlerActive } from "../run/interruptHandler.js";
 import detectBlockedResponse from "../proxy/detectBlockedResponse.js";
 import { claimOxylabsFallback, getOxylabsFallbackConfiguration } from "../proxy/oxylabsFallback.js";
+import { deleteCacheEntry, readCacheEntry, writeCacheEntryUnsafe } from "./cacheDb.js";
 
 /**
  * Proxy-wiring layer. This is the single place a resolved proxy config (see
@@ -156,15 +156,7 @@ const UAs = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
 ];
 
-interface CacheEntry {
-    readonly identityDigest: string;
-    readonly status: number;
-    readonly statusText: string;
-    readonly bodyBase64: string;
-    readonly responseHeaders: Readonly<Record<string, string>>;
-}
-
-const getCacheIdentityDigest = (url: string, headers: HeadersInit): string => {
+export const getCacheIdentityDigest = (url: string, headers: HeadersInit): string => {
     const normalizedHeaders = [...new Headers(headers as HeadersInit).entries()].sort(([left], [right]) =>
         left.localeCompare(right)
     );
@@ -173,20 +165,13 @@ const getCacheIdentityDigest = (url: string, headers: HeadersInit): string => {
         .digest("hex");
 };
 
-const getCacheEntryPath = (url: string, headers: HeadersInit): string => {
-    const digest = getCacheIdentityDigest(url, headers);
-    return `${globals.getRespCacheFile()}.entries/${digest}.json`;
-};
-
 /**
- * Reads response data from cache for future requests.
+ * Reads response data from the SQLite response cache for future requests.
  *
- * If the cache file exists, and the given URL is present in the cache,
- * it checks if the response contains the specific request headers. If it does,
- * it builds a Response object with the cached data and returns it.
- *
- * If the response does not contain the request headers, or if the cache file
- * does not exist, or if the URL is not present in the cache, it returns null.
+ * Looks up the given URL/headers identity digest in `cache_entries`. If a row
+ * is found, builds a Response object with the cached data and returns it.
+ * Returns null on a miss (including a miss caused by the digest belonging to
+ * a different target, which is the normal/expected case, not an error).
  *
  * @param url - The URL to read the cache for
  * @param headers - Request headers that were used
@@ -194,65 +179,26 @@ const getCacheEntryPath = (url: string, headers: HeadersInit): string => {
  */
 const readCache = async (url: string, headers: HeadersInit): Promise<Response | null> => {
     const identityDigest = getCacheIdentityDigest(url, headers);
-    const entryPath = getCacheEntryPath(url, headers);
-    if (fs.existsSync(entryPath)) {
-        try {
-            const entry = JSON.parse(fs.readFileSync(entryPath, "utf-8")) as CacheEntry;
-            if (entry.identityDigest === identityDigest) {
-                return new Response(Buffer.from(entry.bodyBase64, "base64"), {
-                    status: entry.status,
-                    statusText: entry.statusText,
-                    headers: entry.responseHeaders,
-                });
-            }
-        } catch {
-            // Ignore corrupt sidecar entries and fall back to the legacy cache.
-        }
-    }
-
-    // first, check if the file exists or not
-    if (!fs.existsSync(globals.getRespCacheFile())) {
-        return null;
-    }
-
-    // console.log("reading cache for", url);
-    // open the cache file, build a Response, and return
-    let cache: Record<string, any>;
     try {
-        cache = JSON.parse(fs.readFileSync(globals.getRespCacheFile(), "utf-8"));
-    } catch {
-        return null;
-    }
-    if (cache[url]) {
-        // check if the response contains the specific request headers
-        // iterate through cache[url] and build a Response
-
-        // first check if the essential headers match
-        const rscEnabled = headers["RSC"] ? true : false;
-        if (rscEnabled) {
-            if (cache[url].rsc) {
-                return new Response(Buffer.from(cache[url].rsc.body_b64, "base64"), {
-                    status: cache[url].rsc.status,
-                    headers: cache[url].rsc.resp_headers,
-                });
-            }
-        }
-        if (!rscEnabled && cache[url] && cache[url].normal) {
-            return new Response(Buffer.from(cache[url].normal.body_b64, "base64"), {
-                status: cache[url].normal.status,
-                headers: cache[url].normal.resp_headers,
+        const entry = readCacheEntry(identityDigest);
+        if (entry) {
+            return new Response(Buffer.from(entry.bodyBase64, "base64"), {
+                status: entry.status,
+                statusText: entry.statusText,
+                headers: entry.responseHeaders,
             });
         }
+    } catch {
+        // Corrupt/unreadable cache DB — treat as a cache miss, never break the request.
     }
-    // console.log("cache not found for ", url);
     return null;
 };
 
 /**
- * Writes response data to cache for future requests.
+ * Writes response data to the SQLite response cache for future requests.
  *
- * Stores one atomic sidecar entry per URL/request-header identity. The legacy
- * JSON cache remains readable, but new writes avoid whole-cache rewrites.
+ * Stores one row per URL/request-header identity digest, first-write-wins for
+ * a duplicate digest (see `cacheDb.ts`'s `writeCacheEntryUnsafe`).
  *
  * @param url - The URL to cache the response for
  * @param headers - Request headers that were used
@@ -285,29 +231,18 @@ const writeCacheUnsafe = async (
 ): Promise<void> => {
     if (signal?.aborted) return;
     const identityDigest = getCacheIdentityDigest(url, headers);
-    const entryPath = getCacheEntryPath(url, headers);
-    if (fs.existsSync(entryPath)) return;
 
     const clonedResponse = response.clone();
     const bodyBuffer = Buffer.from(await clonedResponse.arrayBuffer());
     if (signal?.aborted) return;
-    const entry: CacheEntry = Object.freeze({
+    writeCacheEntryUnsafe({
         identityDigest,
+        url,
         status: clonedResponse.status,
         statusText: clonedResponse.statusText,
         bodyBase64: bodyBuffer.toString("base64"),
         responseHeaders: Object.freeze(Object.fromEntries(clonedResponse.headers.entries())),
     });
-    const entryDirectory = `${globals.getRespCacheFile()}.entries`;
-    fs.mkdirSync(entryDirectory, { recursive: true });
-    const temporaryPath = `${entryPath}.${process.pid}.${randomUUID()}.tmp`;
-    try {
-        fs.writeFileSync(temporaryPath, JSON.stringify(entry));
-        if (signal?.aborted) return;
-        fs.renameSync(temporaryPath, entryPath);
-    } finally {
-        if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
-    }
 };
 
 /**
@@ -589,9 +524,9 @@ const makeRequest = async (
                 getOxylabsFallbackConfiguration().enabled &&
                 cachedDetection.blocked;
             if (shouldRefreshBlockedCache) {
-                const sidecarPath = getCacheEntryPath(url, cachedEntry.headers);
+                const identityDigest = getCacheIdentityDigest(url, cachedEntry.headers);
                 try {
-                    if (fs.existsSync(sidecarPath)) fs.unlinkSync(sidecarPath);
+                    deleteCacheEntry(identityDigest);
                 } catch (error) {
                     if (reportErrors) {
                         progressError(chalk.yellow(`[!] Could not replace blocked cache entry for ${url}: ${error}`));

@@ -125,7 +125,7 @@ export function buildProgram(): Command {
         .option("--oxylabs-fallback-max-requests <count>", "Maximum paid Oxylabs fallback requests per origin", "10")
         .option("--oxylabs-fallback-max-total <count>", "Maximum paid Oxylabs fallback requests per run", "100")
         .option("--oxylabs-fallback-max-origins <count>", "Maximum distinct fallback origins per run", "25")
-        .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
+        .option("--cache-file <file>", "File to store response cache", ".resp_cache.db")
         .option("--disable-cache", "Disable response caching", false)
         .option("--cache-only", "Only use the response cache; never make network requests", false)
         .option("-y, --yes", "Auto-approve executing JS code from the target", false)
@@ -744,7 +744,7 @@ export function buildProgram(): Command {
         .option("--oxylabs-fallback-max-requests <count>", "Maximum paid Oxylabs fallback requests per origin", "10")
         .option("--oxylabs-fallback-max-total <count>", "Maximum paid Oxylabs fallback requests per run", "100")
         .option("--oxylabs-fallback-max-origins <count>", "Maximum distinct fallback origins per run", "25")
-        .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
+        .option("--cache-file <file>", "File to store response cache", ".resp_cache.db")
         .option("--disable-cache", "Disable response caching", false)
         .option("--cache-only", "Only use the response cache; never make network requests", false)
         .option("-y, --yes", "Auto-approve executing JS code from the target", false)
@@ -950,7 +950,7 @@ export function buildProgram(): Command {
         .description("Populate response cache from a Caido/Burp request history export")
         .requiredOption("-c, --caido <file>", "Caido JSON export file")
         .requiredOption("-u, --url <url>", "Target URL — only entries matching this host/port/scheme are loaded")
-        .option("--cache-file <file>", "Response cache file to write", ".resp_cache.json")
+        .option("--cache-file <file>", "Response cache file to write", ".resp_cache.db")
         .action(async (cmd) => {
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             await load(cmd.caido, cmd.url);

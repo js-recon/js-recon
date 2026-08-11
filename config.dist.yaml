@@ -36,7 +36,7 @@ commands:
         oxylabsFallbackMaxRequests: "10"
         oxylabsFallbackMaxTotal: "100"
         oxylabsFallbackMaxOrigins: "25"
-        cacheFile: .resp_cache.json
+        cacheFile: .resp_cache.db
         disableCache: false
         cacheOnly: false
         yes: false
@@ -173,7 +173,7 @@ commands:
         oxylabsFallbackMaxRequests: "10"
         oxylabsFallbackMaxTotal: "100"
         oxylabsFallbackMaxOrigins: "25"
-        cacheFile: .resp_cache.json
+        cacheFile: .resp_cache.db
         disableCache: false
         cacheOnly: false
         yes: false
@@ -209,7 +209,7 @@ commands:
     load:
         caido: null
         url: null
-        cacheFile: .resp_cache.json
+        cacheFile: .resp_cache.db
 
     fingerprint:
         # May also be a YAML list of HTTP(S) URLs.
