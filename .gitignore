@@ -145,6 +145,7 @@ extracted_urls*
 .vscode/*
 !.vscode/tasks.json
 output*/
+refactored*/
 mapped.json
 mapped-openapi.postman_collection.json
 endpoints.json
