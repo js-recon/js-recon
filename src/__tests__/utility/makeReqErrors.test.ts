@@ -1,6 +1,10 @@
 import fs from "fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import makeRequest, { getActivePuppeteerProxyArgs, withRequestSignal } from "../../utility/makeReq.js";
+import makeRequest, {
+    getActivePuppeteerProxyArgs,
+    getCacheIdentityDigest,
+    withRequestSignal,
+} from "../../utility/makeReq.js";
 import {
     setCacheOnly,
     setDisableCache,
@@ -11,6 +15,30 @@ import {
 } from "../../utility/globals.js";
 import puppeteer from "../../utility/puppeteerInstance.js";
 import { configureOxylabsFallback, resetOxylabsFallback } from "../../proxy/oxylabsFallback.js";
+import * as cacheDbModule from "../../utility/cacheDb.js";
+import { closeCacheDb, getCacheDb, writeCacheEntryUnsafe } from "../../utility/cacheDb.js";
+
+const DEFAULT_USER_AGENT =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36";
+const defaultHeadersWithReferer = (origin: string): Record<string, string> => ({
+    "User-Agent": DEFAULT_USER_AGENT,
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Dest": "empty",
+    Referer: origin,
+    Origin: origin,
+});
+
+vi.mock("../../utility/cacheDb.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("../../utility/cacheDb.js")>();
+    return {
+        ...actual,
+        writeCacheEntryUnsafe: vi.fn(actual.writeCacheEntryUnsafe),
+        readCacheEntry: vi.fn(actual.readCacheEntry),
+    };
+});
 
 const requestHarness = vi.hoisted(() => ({
     awsGet: vi.fn(),
@@ -30,6 +58,8 @@ beforeEach(() => {
     setOxylabsConfig(undefined);
     resetOxylabsFallback();
     requestHarness.awsGet.mockReset();
+    vi.mocked(cacheDbModule.readCacheEntry).mockClear();
+    vi.mocked(cacheDbModule.writeCacheEntryUnsafe).mockClear();
 });
 
 afterEach(() => {
@@ -38,7 +68,8 @@ afterEach(() => {
     setProxyMethod(null);
     setOxylabsConfig(undefined);
     resetOxylabsFallback();
-    setRespCacheFile(".resp_cache.json");
+    closeCacheDb();
+    setRespCacheFile(".resp_cache.db");
     if (temporaryCacheDirectory) {
         fs.rmSync(temporaryCacheDirectory, { recursive: true, force: true });
         temporaryCacheDirectory = undefined;
@@ -199,8 +230,7 @@ describe("makeRequest error reporting ownership", () => {
     it("caches a successful Oxylabs recovery under the direct request identity", async () => {
         setDisableCache(false);
         temporaryCacheDirectory = fs.mkdtempSync("/tmp/js-recon-oxylabs-cache-");
-        const cachePath = `${temporaryCacheDirectory}/responses.json`;
-        fs.writeFileSync(cachePath, "{}");
+        const cachePath = `${temporaryCacheDirectory}/responses.db`;
         setRespCacheFile(cachePath);
         configureOxylabsFallback({
             enabled: true,
@@ -237,24 +267,21 @@ describe("makeRequest error reporting ownership", () => {
         expect(fetchSpy).not.toHaveBeenCalled();
     });
 
-    it("refreshes a legacy cached WAF block through direct-first Oxylabs fallback", async () => {
+    it("refreshes a cached WAF block through direct-first Oxylabs fallback", async () => {
         setDisableCache(false);
         temporaryCacheDirectory = fs.mkdtempSync("/tmp/js-recon-blocked-cache-");
-        const cachePath = `${temporaryCacheDirectory}/responses.json`;
+        const cachePath = `${temporaryCacheDirectory}/responses.db`;
         const url = "https://cached-block.example.test/chunk.js";
-        fs.writeFileSync(
-            cachePath,
-            JSON.stringify({
-                [url]: {
-                    normal: {
-                        status: 403,
-                        body_b64: Buffer.from("<title>Just a moment...</title>").toString("base64"),
-                        resp_headers: { server: "cloudflare", "cf-ray": "cached-ray" },
-                    },
-                },
-            })
-        );
         setRespCacheFile(cachePath);
+        const seededHeaders = defaultHeadersWithReferer("https://cached-block.example.test");
+        writeCacheEntryUnsafe({
+            identityDigest: getCacheIdentityDigest(url, seededHeaders),
+            url,
+            status: 403,
+            statusText: "Forbidden",
+            bodyBase64: Buffer.from("<title>Just a moment...</title>").toString("base64"),
+            responseHeaders: { server: "cloudflare", "cf-ray": "cached-ray" },
+        });
         configureOxylabsFallback({
             enabled: true,
             maxRequestsPerOrigin: 10,
@@ -388,8 +415,7 @@ describe("makeRequest error reporting ownership", () => {
     it("reuses a cached no-Referer fallback in cache-only mode", async () => {
         setDisableCache(false);
         temporaryCacheDirectory = fs.mkdtempSync("/tmp/js-recon-fallback-cache-");
-        const cachePath = `${temporaryCacheDirectory}/responses.json`;
-        fs.writeFileSync(cachePath, "{}");
+        const cachePath = `${temporaryCacheDirectory}/responses.db`;
         setRespCacheFile(cachePath);
         const timeoutError = Object.assign(new Error("timed out"), { name: "AbortError" });
         const fetchSpy = vi
@@ -414,10 +440,9 @@ describe("makeRequest error reporting ownership", () => {
 
     it("suppresses per-URL cache write diagnostics when the caller requests compact output", async () => {
         setDisableCache(false);
-        setRespCacheFile("/tmp/js-recon-unwritable-cache.json");
+        setRespCacheFile("/tmp/js-recon-unwritable-cache.db");
         vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("const ok = true;", { status: 200 }));
-        vi.spyOn(fs, "existsSync").mockReturnValue(false);
-        vi.spyOn(fs, "writeFileSync").mockImplementation(() => {
+        vi.mocked(cacheDbModule.writeCacheEntryUnsafe).mockImplementationOnce(() => {
             throw new Error("read-only cache path");
         });
         const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -432,8 +457,7 @@ describe("makeRequest error reporting ownership", () => {
     it("preserves every entry when concurrent requests update the response cache", async () => {
         setDisableCache(false);
         temporaryCacheDirectory = fs.mkdtempSync("/tmp/js-recon-response-cache-");
-        const cachePath = `${temporaryCacheDirectory}/responses.json`;
-        fs.writeFileSync(cachePath, "{}");
+        const cachePath = `${temporaryCacheDirectory}/responses.db`;
         setRespCacheFile(cachePath);
         const fetchSpy = vi
             .spyOn(globalThis, "fetch")
@@ -446,11 +470,13 @@ describe("makeRequest error reporting ownership", () => {
             makeRequest("https://cache.example.test/b.js", { reportErrors: false }),
         ]);
 
-        const entryDirectory = `${cachePath}.entries`;
-        const entryFiles = fs.readdirSync(entryDirectory).filter((name) => name.endsWith(".json"));
-        expect(entryFiles).toHaveLength(2);
-        const serializedEntries = entryFiles
-            .map((name) => fs.readFileSync(`${entryDirectory}/${name}`, "utf8"))
+        const rowCount = (
+            getCacheDb().prepare("SELECT COUNT(*) as count FROM cache_entries").get() as { count: number }
+        ).count;
+        expect(rowCount).toBe(2);
+        const bodies = getCacheDb().prepare("SELECT body_base64 FROM cache_entries").all() as { body_base64: string }[];
+        const serializedEntries = bodies
+            .map((row) => Buffer.from(row.body_base64, "base64").toString("utf8"))
             .join("\n");
         expect(serializedEntries).not.toContain("Mozilla/");
 
@@ -489,18 +515,14 @@ describe("makeRequest error reporting ownership", () => {
     it("does not return a cached response after its request scope is cancelled", async () => {
         setDisableCache(false);
         const fetchSpy = vi.spyOn(globalThis, "fetch");
-        vi.spyOn(fs, "existsSync").mockReturnValue(true);
-        vi.spyOn(fs, "readFileSync").mockReturnValue(
-            JSON.stringify({
-                "https://cached.example.test/chunk.js": {
-                    normal: {
-                        status: 200,
-                        body_b64: Buffer.from("const stale = true;").toString("base64"),
-                        resp_headers: { "content-type": "application/javascript" },
-                    },
-                },
-            })
-        );
+        const readCacheEntrySpy = vi.mocked(cacheDbModule.readCacheEntry).mockReturnValueOnce({
+            identityDigest: "unused",
+            url: "https://cached.example.test/chunk.js",
+            status: 200,
+            statusText: "OK",
+            bodyBase64: Buffer.from("const stale = true;").toString("base64"),
+            responseHeaders: { "content-type": "application/javascript" },
+        });
         const controller = new AbortController();
         controller.abort();
 
@@ -511,6 +533,7 @@ describe("makeRequest error reporting ownership", () => {
         ).resolves.toBeNull();
 
         expect(fetchSpy).not.toHaveBeenCalled();
+        expect(readCacheEntrySpy).not.toHaveBeenCalled();
     });
 
     it("propagates scoped cancellation through the AWS proxy request path", async () => {
