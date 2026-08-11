@@ -60,6 +60,7 @@ import { withRequestSignal } from "../utility/makeReq.js";
 import { resolveTargetInputs, type TargetInput } from "../utility/targetInputs.js";
 import { accumulateTechnique, createTechniqueRecorder } from "./researchUtils.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import { getCacheDb } from "../utility/cacheDb.js";
 
 /**
  * Downloads the required JavaScript files for a given URL
@@ -145,10 +146,13 @@ const lazyLoad = async (
             printMsg(MSG.Warn, "[!] Running in insecure mode. SSL certificate verification disabled");
         }
 
-        // if cache enabled, check if the cache file exists or not. If no, then create a new one
+        // if cache enabled, ensure the cache DB can be opened (this also creates it + its schema if missing)
         if (!globals.getDisableCache()) {
-            if (!fs.existsSync(globals.getRespCacheFile())) {
-                fs.writeFileSync(globals.getRespCacheFile(), "{}");
+            try {
+                getCacheDb();
+            } catch (err) {
+                printMsg(MSG.Err, `[!] Could not open response cache database: ${err?.message || err}`);
+                process.exit(32);
             }
         }
 
