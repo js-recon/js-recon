@@ -32,8 +32,15 @@ describe("buildStateTreeHeader", () => {
         ]);
     });
 
-    it("encodes a dynamic-segment ancestor as a [paramName, value, 'd'] tuple, matching Next.js's matchSegment", () => {
+    it("encodes a dynamic-segment ancestor as a [paramName, cacheKey, 'd', null] tuple by default, matching Next.js 16.3.0+'s flightRouterStateSchema", () => {
         const decoded = JSON.parse(decodeURIComponent(buildStateTreeHeader([{ paramName: "org", value: "acme" }])));
+        expect(decoded).toEqual(["", { children: [["org", "acme", "d", null], { children: ["__PAGE__", {}] }] }]);
+    });
+
+    it("encodes a dynamic-segment ancestor as a 3-element tuple when tupleLength=3, matching pre-16.3.0 Next.js's flightRouterStateSchema", () => {
+        const decoded = JSON.parse(
+            decodeURIComponent(buildStateTreeHeader([{ paramName: "org", value: "acme" }], "page", 3))
+        );
         expect(decoded).toEqual(["", { children: [["org", "acme", "d"], { children: ["__PAGE__", {}] }] }]);
     });
 
@@ -44,7 +51,10 @@ describe("buildStateTreeHeader", () => {
         expect(decoded).toEqual([
             "",
             {
-                children: ["organizations", { children: [["org", "acme", "d"], { children: ["__PAGE__", {}] }] }],
+                children: [
+                    "organizations",
+                    { children: [["org", "acme", "d", null], { children: ["__PAGE__", {}] }] },
+                ],
             },
         ]);
     });

