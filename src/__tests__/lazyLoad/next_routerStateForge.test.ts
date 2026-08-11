@@ -51,10 +51,7 @@ describe("buildStateTreeHeader", () => {
         expect(decoded).toEqual([
             "",
             {
-                children: [
-                    "organizations",
-                    { children: [["org", "acme", "d", null], { children: ["__PAGE__", {}] }] },
-                ],
+                children: ["organizations", { children: [["org", "acme", "d", null], { children: ["__PAGE__", {}] }] }],
             },
         ]);
     });
