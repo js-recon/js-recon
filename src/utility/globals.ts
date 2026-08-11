@@ -9,8 +9,7 @@ export let proxyMethod: "aws" | "socks" | "http" | "oxylabs" | null = null;
 export let proxyUrl: string | undefined;
 /** Resolved Oxylabs datacenter proxy config (method === "oxylabs") */
 export let oxylabsConfig:
-    | { username: string; password: string; country?: string; city?: string; sessionId?: string }
-    | undefined;
+    { username: string; password: string; country?: string; city?: string; sessionId?: string } | undefined;
 /** Whether to skip reading JS_RECON_* env vars during proxy config resolution */
 export let ignoreProxyEnv = false;
 
@@ -93,8 +92,7 @@ export const setOxylabsConfig = (
  * @returns The Oxylabs config
  */
 export const getOxylabsConfig = ():
-    | { username: string; password: string; country?: string; city?: string; sessionId?: string }
-    | undefined => {
+    { username: string; password: string; country?: string; city?: string; sessionId?: string } | undefined => {
     return oxylabsConfig;
 };
 
