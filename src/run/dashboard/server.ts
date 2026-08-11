@@ -37,7 +37,10 @@ export const listenWithFallback = (
             };
             server.once("error", onError);
             server.once("listening", onListening);
-            server.listen(port);
+            // Loopback-only: this dashboard is a local progress viewer, never meant to be
+            // reachable off-host. Binding to 127.0.0.1 is the actual mitigation for
+            // unauthenticated, unrate-limited file-read routes below.
+            server.listen(port, "127.0.0.1");
         };
 
         tryListen(startPort);
@@ -78,7 +81,7 @@ const buildApp = (): Express => {
         res.json(buildFileTree(target.dir));
     });
 
-    app.get("/api/targets/:host/files/*splat", (req, res) => {
+    app.get("/api/targets/:host/files/*splat", (req, res) => { // lgtm[js/missing-rate-limiting]: server binds to 127.0.0.1 only (see listenWithFallback above); no unauthenticated network-reachable surface to rate-limit.
         const target = getByHostDir(req.params.host);
         if (!target) {
             res.status(404).json({ error: "Unknown target" });

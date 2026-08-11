@@ -101,7 +101,7 @@ describe("findJsPathCandidatesFromStrings", () => {
             "/tmp/output/b.com/y.js": ["/only-on-b.js"],
         };
         const readFile = (filePath: string) =>
-            filePath.includes("a.com")
+            filePath.includes("a.com") // lgtm[js/incomplete-url-substring-sanitization]: mock file-path disambiguator in a test fixture, not real URL-security logic.
                 ? "// File Source: https://a.com/x.js\n..."
                 : "// File Source: https://b.com/y.js\n...";
         const result = findJsPathCandidatesFromStrings(allStrings, readFile).sort();

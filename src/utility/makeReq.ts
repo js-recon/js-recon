@@ -368,7 +368,7 @@ const singleFetch = async (
 
             try {
                 EventEmitter.defaultMaxListeners = 20;
-                const response = await fetch(url, currentRequestOptions);
+                const response = await fetch(url, currentRequestOptions); // lgtm[js/insecure-download]: this is a recon tool's generic HTTP client — it fetches whatever URL/scheme the target itself serves, by design.
                 const arrayBuffer = await response.arrayBuffer();
                 if (controller.signal.aborted) {
                     shouldDestroyOwnedDispatcher = true;

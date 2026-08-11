@@ -21,7 +21,7 @@ describe("listenWithFallback", () => {
         const occupier = http.createServer();
         servers.push(occupier);
         const occupiedPort: number = await new Promise((resolve) => {
-            occupier.listen(0, () => resolve((occupier.address() as any).port));
+            occupier.listen(0, "127.0.0.1", () => resolve((occupier.address() as any).port));
         });
 
         const server = http.createServer();
@@ -35,7 +35,7 @@ describe("listenWithFallback", () => {
         const occupier = http.createServer();
         servers.push(occupier);
         const occupiedPort: number = await new Promise((resolve) => {
-            occupier.listen(0, () => resolve((occupier.address() as any).port));
+            occupier.listen(0, "127.0.0.1", () => resolve((occupier.address() as any).port));
         });
 
         const server = http.createServer();
