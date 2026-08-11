@@ -10,7 +10,7 @@ import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
-let analyzedFiles = [];
+const analyzedFiles = [];
 let filesFound = [];
 
 /**
@@ -29,7 +29,7 @@ export const parseJSFileContent = async (content) => {
             errorRecovery: true,
         });
 
-        let foundJsFiles = {};
+        const foundJsFiles = {};
 
         traverse(ast, {
             StringLiteral(path) {

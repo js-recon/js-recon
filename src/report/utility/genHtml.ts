@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import fs from "fs";
 import { marked } from "marked";
 import hljs from "highlight.js";
@@ -8,6 +7,7 @@ import CONFIG from "../../globalConfig.js";
 import addMappedJson from "./markdownGen/addMappedJson.js";
 import genDataTablesPage from "./dataTables/genDataTablesPage.js";
 import { createRequire } from "module";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 declare global {
     interface Window {
@@ -20,7 +20,7 @@ declare global {
  *
  * @returns An object containing the DataTables JavaScript and CSS, or null if not found
  */
-const getLocalDataTablesAssets = () => {
+export const getLocalDataTablesAssets = () => {
     try {
         const require = createRequire(import.meta.url);
         const dtJsPath = require.resolve("datatables.net/js/dataTables.min.js");
@@ -29,7 +29,7 @@ const getLocalDataTablesAssets = () => {
         const css = fs.readFileSync(dtCssPath, "utf8");
         return { js, css } as { js: string | null; css: string | null };
     } catch (e: any) {
-        console.warn("[DataTables] Local assets not found; falling back to CDN", e?.message || e);
+        printMsg(MSG.Warn, `[DataTables] Local assets not found; falling back to CDN ${e?.message || e}`);
         return { js: null, css: null } as { js: string | null; css: string | null };
     }
 };
@@ -39,7 +39,7 @@ const getLocalDataTablesAssets = () => {
  *
  * @returns The jQuery JavaScript, or null if not found
  */
-const getLocalJqueryAsset = () => {
+export const getLocalJqueryAsset = () => {
     try {
         const require = createRequire(import.meta.url);
         // Try the direct subpath first (jQuery <4); if that fails (jQuery 4+ restricts
@@ -55,7 +55,7 @@ const getLocalJqueryAsset = () => {
         const js = fs.readFileSync(jqPath, "utf8");
         return js as string | null;
     } catch {
-        console.warn("[DataTables] Local jQuery not found; falling back to CDN");
+        printMsg(MSG.Warn, "[DataTables] Local jQuery not found; falling back to CDN");
         return null as string | null;
     }
 };
@@ -509,7 +509,7 @@ const html = async (
  * @returns A promise that resolves when the HTML report is generated
  */
 const genHtml = async (outputReportFile: string, db: Database.Database) => {
-    console.log(chalk.cyan("[i] Generating HTML report..."));
+    printMsg(MSG.Header, "[i] Generating HTML report...");
 
     let analyzeMarkdown = `# JS Recon Report generated at ${new Date().toISOString()}\n\n`;
     let mappedJsonMarkdown = analyzeMarkdown;
@@ -537,7 +537,7 @@ const genHtml = async (outputReportFile: string, db: Database.Database) => {
     const renderedHtml = await html(analyzeMarkdown, mappedJsonMarkdown, dataTablesHtml, dtAssets, jqueryJs);
     fs.writeFileSync(outputReportFile, renderedHtml);
 
-    console.log(chalk.green("[✓] HTML report generated successfully"));
+    printMsg(MSG.Run, "[✓] HTML report generated successfully");
 };
 
 export default genHtml;

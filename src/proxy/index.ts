@@ -144,9 +144,9 @@ const destroyGateway = async (id: string): Promise<void> => {
         return;
     }
     //   read the aws gateway map
-    let config = readAwsGatewayMap(configFile);
+    const config = readAwsGatewayMap(configFile);
     //   get the name of the api gateway
-    let name = Object.keys(config).find((key) => config[key].id === id);
+    const name = Object.keys(config).find((key) => config[key].id === id);
 
     console.log(chalk.bgGreen("Name:"), chalk.green(name));
     console.log(chalk.bgGreen("ID:"), chalk.green(id));
@@ -184,7 +184,7 @@ const destroyGateway = async (id: string): Promise<void> => {
 const destroyAllGateways = async () => {
     console.log(chalk.cyan("[i] Destroying all API Gateways"));
     //   read the aws gateway map
-    let config = readAwsGatewayMap(configFile);
+    const config = readAwsGatewayMap(configFile);
 
     //   destroy all the gateways
     for (const [key, value] of Object.entries(config)) {

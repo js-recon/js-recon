@@ -1,8 +1,8 @@
-import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import extract from "extract-zip";
 import { withActiveProxyDispatcher, type FetchOptsWithDispatcher } from "../../utility/makeReq.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const RULES_RELEASE_URL = "https://api.github.com/repos/js-recon/js-recon-rules/releases/latest";
 
@@ -47,7 +47,7 @@ const fetchLatestRulesRelease = async (options: FetchOptsWithDispatcher): Promis
  * @returns Promise that resolves when rules are downloaded and extracted
  */
 const downloadRules = async (homeDir: string): Promise<void> => {
-    console.log(chalk.cyan("[i] Rules not found. Downloading from GitHub..."));
+    printMsg(MSG.Header, "[i] Rules not found. Downloading from GitHub...");
     const buffer = await withActiveProxyDispatcher(async (options) => {
         const release = await fetchLatestRulesRelease(options);
         const downloadResponse = await fetch(release.zipballUrl, options);
@@ -61,7 +61,7 @@ const downloadRules = async (homeDir: string): Promise<void> => {
     const zipPath = path.join(homeDir, "/.js-recon/rules.zip");
     fs.writeFileSync(zipPath, buffer);
 
-    console.log(chalk.cyan("[i] Unzipping rules..."));
+    printMsg(MSG.Header, "[i] Unzipping rules...");
     const extractPath = path.join(homeDir, "/.js-recon");
     await extract(zipPath, { dir: extractPath });
 
@@ -91,7 +91,7 @@ const downloadRules = async (homeDir: string): Promise<void> => {
         fs.renameSync(rulesSkillsDir, skillsDir);
     }
 
-    console.log(chalk.green("[✓] Rules initialized successfully."));
+    printMsg(MSG.Run, "[✓] Rules initialized successfully.");
 };
 
 /**
@@ -126,7 +126,7 @@ export const shouldSkipRulesVersionCheck = (
  * @returns Promise that resolves when rules initialization is complete
  */
 const initRules = async (disableVersionCheck: boolean = false): Promise<void> => {
-    console.log(chalk.cyan("[i] Initializing rules..."));
+    printMsg(MSG.Header, "[i] Initializing rules...");
 
     // get the user's home dir
     const homeDir = process.env.HOME;
@@ -144,7 +144,7 @@ const initRules = async (disableVersionCheck: boolean = false): Promise<void> =>
             fs.existsSync(rulesDir)
         )
     ) {
-        console.log(chalk.cyan("[i] Rules version check disabled — using cached rules as-is."));
+        printMsg(MSG.Header, "[i] Rules version check disabled — using cached rules as-is.");
         return;
     }
 
@@ -156,7 +156,7 @@ const initRules = async (disableVersionCheck: boolean = false): Promise<void> =>
     // now that this rule exists, check if the version.txt exists
     const versionPath = path.join(homeDir, "/.js-recon/rules/version.txt");
     if (!fs.existsSync(versionPath)) {
-        console.error(chalk.yellow("[!] Rules directory is corrupted. Downloading again..."));
+        printMsg(MSG.Warn, "[!] Rules directory is corrupted. Downloading again...");
         // remove the rules directory
         fs.rmSync(path.join(homeDir, "/.js-recon/rules"), { recursive: true });
         await downloadRules(homeDir);
@@ -167,13 +167,13 @@ const initRules = async (disableVersionCheck: boolean = false): Promise<void> =>
     try {
         const release = await withActiveProxyDispatcher(fetchLatestRulesRelease);
         if (`v${version}` !== release.tagName) {
-            console.error(chalk.yellow("[!] Rules are not up to date. Downloading latest version..."));
+            printMsg(MSG.Warn, "[!] Rules are not up to date. Downloading latest version...");
             // remove the rules directory
             fs.rmSync(path.join(homeDir, "/.js-recon/rules"), { recursive: true });
             await downloadRules(homeDir);
         }
     } catch {
-        console.error(chalk.red("[!] An error occurred when fetching rules from GitHub"));
+        printMsg(MSG.Err, "[!] An error occurred when fetching rules from GitHub");
     }
 };
 

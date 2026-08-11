@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 export interface EngineOutput {
     ruleId: string;
@@ -21,7 +21,7 @@ export interface EngineOutput {
  * @param {EngineOutput[]} findings - Array of analysis findings to write to the output file
  */
 export const generateEngineOutput = (outputFile: string, findings: EngineOutput[]) => {
-    console.log(chalk.cyan("[i] Generating engine output..."));
+    printMsg(MSG.Header, "[i] Generating engine output...");
     fs.writeFileSync(outputFile, JSON.stringify(findings, null, 2));
-    console.log(chalk.green("[✓] Engine output generated successfully."));
+    printMsg(MSG.Run, "[✓] Engine output generated successfully.");
 };

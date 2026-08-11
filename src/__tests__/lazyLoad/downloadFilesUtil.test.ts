@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import downloadFiles from "../../lazyLoad/downloadFilesUtil.js";
 import { getSanitizedAssetFilename } from "../../lazyLoad/outputPath.js";
 import { setMaxReqQueue, setScope } from "../../lazyLoad/globals.js";
+import { setVerbose } from "../../utility/globals.js";
 import makeRequest from "../../utility/makeReq.js";
 
 vi.mock("../../utility/makeReq.js", () => ({
@@ -44,6 +45,7 @@ describe("legacy downloadFiles", () => {
         vi.spyOn(fs, "writeFileSync").mockImplementation(() => {
             throw new Error("disk full");
         });
+        setVerbose(true);
         const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
         const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -51,6 +53,7 @@ describe("legacy downloadFiles", () => {
 
         expect(logSpy.mock.calls.flat().join("\n")).not.toContain("Downloaded 1 JS chunks");
         expect(errorSpy.mock.calls.flat().join("\n")).toContain("Failed to write file");
+        setVerbose(false);
     });
 
     it("rejects HTTP and HTML fallback responses before formatting", async () => {

@@ -73,7 +73,7 @@ const inferOneEnclosingFn = (fnPath: any, file: string): EnclosingFn => {
 };
 
 export const inferEnclosingFn = (callPath: any, file: string): EnclosingFn | null => {
-    let fnPath = callPath.getFunctionParent();
+    const fnPath = callPath.getFunctionParent();
     if (!fnPath) return null;
     const innermost = inferOneEnclosingFn(fnPath, file);
     let chainTail = innermost;

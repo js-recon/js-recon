@@ -13,6 +13,19 @@ import { checkAngularJS } from "./checkAngularJS.js";
 import { checkReact } from "./checkReact.js";
 import { isValidInterceptedJsEvidence } from "./checkInterceptedEvidence.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
+
+// Every request Puppeteer intercepted during the most recent frameworkDetect() call,
+// including anything a runtime-injected script requested (e.g. Cloudflare's own
+// bot-challenge script self-injecting via `element.innerHTML = "...;a.src='...';..."`) —
+// a network capture generic tech's plain-fetch crawl has no way to see on its own,
+// since the reference is only ever constructed by executing the page's JS live.
+// Exposed as a getter rather than widening frameworkDetect's return type so the
+// existing `{name, evidence} | null` contract (consumed by fingerprint/index.ts too)
+// doesn't need to change everywhere.
+let lastInterceptedUrls: string[] = [];
+
+export const getLastInterceptedUrls = (): string[] => lastInterceptedUrls;
 
 /**
  * Detects the front-end framework used in a webpage.
@@ -29,7 +42,7 @@ const frameworkDetect = async (
     signal?: AbortSignal
 ): Promise<{ name: string; evidence: string } | null> => {
     const log = (...args: any[]) => {
-        if (!globalsUtil.getQuiet()) console.log(...args);
+        if (!globalsUtil.getQuiet()) printMsg(MSG.Plain, args.join(" "));
     };
     log(chalk.cyan("[i] Detecting front-end framework"));
 
@@ -165,6 +178,7 @@ const frameworkDetect = async (
             await browser.close().catch(() => {});
         }
     }
+    lastInterceptedUrls = interceptedUrls;
 
     if (signal?.aborted) return null;
 

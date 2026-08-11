@@ -1,5 +1,5 @@
 import { Chunks } from "../../../utility/interfaces.js";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 /**
  * Finds the chunks that export and import Axios clients.
@@ -12,8 +12,8 @@ import chalk from "chalk";
 export const findAxiosClients = (
     chunks: Chunks
 ): { axiosExportedFrom: string[]; axiosImportedTo: { [key: string]: string } } => {
-    let axiosExportedFrom: string[] = [];
-    let axiosImportedTo: { [key: string]: string } = {};
+    const axiosExportedFrom: string[] = [];
+    const axiosImportedTo: { [key: string]: string } = {};
 
     // first get those which have axios client
     for (const chunkName of Object.keys(chunks)) {
@@ -31,7 +31,7 @@ export const findAxiosClients = (
                 if (importName === axiosExportFunctionId) {
                     axiosImportedTo[chunkName] = axiosExportFunctionId;
 
-                    console.log(chalk.green(`[✓] ${chunkName} imports axios client ${axiosExportFunctionId}`));
+                    printMsg(MSG.Run, `[✓] ${chunkName} imports axios client ${axiosExportFunctionId}`);
                 }
             }
         }

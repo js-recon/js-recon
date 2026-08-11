@@ -13,7 +13,6 @@
 //   4. Rewrites direct vendor imports using vendor export map
 //   5. Cleans up rolldown boilerplate
 
-import chalk from "chalk";
 import { parse } from "@babel/parser";
 import _traverse from "@babel/traverse";
 import * as t from "@babel/types";
@@ -35,6 +34,7 @@ import {
     type LibraryType,
 } from "../react/library-classify.js";
 import { analyzeVendorChunk, type VendorExportInfo } from "./vendor-analyze.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 const generate = (_generator as unknown as { default: typeof _generator }).default ?? _generator;
 
@@ -581,7 +581,7 @@ export default async function refactorVite(
 
         // CS-MAST library detection: skip chunks whose signature set matches the baseline
         if (libSigs && libSigs.size > 0 && fileIsLibrary(code, libSigs, scatOverride)) {
-            console.log(chalk.gray(`[-] Chunk ${basename} matches library baseline — skipping`));
+            printMsg(MSG.Info, `[-] Chunk ${basename} matches library baseline — skipping`);
             continue;
         }
 
@@ -598,7 +598,7 @@ export default async function refactorVite(
             continue;
         }
 
-        let statements: t.Statement[] = ast.program.body as t.Statement[];
+        const statements: t.Statement[] = ast.program.body as t.Statement[];
 
         // Step 3a: Find rolldown-runtime import to identify __toESM local name
         let toEsmLocalName: string | null = null;

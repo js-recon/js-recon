@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import makeRequest from "../../utility/makeReq.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Discovers Nuxt's build manifest JSON files.
@@ -49,7 +49,7 @@ const nuxt_getBuildsManifest = async (url: string): Promise<string[]> => {
     }
 
     if (found.length > 0) {
-        console.log(chalk.green(`[✓] Found ${found.length} Nuxt build manifest file(s)`));
+        printMsg(MSG.Run, `[✓] Found ${found.length} Nuxt build manifest file(s)`);
     }
 
     return found;

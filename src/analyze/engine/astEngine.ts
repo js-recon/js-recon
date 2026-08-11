@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import { Chunks } from "../../utility/interfaces.js";
 import { Rule } from "../types/index.js";
 
@@ -15,6 +14,7 @@ import { findMemberExpressionAssignment } from "../helpers/engineHelpers/findMem
 import { findDirectAssignment } from "../helpers/engineHelpers/findDirectAssignment.js";
 import { computeTaint, sinkConsumesTaint, TaintInfo } from "../helpers/engineHelpers/taintFlow.js";
 import { EngineOutput } from "../helpers/outputHelper.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * ESQuery-based AST analysis engine for detecting code patterns using custom rules.
@@ -28,7 +28,7 @@ import { EngineOutput } from "../helpers/outputHelper.js";
  * @returns Promise that resolves to an array of analysis findings
  */
 const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<EngineOutput[]> => {
-    let findings: EngineOutput[] = [];
+    const findings: EngineOutput[] = [];
 
     for (const chunk of Object.values(mappedJsonData)) {
         // first of all, load the code in ast
@@ -43,7 +43,7 @@ const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
             continue;
         }
 
-        let matchList: { [key: string]: { node: Node; scope: Node; allNodes?: Node[] } } = {};
+        const matchList: { [key: string]: { node: Node; scope: Node; allNodes?: Node[] } } = {};
         const completedSteps: Set<string> = new Set();
         // Cache taint info per "source step name" so we don't recompute when several
         // sink steps share the same source step.
@@ -145,6 +145,7 @@ const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
                 }
             } else if (step.regexMatch) {
                 // Scan all StringLiteral/TemplateLiteral nodes in the chunk for values matching the regex
+                // eslint-disable-next-line security/detect-non-literal-regexp -- pattern comes from a loaded rule YAML file — same trust model as the rest of the rule engine, not user/network input
                 const pattern = new RegExp(step.regexMatch.pattern);
                 const foundNodes: Node[] = [];
                 _traverseDefault(ast, {
@@ -172,11 +173,7 @@ const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
                 const memberExpression = step.checkAssignmentExist.memberExpression;
 
                 if (selectedNode && memberExpression) {
-                    const assignmentNode = findMemberExpressionAssignment(
-                        selectedNode,
-                        toMatch,
-                        matchList[step.checkAssignmentExist.name].scope
-                    );
+                    const assignmentNode = findMemberExpressionAssignment(selectedNode, toMatch);
 
                     if (assignmentNode) {
                         matchList[step.name] = { node: assignmentNode, scope: ast };
@@ -207,16 +204,17 @@ const esqueryEngine = async (rule: Rule, mappedJsonData: Chunks): Promise<Engine
                 const code = generator(reportNode).code;
 
                 if (rule.severity === "info") {
-                    console.log(chalk.cyan(message));
+                    printMsg(MSG.Header, message);
                 } else if (rule.severity === "low") {
-                    console.log(chalk.yellow(message));
+                    printMsg(MSG.Warn, message);
                 } else if (rule.severity === "medium") {
-                    console.log(chalk.magenta(message));
+                    printMsg(MSG.Info, message);
                 } else if (rule.severity === "high") {
-                    console.error(chalk.red(message));
+                    printMsg(MSG.Err, message);
                 }
 
-                console.log(
+                printMsg(
+                    MSG.Plain,
                     highlight(code, {
                         language: "javascript",
                         ignoreIllegals: true,

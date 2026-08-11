@@ -1,12 +1,12 @@
-import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import makeRequest from "../../utility/makeReq.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
-let toReturn = [];
+const toReturn = [];
 
 /**
  * Checks for client-side paths in a file and appends discovered paths to the module-scoped `toReturn` array.
@@ -50,7 +50,7 @@ const checkHref = async (files, url) => {
                 }
 
                 // traverse the ast, and find the objects with href, and external
-                let finds: any[] = [];
+                const finds: any[] = [];
                 traverse(ast, {
                     ObjectExpression(path) {
                         const properties = path.node.properties;
@@ -190,12 +190,12 @@ const checkSlug = async (files, url) => {
 
 const client_subsequentRequests = async (subsequentRequestsDir, url) => {
     //   let report = `## Subsequent Requests\n`;
-    console.log(chalk.cyan("[i] Using subsequent requests file method"));
+    printMsg(MSG.Header, "[i] Using subsequent requests file method");
 
     // get all the files in the directory
     const walkSync = (dir, files = []) => {
         fs.readdirSync(dir).forEach((file) => {
-            let dirFile = path.join(dir, file);
+            const dirFile = path.join(dir, file);
             if (fs.statSync(dirFile).isDirectory()) {
                 walkSync(dirFile, files);
             } else {

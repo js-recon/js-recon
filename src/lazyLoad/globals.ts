@@ -8,6 +8,10 @@ let json_urls: string[] = [];
 let max_req_queue: number;
 /** List of URLs which has been crawled */
 let crawled_urls: string[] = [];
+/** Global map of JS file content hash -> count of files seen with that hash (used by generic-tech stagnation detection) */
+let js_file_hash_counts: Map<string, number> = new Map();
+/** Total number of JS files whose content hash has been recorded */
+let js_file_total_count = 0;
 
 /**
  * Gets the current scope configuration.
@@ -120,4 +124,34 @@ export const addCrawledUrl = (url: string | string[]): void => {
 /** Clears the per-target crawl history before processing another target. */
 export const clearCrawledUrls = (): void => {
     crawled_urls = [];
+};
+
+/**
+ * Records a JS file's content hash, incrementing both its per-hash count and the total count.
+ * Used by generic-tech stagnation detection to track how much discovered content is duplicate.
+ * @param hash - Content hash (e.g. sha256) of a discovered JS file
+ */
+export const recordJsFileHash = (hash: string): void => {
+    js_file_hash_counts.set(hash, (js_file_hash_counts.get(hash) ?? 0) + 1);
+    js_file_total_count++;
+};
+
+/**
+ * Gets the current map of JS file content hash -> count.
+ * @returns Map of content hash to occurrence count
+ */
+export const getJsFileHashCounts = (): Map<string, number> => js_file_hash_counts;
+
+/**
+ * Gets the total number of JS files whose content hash has been recorded.
+ * @returns Total recorded JS file count
+ */
+export const getJsFileTotalCount = (): number => js_file_total_count;
+
+/**
+ * Clears all recorded JS file content hashes and resets the total count.
+ */
+export const clearJsFileHashCounts = (): void => {
+    js_file_hash_counts = new Map();
+    js_file_total_count = 0;
 };

@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import {
     ChatMessage,
     LLMProvider,
@@ -13,6 +12,7 @@ import { getUsableAccessToken } from "./claudeCodeCreds.js";
 import { SYSTEM_PROMPT } from "./cli.js";
 import { getJobManager } from "./jobs.js";
 import { loadSkills } from "./skills.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 export interface ChatOneShotOptions {
     refreshClaudeCreds?: boolean;
@@ -29,7 +29,7 @@ export const runChatOneShot = async (
 ): Promise<void> => {
     let providerName = (cliProvider || config.provider) as "openai" | "anthropic";
     let model = cliModel || config.model;
-    let apiKey = resolveApiKey(providerName, cliApiKey, config);
+    const apiKey = resolveApiKey(providerName, cliApiKey, config);
 
     let provider: LLMProvider | null = null;
 
@@ -42,15 +42,14 @@ export const runChatOneShot = async (
             providerName = "anthropic";
             model = cliModel || getDefaultModel("anthropic");
             provider = createAnthropicOAuthProvider(token, model);
-            console.error(chalk.cyan("[i] Using existing Claude Code credentials (Anthropic OAuth)."));
+            printMsg(MSG.Header, "[i] Using existing Claude Code credentials (Anthropic OAuth).");
         }
     }
 
     if (!provider && !apiKey) {
-        console.error(
-            chalk.red(
-                "[!] No API key configured and no Claude Code credentials found. Pass --api-key, set OPENAI_API_KEY / ANTHROPIC_API_KEY, or run 'claude' to log in."
-            )
+        printMsg(
+            MSG.Err,
+            "[!] No API key configured and no Claude Code credentials found. Pass --api-key, set OPENAI_API_KEY / ANTHROPIC_API_KEY, or run 'claude' to log in."
         );
         process.exit(1);
     }
@@ -68,7 +67,7 @@ export const runChatOneShot = async (
     const history: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
     const cwd = process.cwd();
     const toolState: IntentToolState = { config, cwd };
-    console.error(chalk.gray(`[i] Working directory: ${cwd}`));
+    printMsg(MSG.Info, `[i] Working directory: ${cwd}`);
 
     for (const rawPrompt of prompts) {
         const trimmed = rawPrompt.trim();
@@ -99,7 +98,7 @@ export const runChatOneShot = async (
                     }
                 }
             } catch (err: any) {
-                console.error(chalk.red(`[!] Tool error: ${err.message}`));
+                printMsg(MSG.Err, `[!] Tool error: ${err.message}`);
             }
         }
 
@@ -117,7 +116,7 @@ export const runChatOneShot = async (
             history.push({ role: "assistant", content: response.content });
             process.stdout.write(response.content + "\n");
         } catch (err: any) {
-            console.error(chalk.red(`[!] ${err.message}`));
+            printMsg(MSG.Err, `[!] ${err.message}`);
             process.exit(1);
         }
     }

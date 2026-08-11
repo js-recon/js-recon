@@ -1,7 +1,7 @@
 import { Rule } from "../types/index.js";
 import { OpenAPISpec } from "../../utility/openapiGenerator.js";
-import chalk from "chalk";
 import { EngineOutput } from "../helpers/outputHelper.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Request-based analysis engine for analyzing OpenAPI specifications against rules.
@@ -15,7 +15,7 @@ import { EngineOutput } from "../helpers/outputHelper.js";
  * @returns Promise that resolves to an array of analysis findings
  */
 const engine = async (rule: Rule, openapiData: OpenAPISpec): Promise<EngineOutput[]> => {
-    let findings: EngineOutput[] = [];
+    const findings: EngineOutput[] = [];
 
     for (const path in openapiData.paths) {
         const methods = openapiData.paths[path];
@@ -64,13 +64,13 @@ const engine = async (rule: Rule, openapiData: OpenAPISpec): Promise<EngineOutpu
                 // get the severity of the rule
                 const message = `[+] "${rule.name}" found in ${path} [${method.toUpperCase()}]`;
                 if (rule.severity === "info") {
-                    console.log(chalk.cyan(message));
+                    printMsg(MSG.Header, message);
                 } else if (rule.severity === "low") {
-                    console.log(chalk.yellow(message));
+                    printMsg(MSG.Warn, message);
                 } else if (rule.severity === "medium") {
-                    console.log(chalk.magenta(message));
+                    printMsg(MSG.Info, message);
                 } else if (rule.severity === "high") {
-                    console.error(chalk.red(message));
+                    printMsg(MSG.Err, message);
                 }
 
                 findings.push({

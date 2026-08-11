@@ -9,6 +9,7 @@ export const TECH_TO_BRANCH: Record<string, string> = {
     "react-webpack": "react/webpack/large-0.1.8",
     "react-vite": "react/vite/large-0.1.8",
     "next-webpack": "next/webpack/large-0.1.8",
+    "next-turbopack": "next/turbopack/large-0.1.8",
 };
 
 export type CollisionRecord = {

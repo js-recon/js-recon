@@ -13,7 +13,7 @@ beforeEach(() => {
 describe("react_followImports compact output", () => {
     it("aggregates a failing batch without emitting one warning per URL", async () => {
         makeRequest.mockRejectedValue(new Error("network failed"));
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const warnSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
         const urls = ["https://example.test/one.js", "https://example.test/two.js", "https://example.test/three.js"];
 
         await expect(reactFollowImports(urls, 2, "https://example.test", new Set(), 3, true)).resolves.toEqual([]);

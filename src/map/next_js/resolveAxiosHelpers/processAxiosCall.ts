@@ -2,7 +2,6 @@ import { NodePath } from "@babel/traverse";
 import { MemberExpression, Node } from "@babel/types";
 import { Chunks } from "../../../utility/interfaces.js";
 import * as fs from "fs";
-import chalk from "chalk";
 import { resolveNodeValue, substituteVariablesInString } from "../utils.js";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
 import { resolveBodyArg } from "./traceBody.js";
@@ -10,6 +9,7 @@ import * as globals from "../../../utility/globals.js";
 import globalConfig from "../../../globalConfig.js";
 import { handleAxiosCreate } from "./handleAxiosCreate.js";
 import { getThirdArg, getGlobalInterceptorHeaders } from "../resolveAxios.js";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 /**
  * Gets the HTTP method from a method name.
@@ -94,8 +94,12 @@ export const processAxiosCall = (
             const axiosFirstArg = args[0];
             const axiosFirstArgText = chunkCode.slice(axiosFirstArg.start, axiosFirstArg.end);
 
-            const concatRegex = /\".*\"(\\.concat\(.+\))+/;
-            if (concatRegex.test(axiosFirstArgText)) {
+            const concatRegex = /"[^"]*"(?:\.concat\([^()]*\))+/;
+            // Bound the probe length before running this regex against attacker-controlled bundle
+            // text: the nested `(\.concat\(.+\))+` quantifiers are catastrophically backtracking on
+            // crafted input, so a maliciously long argument could hang the analysis pipeline.
+            const MAX_CONCAT_PROBE_LENGTH = 2000;
+            if (axiosFirstArgText.length <= MAX_CONCAT_PROBE_LENGTH && concatRegex.test(axiosFirstArgText)) {
                 callUrl = resolveNodeValue(
                     axiosFirstArg,
                     path.scope,
@@ -193,14 +197,14 @@ export const processAxiosCall = (
     const interceptorHeaders = getGlobalInterceptorHeaders();
     const mergedHeaders: { [key: string]: string } = { ...interceptorHeaders, ...callHeaders };
 
-    console.log(chalk.blue(`[+] Found axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`));
-    console.log(chalk.green(`    URL: ${callUrl}`));
-    console.log(chalk.green(`    Method: ${callMethod}`));
+    printMsg(MSG.Info, `[+] Found axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`);
+    printMsg(MSG.Run, `    URL: ${callUrl}`);
+    printMsg(MSG.Run, `    Method: ${callMethod}`);
     if (callBody) {
-        console.log(chalk.green(`    Body: ${callBody}`));
+        printMsg(MSG.Run, `    Body: ${callBody}`);
     }
     if (Object.keys(mergedHeaders).length > 0) {
-        console.log(chalk.green(`    Headers: ${JSON.stringify(mergedHeaders)}`));
+        printMsg(MSG.Run, `    Headers: ${JSON.stringify(mergedHeaders)}`);
     }
 
     globals.addOpenapiOutput({

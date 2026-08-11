@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import { URL } from "url";
 
 import next_getJSScript from "./next_GetJSScript.js";
@@ -10,9 +9,11 @@ import next_parseLayoutJs from "./next_parseLayoutJs.js";
 import next_scriptTagsSubsequentRequests from "./next_scriptTagsSubsequentRequests.js";
 import next_bruteForceJsFiles from "./next_bruteForceJsFiles.js";
 import next_getClientSidePaths from "./next_getClientSidePaths.js";
+import next_routerStateForge from "./next_routerStateForge.js";
 
 import * as lazyLoadGlobals from "../globals.js";
 import { shouldRunMethod } from "../methodFilter.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 interface NextJsCrawlerOptions {
     url: string;
@@ -24,6 +25,9 @@ interface NextJsCrawlerOptions {
     maxIterations: number;
     /** Maximum number of HTML pages to visit across all recursive passes. 0 = unlimited. */
     maxPageVisits?: number;
+    /** Max harvested dynamic-route param-name candidates `next_routerStateForge` tries per
+     * URL in its RSC-body keyword fallback (0 = disable the fallback). */
+    rscParamBruteforceLimit?: number;
     /** Called with newly discovered downloadable URLs as they are found. */
     onUrlsDiscovered?: (urls: string[]) => void;
     /** Whitelist of method names to run (empty = run all). */
@@ -70,6 +74,9 @@ class NextJsCrawler {
     /** Maximum HTML pages to visit across all recursive passes (0 = unlimited). */
     private readonly MAX_PAGE_VISITS: number;
 
+    /** Passed through to `next_routerStateForge`'s RSC-body keyword fallback. */
+    private readonly rscParamBruteforceLimit: number;
+
     /** Total HTML pages visited across all recursive passes. */
     private totalPagesVisited = 0;
 
@@ -99,6 +106,7 @@ class NextJsCrawler {
         this.research = options.research;
         this.MAX_ITERATIONS = options.maxIterations;
         this.MAX_PAGE_VISITS = options.maxPageVisits ?? 200;
+        this.rscParamBruteforceLimit = options.rscParamBruteforceLimit ?? 20;
         this.onUrlsDiscovered = options.onUrlsDiscovered;
         this.includeMethods = options.includeMethods ?? [];
         this.excludeMethods = options.excludeMethods ?? [];
@@ -262,7 +270,7 @@ class NextJsCrawler {
     private async recursivePass(jsUrls: string[]): Promise<string[]> {
         const inc = this.includeMethods;
         const exc = this.excludeMethods;
-        let newInThisPass: string[] = [];
+        const newInThisPass: string[] = [];
 
         // Promise.all pattern analysis on JS file contents
         if (shouldRunMethod("next_promiseResolve", inc, exc)) {
@@ -323,10 +331,9 @@ class NextJsCrawler {
             if (this.stopped) break; // honour stop() at each iteration boundary
 
             if (this.MAX_PAGE_VISITS > 0 && this.totalPagesVisited >= this.MAX_PAGE_VISITS) {
-                console.error(
-                    chalk.yellow(
-                        `[!] Page visit cap reached (${this.MAX_PAGE_VISITS}). Skipping remaining pages in queue.`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] Page visit cap reached (${this.MAX_PAGE_VISITS}). Skipping remaining pages in queue.`
                 );
                 break;
             }
@@ -338,8 +345,8 @@ class NextJsCrawler {
             const extra = shouldRunMethod("next_GetJSScript", inc, exc) ? await next_getJSScript(u) : [];
 
             if (!extra || !Array.isArray(extra)) {
-                console.error(`[NextJsCrawler] Invalid return value from next_getJSScript for URL: ${u}`);
-                console.error(`[NextJsCrawler] Returned value:`, extra);
+                printMsg(MSG.Err, `[NextJsCrawler] Invalid return value from next_getJSScript for URL: ${u}`);
+                printMsg(MSG.Err, `[NextJsCrawler] Returned value: ${JSON.stringify(extra)}`);
                 process.exit(1);
             }
 
@@ -403,25 +410,25 @@ class NextJsCrawler {
             iteration++;
             const sizeBefore = this.size;
 
-            console.log(chalk.cyan(`[i] Recursive crawl pass ${iteration} – ${sizeBefore} URLs known`));
+            printMsg(MSG.Header, `[i] Recursive crawl pass ${iteration} – ${sizeBefore} URLs known`);
 
             const newUrls = await this.recursivePass(currentBatch);
 
             if (newUrls.length === 0) {
-                console.log(chalk.green(`[✓] Recursive crawl converged after ${iteration} pass(es)`));
+                printMsg(MSG.Run, `[✓] Recursive crawl converged after ${iteration} pass(es)`);
                 break;
             }
 
-            console.log(chalk.green(`[+] Pass ${iteration} discovered ${newUrls.length} new URL(s)`));
+            printMsg(MSG.Run, `[+] Pass ${iteration} discovered ${newUrls.length} new URL(s)`);
 
             // Next pass only analyses the newly found URLs
             currentBatch = newUrls;
         }
 
         if (this.stopped) {
-            console.error(chalk.yellow(`[!] Crawler stopped — downloading all discovered files`));
+            printMsg(MSG.Warn, `[!] Crawler stopped — downloading all discovered files`);
         } else if (iteration >= this.MAX_ITERATIONS) {
-            console.error(chalk.yellow(`[!] Reached max recursive crawl iterations (${this.MAX_ITERATIONS})`));
+            printMsg(MSG.Warn, `[!] Reached max recursive crawl iterations (${this.MAX_ITERATIONS})`);
         }
 
         // Phase 3 – brute-force .map files on the final set (skip if stopped by timeout)
@@ -430,6 +437,29 @@ class NextJsCrawler {
             const jsFromBrute = await next_bruteForceJsFiles(allJsUrls, this.threads);
             this.techniqueEfficiencyMapping["next_bruteForceJsFiles"] = jsFromBrute;
             this.emitDownloadable(this.registerUrls(jsFromBrute));
+        }
+
+        // Phase 4 – retry any redirecting page URL with a forged next-router-state-tree
+        // claiming a known ancestor segment is already client-rendered. Some Next.js apps
+        // put auth checks inside a layout component instead of middleware; Next.js skips
+        // re-executing that layout when the client claims to already have it mounted,
+        // which can return protected content (and reveal JS chunks a plain crawl never
+        // sees) for a request with no session at all.
+        if (!this.stopped && shouldRunMethod("next_routerStateForge", this.includeMethods, this.excludeMethods)) {
+            const pageUrls = [...this.discoveredUrls].filter((u) => {
+                try {
+                    const p = new URL(u).pathname;
+                    return !p.endsWith(".js") && !p.endsWith(".js.map");
+                } catch {
+                    return false;
+                }
+            });
+            const { bypassedUrls, metadataOnlyBypassedUrls, legacyKeyAcceptedUrls, newJsUrls } =
+                await next_routerStateForge(pageUrls, this.threads, undefined, this.rscParamBruteforceLimit);
+            this.techniqueEfficiencyMapping["next_routerStateForge"] = bypassedUrls;
+            this.techniqueEfficiencyMapping["next_routerStateForge_metadataOnly"] = metadataOnlyBypassedUrls;
+            this.techniqueEfficiencyMapping["next_routerStateForge_legacyKeyAccepted"] = legacyKeyAcceptedUrls;
+            this.emitDownloadable(this.registerUrls(newJsUrls));
         }
 
         // Only return downloadable assets. Anchor-derived page URLs live in

@@ -5,12 +5,13 @@ import * as globalsUtil from "../utility/globals.js";
 import * as fs from "fs";
 import lazyLoad from "../lazyLoad/index.js";
 import chalk from "chalk";
+import CONFIG from "../globalConfig.js";
 import analyze from "../analyze/index.js";
 import report from "../report/index.js";
 import refactor from "../refactor/index.js";
 import initGlobalReportDb from "../report/utility/initGlobalReportDb.js";
 import mergeDomainIntoGlobalDb from "../report/utility/mergeDomainIntoGlobalDb.js";
-import { clearJsUrls, clearJsonUrls, getJsUrls } from "../lazyLoad/globals.js";
+import { clearJsUrls, clearJsonUrls, clearJsFileHashCounts, getJsUrls } from "../lazyLoad/globals.js";
 import path from "path";
 import {
     installSigintHandler,
@@ -22,6 +23,7 @@ import {
     waitForPendingInterrupt,
 } from "./interruptHandler.js";
 import { detectBundler } from "./bundler-detect.js";
+import { printMsg, MSG, setHeaderListener } from "../utility/printMsg.js";
 import configureProxy from "../utility/configureProxy.js";
 import { getOxylabsFallbackConfiguration } from "../proxy/oxylabsFallback.js";
 import { probeFeasibility } from "../proxy/checkFeasibility.js";
@@ -30,6 +32,8 @@ import { resolveHostOutputDirectory } from "../lazyLoad/outputPath.js";
 import { awaitCancellableStep } from "./cancellableStep.js";
 import { resolveTargetInputs } from "../utility/targetInputs.js";
 import { clearRunOutputDirectory, getBatchTargetDirectoryName, reserveRunOutputDirectory } from "./outputDirectory.js";
+import { startDashboardServer } from "./dashboard/server.js";
+import * as dashboardState from "./dashboard/state.js";
 
 /**
  * Determines the directory for a Content Delivery Network (CDN) if used by the target.
@@ -87,11 +91,12 @@ const processUrl = async (
 ): Promise<void> => {
     const targetHost = new URL(url).host;
 
-    console.log(chalk.bgGreenBright(`[+] Starting analysis for ${url}...`));
+    printMsg(MSG.Run, `[+] Starting analysis for ${url}...`);
 
     if (isBatch) {
         clearJsUrls();
         clearJsonUrls();
+        clearJsFileHashCounts();
         globalsUtil.clearOpenapiOutput();
     }
 
@@ -102,23 +107,21 @@ const processUrl = async (
         try {
             outcome = await probeFeasibility(resolved, url);
         } catch (error) {
-            console.error(
-                chalk.bgRed(
-                    `[!] Proxy WAF fallback check failed: ${error}. ${isBatch ? "Skipping this target." : "Quitting."}`
-                )
+            printMsg(
+                MSG.Err,
+                `[!] Proxy WAF fallback check failed: ${error}. ${isBatch ? "Skipping this target." : "Quitting."}`
             );
             if (isBatch) return;
             process.exit(29);
         }
-        console.log(outcome.code === 0 ? chalk.green(outcome.message) : chalk.yellow(outcome.message));
+        printMsg(outcome.code === 0 ? MSG.Run : MSG.Warn, outcome.message);
         if (outcome.code === 27) {
             // no firewall detected without a proxy - don't use it for this target
             globalsUtil.setUseProxy(false);
         } else if (outcome.code === 28) {
-            console.error(
-                chalk.bgRed(
-                    `[!] Proxy could not bypass the firewall for this target. ${isBatch ? "Skipping this target." : "Quitting."}`
-                )
+            printMsg(
+                MSG.Err,
+                `[!] Proxy could not bypass the firewall for this target. ${isBatch ? "Skipping this target." : "Quitting."}`
             );
             if (isBatch) return;
             process.exit(29);
@@ -126,7 +129,7 @@ const processUrl = async (
         // outcome.code === 0: firewall present, proxy bypasses it - keep using the proxy
     }
 
-    console.log(chalk.bgCyan("[1/8] Running lazyload to download JavaScript files..."));
+    printMsg(MSG.Header, "[1/8] Running lazyload to download JavaScript files...");
     resetSkipStep();
     await awaitCancellableStep(
         (signal) =>
@@ -151,15 +154,22 @@ const processUrl = async (
                 excludeMethods,
                 Number(cmd.detectionTimeout) * 1000,
                 signal,
-                isBatch
+                isBatch,
+                Number(cmd.maxRedirects),
+                cmd.strings,
+                Number(cmd.stringsMaxIterations),
+                Number(cmd.stagnationTimein) * 60 * 1000,
+                Number(cmd.stagnationPercentage),
+                Number(cmd.stagnationMonitor) * 60 * 1000,
+                Number(cmd.rscParamBruteforceLimit)
             ),
         getSkipStepPromise()
     );
-    console.log(chalk.bgGreen("[+] Lazyload complete."));
+    printMsg(MSG.Run, "[+] Lazyload complete.");
     if (shouldSkipTarget()) return;
 
     if (globalsUtil.getTech() === "") {
-        console.error(chalk.bgRed(`[!] Technology not detected. ${isBatch ? "Skipping this target." : "Quitting."}`));
+        printMsg(MSG.Err, `[!] Technology not detected. ${isBatch ? "Skipping this target." : "Quitting."}`);
         if (isBatch) {
             return;
         }
@@ -167,10 +177,9 @@ const processUrl = async (
     }
 
     if (!["next", "vue", "nuxt", "react", "svelte", "angular"].includes(globalsUtil.getTech())) {
-        console.log(
-            chalk.bgYellow(
-                `[!] The tool supports Next.JS, Vue.JS, Nuxt.JS, React, Svelte/Astro, and Angular in the run module. For ${globalsUtil.getTech()}, only downloading JS files is supported`
-            )
+        printMsg(
+            MSG.Warn,
+            `[!] The tool supports Next.JS, Vue.JS, Nuxt.JS, React, Svelte/Astro, and Angular in the run module. For ${globalsUtil.getTech()}, only downloading JS files is supported`
         );
         return;
     }
@@ -190,7 +199,7 @@ const processUrl = async (
         const reportFile = isBatch ? `${workingDir}/report` : "report";
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
-        console.log(chalk.bgCyan("[2/4] Running map to find functions and API calls..."));
+        printMsg(MSG.Header, "[2/4] Running map to find functions and API calls...");
         globalsUtil.setOpenapi(true);
         if (isBatch) {
             globalsUtil.setOpenapiOutputFile(openapiFile);
@@ -204,12 +213,11 @@ const processUrl = async (
             map(outputDir, mappedFileReact, ["json"], "react", false, false, cmd.command || []),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Map complete."));
+        printMsg(MSG.Run, "[+] Map complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[3/4] Running analyze..."));
+        printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",
@@ -219,28 +227,40 @@ const processUrl = async (
                 openapiFile,
                 false,
                 analyzeFile,
-                !!cmd.disableRulesVersionCheck
+                !!cmd.disableRulesVersionCheck,
+                false,
+                false
             ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Analyze complete."));
+        printMsg(MSG.Run, "[+] Analyze complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[4/4] Running report module..."));
+        printMsg(MSG.Header, "[4/4] Running report module...");
         const endpointsJson = `${endpointsFile}.json`;
         if (!fs.existsSync(endpointsJson)) {
             fs.writeFileSync(endpointsJson, "[]");
         }
         resetSkipStep();
         await Promise.race([
-            report(reportDbFile, mappedJsonFileReact, analyzeFile, endpointsJson, openapiFile, reportFile),
+            report(
+                reportDbFile,
+                mappedJsonFileReact,
+                analyzeFile,
+                endpointsJson,
+                openapiFile,
+                reportFile,
+                cmd.sj,
+                cmd.sjBin,
+                cmd.sjArgs
+            ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Report complete."));
+        printMsg(MSG.Run, "[+] Report complete.");
         if (shouldSkipTarget()) return;
 
         if (!cmd.disableRefactor) {
-            console.log(chalk.bgCyan("[*] Detecting bundler via CS-MAST-S for refactor..."));
+            printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
             const detectedBundlerTechReact = await detectBundler(
                 mappedJsonFileReact,
                 "react",
@@ -249,7 +269,7 @@ const processUrl = async (
             if (detectedBundlerTechReact) {
                 const refactorOutputDirReact = isBatch ? `${workingDir}/refactored` : "refactored";
                 if (fs.existsSync(refactorOutputDirReact)) fs.rmSync(refactorOutputDirReact, { recursive: true });
-                console.log(chalk.bgCyan(`[*] Running refactor (${detectedBundlerTechReact})...`));
+                printMsg(MSG.Header, `[*] Running refactor (${detectedBundlerTechReact})...`);
                 // Vendor chunks may have been downloaded under a different host than the target
                 // (CDN) — resolve the assets dir from an actual downloaded JS URL's host instead
                 // of always assuming targetHost, mirroring getCdnDir's approach for the map step.
@@ -275,15 +295,15 @@ const processUrl = async (
                     getSkipStepPromise(),
                 ]);
                 if (shouldSkipTarget()) return;
-                console.log(chalk.bgGreen("[+] Refactor complete."));
+                printMsg(MSG.Run, "[+] Refactor complete.");
             } else {
-                console.log(chalk.yellow("[!] Bundler not detected via CS-MAST-S, skipping refactor."));
+                printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
             }
         } else {
-            console.log(chalk.yellow("[!] Refactor step disabled via --disable-refactor, skipping."));
+            printMsg(MSG.Warn, "[!] Refactor step disabled via --disable-refactor, skipping.");
         }
 
-        console.log(chalk.bgGreenBright(`[+] Analysis complete for ${url}.`));
+        printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
         return;
     }
 
@@ -299,7 +319,7 @@ const processUrl = async (
         const reportFile = isBatch ? `${workingDir}/report` : "report";
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
-        console.log(chalk.bgCyan("[2/4] Running map to find functions and API calls..."));
+        printMsg(MSG.Header, "[2/4] Running map to find functions and API calls...");
         globalsUtil.setOpenapi(true);
         if (isBatch) {
             globalsUtil.setOpenapiOutputFile(openapiFile);
@@ -313,12 +333,11 @@ const processUrl = async (
             map(outputDir, mappedFileVue, ["json"], "vue", false, false, cmd.command || []),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Map complete."));
+        printMsg(MSG.Run, "[+] Map complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[3/4] Running analyze..."));
+        printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",
@@ -328,14 +347,16 @@ const processUrl = async (
                 openapiFile,
                 false,
                 analyzeFile,
-                !!cmd.disableRulesVersionCheck
+                !!cmd.disableRulesVersionCheck,
+                false,
+                false
             ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Analyze complete."));
+        printMsg(MSG.Run, "[+] Analyze complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[4/4] Running report module..."));
+        printMsg(MSG.Header, "[4/4] Running report module...");
         // Endpoints extraction isn't implemented for Vue yet; pass an empty file if absent.
         const endpointsJson = `${endpointsFile}.json`;
         if (!fs.existsSync(endpointsJson)) {
@@ -343,14 +364,24 @@ const processUrl = async (
         }
         resetSkipStep();
         await Promise.race([
-            report(reportDbFile, mappedJsonFileVue, analyzeFile, endpointsJson, openapiFile, reportFile),
+            report(
+                reportDbFile,
+                mappedJsonFileVue,
+                analyzeFile,
+                endpointsJson,
+                openapiFile,
+                reportFile,
+                cmd.sj,
+                cmd.sjBin,
+                cmd.sjArgs
+            ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Report complete."));
+        printMsg(MSG.Run, "[+] Report complete.");
         if (shouldSkipTarget()) return;
 
         if (!cmd.disableRefactor) {
-            console.log(chalk.bgCyan("[*] Detecting bundler via CS-MAST-S for refactor..."));
+            printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
             const detectedBundlerTechVue = await detectBundler(
                 mappedJsonFileVue,
                 "vue",
@@ -359,22 +390,22 @@ const processUrl = async (
             if (detectedBundlerTechVue) {
                 const refactorOutputDirVue = isBatch ? `${workingDir}/refactored` : "refactored";
                 if (fs.existsSync(refactorOutputDirVue)) fs.rmSync(refactorOutputDirVue, { recursive: true });
-                console.log(chalk.bgCyan(`[*] Running refactor (${detectedBundlerTechVue})...`));
+                printMsg(MSG.Header, `[*] Running refactor (${detectedBundlerTechVue})...`);
                 resetSkipStep();
                 await Promise.race([
                     refactor(mappedJsonFileVue, refactorOutputDirVue, detectedBundlerTechVue, false),
                     getSkipStepPromise(),
                 ]);
                 if (shouldSkipTarget()) return;
-                console.log(chalk.bgGreen("[+] Refactor complete."));
+                printMsg(MSG.Run, "[+] Refactor complete.");
             } else {
-                console.log(chalk.yellow("[!] Bundler not detected via CS-MAST-S, skipping refactor."));
+                printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
             }
         } else {
-            console.log(chalk.yellow("[!] Refactor step disabled via --disable-refactor, skipping."));
+            printMsg(MSG.Warn, "[!] Refactor step disabled via --disable-refactor, skipping.");
         }
 
-        console.log(chalk.bgGreenBright(`[+] Analysis complete for ${url}.`));
+        printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
         return;
     }
 
@@ -388,7 +419,7 @@ const processUrl = async (
         const reportFile = isBatch ? `${workingDir}/report` : "report";
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
-        console.log(chalk.bgCyan("[2/4] Running map to find functions and API calls..."));
+        printMsg(MSG.Header, "[2/4] Running map to find functions and API calls...");
         globalsUtil.setOpenapi(true);
         if (isBatch) {
             globalsUtil.setOpenapiOutputFile(openapiFile);
@@ -402,12 +433,11 @@ const processUrl = async (
             map(outputDir, mappedFileNuxt, ["json"], "vue", false, false, cmd.command || []),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Map complete."));
+        printMsg(MSG.Run, "[+] Map complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[3/4] Running analyze..."));
+        printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",
@@ -417,28 +447,40 @@ const processUrl = async (
                 openapiFile,
                 false,
                 analyzeFile,
-                !!cmd.disableRulesVersionCheck
+                !!cmd.disableRulesVersionCheck,
+                false,
+                false
             ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Analyze complete."));
+        printMsg(MSG.Run, "[+] Analyze complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[4/4] Running report module..."));
+        printMsg(MSG.Header, "[4/4] Running report module...");
         const endpointsJson = `${endpointsFile}.json`;
         if (!fs.existsSync(endpointsJson)) {
             fs.writeFileSync(endpointsJson, "[]");
         }
         resetSkipStep();
         await Promise.race([
-            report(reportDbFile, mappedJsonFileNuxt, analyzeFile, endpointsJson, openapiFile, reportFile),
+            report(
+                reportDbFile,
+                mappedJsonFileNuxt,
+                analyzeFile,
+                endpointsJson,
+                openapiFile,
+                reportFile,
+                cmd.sj,
+                cmd.sjBin,
+                cmd.sjArgs
+            ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Report complete."));
+        printMsg(MSG.Run, "[+] Report complete.");
         if (shouldSkipTarget()) return;
 
         if (!cmd.disableRefactor) {
-            console.log(chalk.bgCyan("[*] Detecting bundler via CS-MAST-S for refactor..."));
+            printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
             const detectedBundlerTechNuxt = await detectBundler(
                 mappedJsonFileNuxt,
                 "nuxt",
@@ -447,22 +489,22 @@ const processUrl = async (
             if (detectedBundlerTechNuxt) {
                 const refactorOutputDirNuxt = isBatch ? `${workingDir}/refactored` : "refactored";
                 if (fs.existsSync(refactorOutputDirNuxt)) fs.rmSync(refactorOutputDirNuxt, { recursive: true });
-                console.log(chalk.bgCyan(`[*] Running refactor (${detectedBundlerTechNuxt})...`));
+                printMsg(MSG.Header, `[*] Running refactor (${detectedBundlerTechNuxt})...`);
                 resetSkipStep();
                 await Promise.race([
                     refactor(mappedJsonFileNuxt, refactorOutputDirNuxt, detectedBundlerTechNuxt, false),
                     getSkipStepPromise(),
                 ]);
                 if (shouldSkipTarget()) return;
-                console.log(chalk.bgGreen("[+] Refactor complete."));
+                printMsg(MSG.Run, "[+] Refactor complete.");
             } else {
-                console.log(chalk.yellow("[!] Bundler not detected via CS-MAST-S, skipping refactor."));
+                printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
             }
         } else {
-            console.log(chalk.yellow("[!] Refactor step disabled via --disable-refactor, skipping."));
+            printMsg(MSG.Warn, "[!] Refactor step disabled via --disable-refactor, skipping.");
         }
 
-        console.log(chalk.bgGreenBright(`[+] Analysis complete for ${url}.`));
+        printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
         return;
     }
 
@@ -475,7 +517,7 @@ const processUrl = async (
         const reportFile = isBatch ? `${workingDir}/report` : "report";
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
-        console.log(chalk.bgCyan("[2/4] Running map to find functions and API calls..."));
+        printMsg(MSG.Header, "[2/4] Running map to find functions and API calls...");
         globalsUtil.setOpenapi(true);
         if (isBatch) {
             globalsUtil.setOpenapiOutputFile(openapiFile);
@@ -489,12 +531,11 @@ const processUrl = async (
             map(outputDir, mappedFileSvelte, ["json"], "svelte", false, false, cmd.command || []),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Map complete."));
+        printMsg(MSG.Run, "[+] Map complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[3/4] Running analyze..."));
+        printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",
@@ -504,26 +545,38 @@ const processUrl = async (
                 openapiFile,
                 false,
                 analyzeFile,
-                !!cmd.disableRulesVersionCheck
+                !!cmd.disableRulesVersionCheck,
+                false,
+                false
             ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Analyze complete."));
+        printMsg(MSG.Run, "[+] Analyze complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[4/4] Running report module..."));
+        printMsg(MSG.Header, "[4/4] Running report module...");
         const endpointsJson = `${endpointsFile}.json`;
         if (!fs.existsSync(endpointsJson)) {
             fs.writeFileSync(endpointsJson, "[]");
         }
         resetSkipStep();
         await Promise.race([
-            report(reportDbFile, mappedJsonFileSvelte, analyzeFile, endpointsJson, openapiFile, reportFile),
+            report(
+                reportDbFile,
+                mappedJsonFileSvelte,
+                analyzeFile,
+                endpointsJson,
+                openapiFile,
+                reportFile,
+                cmd.sj,
+                cmd.sjBin,
+                cmd.sjArgs
+            ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Report complete."));
+        printMsg(MSG.Run, "[+] Report complete.");
 
-        console.log(chalk.bgGreenBright(`[+] Analysis complete for ${url}.`));
+        printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
         return;
     }
 
@@ -541,7 +594,7 @@ const processUrl = async (
 
         const angularHostDir = resolveHostOutputDirectory(outputDir, targetHost, isBatch);
 
-        console.log(chalk.bgCyan("[2/4] Running map to find functions and API calls..."));
+        printMsg(MSG.Header, "[2/4] Running map to find functions and API calls...");
         globalsUtil.setOpenapi(true);
         if (isBatch) {
             globalsUtil.setOpenapiOutputFile(openapiFile);
@@ -555,12 +608,11 @@ const processUrl = async (
             map(angularHostDir, mappedFileAngular, ["json"], "angular", false, false, cmd.command || []),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Map complete."));
+        printMsg(MSG.Run, "[+] Map complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[3/4] Running analyze..."));
+        printMsg(MSG.Header, "[3/4] Running analyze...");
         resetSkipStep();
-        // @ts-ignore
         await Promise.race([
             analyze(
                 cmd.rules || "",
@@ -570,26 +622,38 @@ const processUrl = async (
                 openapiFile,
                 false,
                 analyzeFile,
-                !!cmd.disableRulesVersionCheck
+                !!cmd.disableRulesVersionCheck,
+                false,
+                false
             ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Analyze complete."));
+        printMsg(MSG.Run, "[+] Analyze complete.");
         if (shouldSkipTarget()) return;
 
-        console.log(chalk.bgCyan("[4/4] Running report module..."));
+        printMsg(MSG.Header, "[4/4] Running report module...");
         const endpointsJson = `${endpointsFile}.json`;
         if (!fs.existsSync(endpointsJson)) {
             fs.writeFileSync(endpointsJson, "[]");
         }
         resetSkipStep();
         await Promise.race([
-            report(reportDbFile, mappedJsonFileAngular, analyzeFile, endpointsJson, openapiFile, reportFile),
+            report(
+                reportDbFile,
+                mappedJsonFileAngular,
+                analyzeFile,
+                endpointsJson,
+                openapiFile,
+                reportFile,
+                cmd.sj,
+                cmd.sjBin,
+                cmd.sjArgs
+            ),
             getSkipStepPromise(),
         ]);
-        console.log(chalk.bgGreen("[+] Report complete."));
+        printMsg(MSG.Run, "[+] Report complete.");
 
-        console.log(chalk.bgGreenBright(`[+] Analysis complete for ${url}.`));
+        printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
         return;
     }
 
@@ -609,16 +673,16 @@ const processUrl = async (
     const cdnDir = await getCdnDir(url, outputDir, isBatch);
     const cdnOutputDir = cdnDir ? cdnDir : resolveHostOutputDirectory(outputDir, targetHost, isBatch);
 
-    console.log(chalk.bgCyan("[2/8] Running strings to extract endpoints..."));
+    printMsg(MSG.Header, "[2/8] Running strings to extract endpoints...");
     resetSkipStep();
     await Promise.race([
         strings(outputDir, stringsFile, true, extractedUrlsFile, false, false, false, false),
         getSkipStepPromise(),
     ]);
-    console.log(chalk.bgGreen("[+] Strings complete."));
+    printMsg(MSG.Run, "[+] Strings complete.");
     if (shouldSkipTarget()) return;
 
-    console.log(chalk.bgCyan("[3/8] Running lazyload with subsequent requests to download JavaScript files..."));
+    printMsg(MSG.Header, "[3/8] Running lazyload with subsequent requests to download JavaScript files...");
     resetSkipStep();
     await awaitCancellableStep(
         (signal) =>
@@ -643,27 +707,45 @@ const processUrl = async (
                 excludeMethods,
                 Number(cmd.detectionTimeout) * 1000,
                 signal,
-                isBatch
+                isBatch,
+                Number(cmd.maxRedirects),
+                cmd.strings,
+                Number(cmd.stringsMaxIterations),
+                Number(cmd.stagnationTimein) * 60 * 1000,
+                Number(cmd.stagnationPercentage),
+                Number(cmd.stagnationMonitor) * 60 * 1000,
+                Number(cmd.rscParamBruteforceLimit)
             ),
         getSkipStepPromise()
     );
-    console.log(chalk.bgGreen("[+] Lazyload with subsequent requests complete."));
+    printMsg(MSG.Run, "[+] Lazyload with subsequent requests complete.");
     if (shouldSkipTarget()) return;
 
-    console.log(chalk.bgCyan("[4/8] Running strings again to extract endpoints..."));
+    printMsg(MSG.Header, "[4/8] Running strings again to extract endpoints...");
     resetSkipStep();
     await Promise.race([
-        strings(outputDir, stringsFile, true, extractedUrlsFile, cmd.secrets, true, true, cmd.trufflehog),
+        strings(
+            outputDir,
+            stringsFile,
+            true,
+            extractedUrlsFile,
+            cmd.secrets,
+            true,
+            true,
+            cmd.trufflehog,
+            cmd.trufflehogBin,
+            cmd.trufflehogAcceptTerms
+        ),
         getSkipStepPromise(),
     ]);
-    console.log(chalk.bgGreen("[+] Strings complete."));
+    printMsg(MSG.Run, "[+] Strings complete.");
     if (shouldSkipTarget()) return;
 
     // a second subsequent_requests pass: the first strings pass only sees initial chunks,
     // so dynamic routes such as `/post/1` are only discovered after the first subsequent
     // crawl + second strings extraction. Re-running subsequent_requests with the freshly
     // updated paths picks up chunks for those dynamic routes (e.g. the post page).
-    console.log(chalk.bgCyan("[4.5/8] Re-running lazyload with subsequent requests for newly discovered paths..."));
+    printMsg(MSG.Header, "[4.5/8] Re-running lazyload with subsequent requests for newly discovered paths...");
     resetSkipStep();
     await awaitCancellableStep(
         (signal) =>
@@ -688,23 +770,41 @@ const processUrl = async (
                 excludeMethods,
                 Number(cmd.detectionTimeout) * 1000,
                 signal,
-                isBatch
+                isBatch,
+                Number(cmd.maxRedirects),
+                cmd.strings,
+                Number(cmd.stringsMaxIterations),
+                Number(cmd.stagnationTimein) * 60 * 1000,
+                Number(cmd.stagnationPercentage),
+                Number(cmd.stagnationMonitor) * 60 * 1000,
+                Number(cmd.rscParamBruteforceLimit)
             ),
         getSkipStepPromise()
     );
-    console.log(chalk.bgGreen("[+] Lazyload re-pass complete."));
+    printMsg(MSG.Run, "[+] Lazyload re-pass complete.");
     if (shouldSkipTarget()) return;
 
-    console.log(chalk.bgCyan("[4.6/8] Re-running strings for chunks from the re-pass..."));
+    printMsg(MSG.Header, "[4.6/8] Re-running strings for chunks from the re-pass...");
     resetSkipStep();
     await Promise.race([
-        strings(outputDir, stringsFile, true, extractedUrlsFile, cmd.secrets, true, true, cmd.trufflehog),
+        strings(
+            outputDir,
+            stringsFile,
+            true,
+            extractedUrlsFile,
+            cmd.secrets,
+            true,
+            true,
+            cmd.trufflehog,
+            cmd.trufflehogBin,
+            cmd.trufflehogAcceptTerms
+        ),
         getSkipStepPromise(),
     ]);
-    console.log(chalk.bgGreen("[+] Strings re-pass complete."));
+    printMsg(MSG.Run, "[+] Strings re-pass complete.");
     if (shouldSkipTarget()) return;
 
-    console.log(chalk.bgCyan("[5/8] Running map to find functions..."));
+    printMsg(MSG.Header, "[5/8] Running map to find functions...");
     globalsUtil.setOpenapi(true);
     if (isBatch) {
         globalsUtil.setOpenapiOutputFile(openapiFile);
@@ -721,10 +821,10 @@ const processUrl = async (
         map(cdnOutputDir, mappedFile, ["json"], detectedTech, false, false, cmd.command || []),
         getSkipStepPromise(),
     ]);
-    console.log(chalk.bgGreen("[+] Map complete."));
+    printMsg(MSG.Run, "[+] Map complete.");
     if (shouldSkipTarget()) return;
 
-    console.log(chalk.bgCyan("[6/8] Running endpoints to extract endpoints..."));
+    printMsg(MSG.Header, "[6/8] Running endpoints to extract endpoints...");
     resetSkipStep();
     const targetOutputDir = resolveHostOutputDirectory(outputDir, targetHost, isBatch);
     if (fs.existsSync(path.join(targetOutputDir, "___subsequent_requests"))) {
@@ -738,10 +838,10 @@ const processUrl = async (
             getSkipStepPromise(),
         ]);
     }
-    console.log(chalk.bgGreen("[+] Endpoints complete."));
+    printMsg(MSG.Run, "[+] Endpoints complete.");
     if (shouldSkipTarget()) return;
 
-    console.log(chalk.bgCyan("[7/8] Running analyze to extract endpoints..."));
+    printMsg(MSG.Header, "[7/8] Running analyze to extract endpoints...");
     resetSkipStep();
     await Promise.race([
         analyze(
@@ -752,24 +852,36 @@ const processUrl = async (
             openapiFile,
             false,
             analyzeFile,
-            !!cmd.disableRulesVersionCheck
+            !!cmd.disableRulesVersionCheck,
+            false,
+            false
         ),
         getSkipStepPromise(),
     ]);
-    console.log(chalk.bgGreen("[+] Analyze complete."));
+    printMsg(MSG.Run, "[+] Analyze complete.");
     if (shouldSkipTarget()) return;
 
-    console.log(chalk.bgCyan("[8/8] Running report module..."));
+    printMsg(MSG.Header, "[8/8] Running report module...");
     resetSkipStep();
     await Promise.race([
-        report(reportDbFile, mappedJsonFile, analyzeFile, `${endpointsFile}.json`, openapiFile, reportFile),
+        report(
+            reportDbFile,
+            mappedJsonFile,
+            analyzeFile,
+            `${endpointsFile}.json`,
+            openapiFile,
+            reportFile,
+            cmd.sj,
+            cmd.sjBin,
+            cmd.sjArgs
+        ),
         getSkipStepPromise(),
     ]);
-    console.log(chalk.bgGreen("[+] Report complete."));
+    printMsg(MSG.Run, "[+] Report complete.");
     if (shouldSkipTarget()) return;
 
     if (!cmd.disableRefactor) {
-        console.log(chalk.bgCyan("[*] Detecting bundler via CS-MAST-S for refactor..."));
+        printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
         const detectedBundlerTechNext = await detectBundler(
             mappedJsonFile,
             detectedTech,
@@ -778,22 +890,22 @@ const processUrl = async (
         if (detectedBundlerTechNext) {
             const refactorOutputDirNext = isBatch ? `${workingDir}/refactored` : "refactored";
             if (fs.existsSync(refactorOutputDirNext)) fs.rmSync(refactorOutputDirNext, { recursive: true });
-            console.log(chalk.bgCyan(`[*] Running refactor (${detectedBundlerTechNext})...`));
+            printMsg(MSG.Header, `[*] Running refactor (${detectedBundlerTechNext})...`);
             resetSkipStep();
             await Promise.race([
                 refactor(mappedJsonFile, refactorOutputDirNext, detectedBundlerTechNext, false),
                 getSkipStepPromise(),
             ]);
             if (shouldSkipTarget()) return;
-            console.log(chalk.bgGreen("[+] Refactor complete."));
+            printMsg(MSG.Run, "[+] Refactor complete.");
         } else {
-            console.log(chalk.yellow("[!] Bundler not detected via CS-MAST-S, skipping refactor."));
+            printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
         }
     } else {
-        console.log(chalk.yellow("[!] Refactor step disabled via --disable-refactor, skipping."));
+        printMsg(MSG.Warn, "[!] Refactor step disabled via --disable-refactor, skipping.");
     }
 
-    console.log(chalk.bgGreenBright(`[+] Analysis complete for ${url}.`));
+    printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
 };
 
 /**
@@ -806,6 +918,34 @@ const processUrl = async (
  * @param cmd - The command-line options object from commander.js
  * @returns Promise that resolves when all URL processing is complete
  */
+/**
+ * Parses a batch/single `cmd.url` into the `{ url, hostDir, dir }` entries the
+ * dashboard state store needs, mirroring the hostDir/dir resolution the batch
+ * loop and single-target path use below. Invalid URLs are dropped — they're
+ * reported (and skipped) by the existing validation further down.
+ */
+const buildDashboardTargetEntries = (cmd: any, isBatch: boolean) => {
+    const toEntry = (url: string, dir: string) => {
+        try {
+            return { url, hostDir: new URL(url).host.replace(":", "_"), dir };
+        } catch {
+            return null;
+        }
+    };
+
+    if (!isBatch) {
+        const entry = toEntry(cmd.url, cmd.output);
+        return entry ? [entry] : [];
+    }
+
+    return fs
+        .readFileSync(cmd.url, "utf-8")
+        .split("\n")
+        .filter((url) => url !== "")
+        .map((url) => toEntry(url, `${cmd.output}/${new URL(url).host.replace(":", "_")}`))
+        .filter((e): e is { url: string; hostDir: string; dir: string } => e !== null);
+};
+
 export default async (cmd: any): Promise<void> => {
     const resolvedTargets = resolveTargetInputs(cmd.url);
     configureProxy(cmd);
@@ -837,17 +977,37 @@ export default async (cmd: any): Promise<void> => {
     }
 
     installSigintHandler(isBatch);
+
+    let dashboard: { port: number; url: string; stop: () => Promise<void> } | null = null;
+    if (cmd.webStatsDashboard) {
+        dashboardState.registerTargets(buildDashboardTargetEntries(cmd, isBatch));
+        dashboard = await startDashboardServer(Number(cmd.webStatsPort));
+        printMsg(MSG.Run, `[+] Web stats dashboard running at ${dashboard.url}`);
+        setHeaderListener((msg) => dashboardState.markStep(msg));
+    }
+
     try {
         if (!isBatch) {
-            await processUrl(
-                resolvedTargets.targets[0],
-                runCommand.output,
-                ".",
-                runCommand,
-                false,
-                runCommand._includeMethods ?? [],
-                runCommand._excludeMethods ?? []
-            );
+            if (cmd.webStatsDashboard) {
+                dashboardState.setCurrentUrl(resolvedTargets.targets[0]);
+                dashboardState.markRunning(resolvedTargets.targets[0]);
+            }
+            try {
+                await processUrl(
+                    resolvedTargets.targets[0],
+                    runCommand.output,
+                    ".",
+                    runCommand,
+                    false,
+                    runCommand._includeMethods ?? [],
+                    runCommand._excludeMethods ?? []
+                );
+                if (cmd.webStatsDashboard) dashboardState.markCompleted(resolvedTargets.targets[0]);
+            } catch (e) {
+                if (cmd.webStatsDashboard)
+                    dashboardState.markError(resolvedTargets.targets[0], e instanceof Error ? e.message : String(e));
+                throw e;
+            }
         } else {
             const globalDbPath = `${runCommand.output}/js-recon.db`;
             await initGlobalReportDb(globalDbPath);
@@ -873,6 +1033,17 @@ export default async (cmd: any): Promise<void> => {
                     console.log(chalk.yellow(`[i] Target output already exists; using ${thisTargetDir} for ${url}.`));
                 }
 
+                if (cmd.webStatsDashboard && dashboardState.isSkipRequested(url)) {
+                    printMsg(MSG.Warn, `[!] Skipping ${url} (skipped from the web dashboard).`);
+                    dashboardState.markSkipped(url);
+                    targetReservation.release();
+                    continue;
+                }
+
+                if (cmd.webStatsDashboard) {
+                    dashboardState.setCurrentUrl(url);
+                    dashboardState.markRunning(url);
+                }
                 try {
                     try {
                         await processUrl(
@@ -884,8 +1055,14 @@ export default async (cmd: any): Promise<void> => {
                             runCommand._includeMethods ?? [],
                             runCommand._excludeMethods ?? []
                         );
+                        if (cmd.webStatsDashboard) {
+                            if (shouldSkipTarget()) dashboardState.markSkipped(url);
+                            else dashboardState.markCompleted(url);
+                        }
                     } catch (error) {
-                        console.error(chalk.bgRed(`[!] Unhandled error while processing ${url}: ${error}`));
+                        if (cmd.webStatsDashboard)
+                            dashboardState.markError(url, error instanceof Error ? error.message : String(error));
+                        printMsg(MSG.Err, `[!] Unhandled error while processing ${url}: ${error}`);
                         process.exitCode = 1;
                         continue;
                     }
@@ -895,15 +1072,12 @@ export default async (cmd: any): Promise<void> => {
                         try {
                             mergeDomainIntoGlobalDb(globalDbPath, domainDbPath, hostDir);
                         } catch (error) {
-                            console.error(
-                                chalk.yellow(`[!] Failed to merge ${hostDir} into the global js-recon.db: ${error}`)
-                            );
+                            printMsg(MSG.Warn, `[!] Failed to merge ${hostDir} into the global js-recon.db: ${error}`);
                         }
                     } else {
-                        console.log(
-                            chalk.yellow(
-                                `[i] No js-recon.db found for ${hostDir}, skipping merge into the global database.`
-                            )
+                        printMsg(
+                            MSG.Warn,
+                            `[i] No js-recon.db found for ${hostDir}, skipping merge into the global database.`
                         );
                     }
                 } finally {
@@ -912,9 +1086,13 @@ export default async (cmd: any): Promise<void> => {
             }
         }
     } catch (error) {
-        console.error(chalk.bgRed(`[!] Unhandled error: ${error}`));
+        printMsg(MSG.Err, `[!] Unhandled error: ${error}`);
         process.exitCode = 1;
     } finally {
+        if (dashboard) {
+            setHeaderListener(null);
+            await dashboard.stop();
+        }
         try {
             await waitForPendingInterrupt();
         } finally {

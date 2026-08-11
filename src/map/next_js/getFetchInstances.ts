@@ -1,9 +1,9 @@
-import chalk from "chalk";
 import fs from "fs";
 import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import parser from "@babel/parser";
 import { Chunks } from "../../utility/interfaces.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Checks if a node is a fetch identifier.
@@ -46,11 +46,11 @@ const isFetchFallback = (node: any): boolean => {
  * @returns Promise that resolves to updated chunks with fetch detection results
  */
 const getFetchInstances = async (chunks: Chunks, output: string, formats: string[]): Promise<Chunks> => {
-    console.log(chalk.cyan("[i] Running 'getFetchInstances' module"));
-    let chunk_copy: Chunks = { ...chunks };
+    printMsg(MSG.Header, "[i] Running 'getFetchInstances' module");
+    const chunk_copy: Chunks = { ...chunks };
 
     //   iterate through the chunks, and check fetch instances
-    for (let chunk of Object.values(chunks)) {
+    for (const chunk of Object.values(chunks)) {
         let chunkAst;
         try {
             chunkAst = parser.parse(chunk.code, {
@@ -106,15 +106,14 @@ const getFetchInstances = async (chunks: Chunks, output: string, formats: string
 
         // -------- Pass 2:  report the call-sites (aliases) --------
         for (const binding of fetchAliases) {
-            // @ts-ignore
+            // @ts-expect-error -- Babel's Binding type doesn't expose referencePaths in this @babel/traverse version
             binding.referencePaths.forEach((ref) => {
                 const parent = ref.parent;
                 if (parent.type === "CallExpression" && parent.callee === ref.node) {
                     const { line, column } = ref.node.loc.start;
-                    console.log(
-                        chalk.magenta(
-                            `[fetch] Webpack ID ${chunk.id}: fetch() alias '${ref.node.name}' called at ${line}:${column}`
-                        )
+                    printMsg(
+                        MSG.Info,
+                        `[fetch] Webpack ID ${chunk.id}: fetch() alias '${ref.node.name}' called at ${line}:${column}`
                     );
                 }
             });
@@ -122,11 +121,10 @@ const getFetchInstances = async (chunks: Chunks, output: string, formats: string
 
         // -------- Pass 3:  report the call-sites (direct) --------
         for (const call of fetchCalls) {
-            console.log(
-                chalk.magenta(
-                    // @ts-ignore
-                    `[fetch] Webpack ID ${chunk.id}: fetch() called at ${call.line}:${call.column}`
-                )
+            printMsg(
+                MSG.Info,
+                // @ts-expect-error -- Babel's Binding type doesn't expose referencePaths in this @babel/traverse version
+                `[fetch] Webpack ID ${chunk.id}: fetch() called at ${call.line}:${call.column}`
             );
         }
 
@@ -139,7 +137,7 @@ const getFetchInstances = async (chunks: Chunks, output: string, formats: string
     if (formats.includes("json")) {
         const chunks_json = JSON.stringify(chunks, null, 2);
         fs.writeFileSync(`${output}.json`, chunks_json);
-        console.log(chalk.green(`[✓] Saved webpack with fetch instances to ${output}.json`));
+        printMsg(MSG.Run, `[✓] Saved webpack with fetch instances to ${output}.json`);
     }
 
     return chunk_copy;

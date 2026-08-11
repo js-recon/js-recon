@@ -4,9 +4,9 @@ import { getHttpMethodWithForm } from "./handleZDotCreate.js";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
 import * as fs from "fs";
 import * as globals from "../../../utility/globals.js";
-import chalk from "chalk";
 import parser from "@babel/parser";
 import { findCrossChunkParameters } from "./findCrossChunkParams.js";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -202,17 +202,16 @@ export const processExportedEndpoints = (
                         }
 
                         // Log the found exported endpoint
-                        console.log(
-                            chalk.cyan(
-                                `[+] Found exported endpoint '${exportKey}' in chunk ${chunkName} ("${functionFile}":${functionFileLine})`
-                            )
+                        printMsg(
+                            MSG.Header,
+                            `[+] Found exported endpoint '${exportKey}' in chunk ${chunkName} ("${functionFile}":${functionFileLine})`
                         );
-                        console.log(chalk.yellow(`    Export: ${exportKey} => ${varName}`));
-                        console.log(chalk.green(`    URL: ${endpoint}`));
-                        console.log(chalk.green(`    Method: ${httpMethod}`));
+                        printMsg(MSG.Warn, `    Export: ${exportKey} => ${varName}`);
+                        printMsg(MSG.Run, `    URL: ${endpoint}`);
+                        printMsg(MSG.Run, `    Method: ${httpMethod}`);
 
                         if (params) {
-                            console.log(chalk.green(`    Params/Body: ${params}`));
+                            printMsg(MSG.Run, `    Params/Body: ${params}`);
                         }
 
                         // Find cross-chunk parameters for this endpoint
@@ -310,17 +309,16 @@ export const processExportedEndpoints = (
                         }
 
                         // Log the found exported endpoint
-                        console.log(
-                            chalk.cyan(
-                                `[+] Found exported endpoint '${exportKey}' in chunk ${chunkName} ("${functionFile}":${functionFileLine})`
-                            )
+                        printMsg(
+                            MSG.Header,
+                            `[+] Found exported endpoint '${exportKey}' in chunk ${chunkName} ("${functionFile}":${functionFileLine})`
                         );
-                        console.log(chalk.yellow(`    Export: ${exportKey} => ${varName}`));
-                        console.log(chalk.green(`    URL: ${endpoint}`));
-                        console.log(chalk.green(`    Method: ${httpMethod}`));
+                        printMsg(MSG.Warn, `    Export: ${exportKey} => ${varName}`);
+                        printMsg(MSG.Run, `    URL: ${endpoint}`);
+                        printMsg(MSG.Run, `    Method: ${httpMethod}`);
 
                         if (params) {
-                            console.log(chalk.green(`    Params/Body: ${params}`));
+                            printMsg(MSG.Run, `    Params/Body: ${params}`);
                         }
 
                         // Find cross-chunk parameters for this endpoint

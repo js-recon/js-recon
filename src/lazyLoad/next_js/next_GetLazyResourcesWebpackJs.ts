@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 import puppeteer from "../../utility/puppeteerInstance.js";
 import { getChromiumPath } from "../../utility/getChromiumPath.js";
 import parser from "@babel/parser";
@@ -104,7 +105,7 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
     try {
         await page.goto(url, { waitUntil: "networkidle0" });
     } catch {
-        console.error(chalk.yellow("[!] Timeout reached for page load. Continuing with the current state"));
+        printMsg(MSG.Warn, "[!] Timeout reached for page load. Continuing with the current state");
     }
 
     await browser.close();
@@ -112,11 +113,11 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
     const jsUrls = getJsUrls();
 
     if (jsUrls.length === 0) {
-        console.error(chalk.yellow("[!] No JS files discovered during page load"));
+        printMsg(MSG.Warn, "[!] No JS files discovered during page load");
         return [];
     }
 
-    console.log(chalk.cyan(`[i] Scanning ${jsUrls.length} JS file(s) for chunk URL builders`));
+    printMsg(MSG.Header, `[i] Scanning ${jsUrls.length} JS file(s) for chunk URL builders`);
 
     // ── progress bar ──────────────────────────────────────────────────────
     const FORMAT = `  ${chalk.cyan("Scanning")} [{bar}] {percentage}% | {value}/{total}`;
@@ -222,18 +223,18 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
     );
 
     if (matched.length === 0) {
-        console.error(chalk.yellow("[!] No chunk URL builder functions found in discovered JS files"));
+        printMsg(MSG.Warn, "[!] No chunk URL builder functions found in discovered JS files");
         return [];
     }
 
-    console.log(chalk.green(`[✓] Found ${matched.length} chunk URL builder function(s)`));
+    printMsg(MSG.Run, `[✓] Found ${matched.length} chunk URL builder function(s)`);
 
     // ── user approval and execution ───────────────────────────────────────
     const chunkUrls: string[] = [];
 
     for (const { source, jsUrl, jsContent } of matched) {
-        console.log(chalk.green(`[✓] Found chunk URL builder in ${jsUrl}`));
-        console.log(chalk.yellow(source));
+        printMsg(MSG.Run, `[✓] Found chunk URL builder in ${jsUrl}`);
+        printMsg(MSG.Warn, source);
 
         let approved: boolean;
         if (globals.getYes()) {
@@ -251,11 +252,11 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
         }
 
         if (!approved) {
-            console.error(chalk.red("[!] Skipping function."));
+            printMsg(MSG.Err, "[!] Skipping function.");
             continue;
         }
 
-        console.log(chalk.cyan("[i] Executing function to enumerate chunk URLs"));
+        printMsg(MSG.Header, "[i] Executing function to enumerate chunk URLs");
 
         // Detect free variable .p accesses (webpack __webpack_public_path__).
         // When a chunk URL builder is extracted from its surrounding scope, outer
@@ -275,6 +276,7 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
 
         let publicPath = "";
         if (pVarName) {
+            // eslint-disable-next-line security/detect-non-literal-regexp -- pVarName is captured from \w* only (no regex metacharacters possible) — not exploitable
             const assignRe = new RegExp(`\\b${pVarName}\\.p\\s*=\\s*["']([^"']*)["']`);
             const assignMatch = jsContent.match(assignRe);
             if (assignMatch) publicPath = assignMatch[1];
@@ -297,13 +299,13 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
                 chunkUrls.push(fullUrl);
             }
         } catch (err) {
-            console.error(chalk.red("Unsafe or invalid code:", err.message));
+            printMsg(MSG.Err, `Unsafe or invalid code: ${err.message}`);
         }
     }
 
     const unique = [...new Set(chunkUrls)];
     if (unique.length > 0) {
-        console.log(chalk.green(`[✓] Found ${unique.length} JS chunk URL(s)`));
+        printMsg(MSG.Run, `[✓] Found ${unique.length} JS chunk URL(s)`);
     }
 
     return unique;

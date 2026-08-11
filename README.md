@@ -1,6 +1,6 @@
 # JS Recon
 
-![NPM Licence](https://img.shields.io/npm/l/%40js-recon%2Fjs-recon) ![GitHub repo size](https://img.shields.io/github/repo-size/js-recon/js-recon) ![NPM Downloads](https://img.shields.io/npm/dm/%40js-recon%2Fjs-recon) ![GitHub commit activity (dev)](https://img.shields.io/github/commit-activity/w/js-recon/js-recon/dev) ![NPM Last Update](https://img.shields.io/npm/last-update/%40js-recon%2Fjs-recon) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/js-recon/js-recon)
+![NPM Licence](https://img.shields.io/npm/l/%40js-recon%2Fjs-recon) ![GitHub repo size](https://img.shields.io/github/repo-size/js-recon/js-recon) ![NPM Downloads](https://img.shields.io/npm/dm/%40js-recon%2Fjs-recon) ![GitHub commit activity (dev)](https://img.shields.io/github/commit-activity/w/js-recon/js-recon/dev) ![NPM Last Update](https://img.shields.io/npm/last-update/%40js-recon%2Fjs-recon) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/js-recon/js-recon) [![Plumber Score](https://score.getplumber.io/github.com/js-recon/js-recon.svg)](https://score.getplumber.io/github.com/js-recon/js-recon) [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13954/badge)](https://www.bestpractices.dev/projects/13954)
 
 <p align="center">
   <a href="https://js-recon.io">
@@ -139,6 +139,7 @@ js-recon --config ./operator.yaml run \
 | `proxy`       | Routes requests through AWS API Gateway, SOCKS5/HTTP, or Oxylabs proxies.        | [Read Docs](https://js-recon.io/docs/docs/modules/proxy)       |
 | `run`         | Runs all analysis modules automatically on a target.                             | [Read Docs](https://js-recon.io/docs/docs/modules/run)         |
 | `analyze`     | Analyzes the code.                                                               | [Read Docs](https://js-recon.io/docs/docs/modules/analyze)     |
+| `exploit`     | Attempts exploitation of known framework CVEs to discover new attack surface.    | [Read Docs](https://js-recon.io/docs/docs/modules/exploit)     |
 | `report`      | Generates a report from the analysis modules.                                    | [Read Docs](https://js-recon.io/docs/docs/modules/report)      |
 | `mcp`         | AI-powered interactive CLI, one-shot chat, and MCP stdio server.                 | [Read Docs](https://js-recon.io/docs/docs/modules/mcp)         |
 | `fingerprint` | Detects the JavaScript framework used by a target URL (JSON/JSONL output).       | [Read Docs](https://js-recon.io/docs/docs/modules/fingerprint) |
@@ -157,7 +158,7 @@ js-recon --config ./operator.yaml run \
 - Map feature analyzes the JS files and outputs it to a JSON file. An interactive mode can be then used to analyze it
 - Reconstruct HTTP requests that the app makes to the server, and output them to the OpenAPI spec
 - Run analyze to find potential issues in JS code and the HTTP requests the app makes
-- Generate a report from the analyze module
+- Generate a report from the analyze module (optional active endpoint probing via `sj`/swagger-jacker integration using `--sj`)
 
 ## Example Scenario
 

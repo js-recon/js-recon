@@ -3,7 +3,7 @@ import makeRequest from "../../utility/makeReq.js";
 import * as cheerio from "cheerio";
 import { progressError } from "../../utility/progressLog.js";
 const vue_severalJsFilesHome = async (url: string): Promise<string[]> => {
-    let jsFilesToReturn: string[] = [];
+    const jsFilesToReturn: string[] = [];
 
     // get the contents of the homepage
     const homepageReq = await makeRequest(url);
@@ -20,7 +20,7 @@ const vue_severalJsFilesHome = async (url: string): Promise<string[]> => {
     const scriptTags = $("script");
 
     // iterate through those, and find the ones that aren't CDN URLs, like the relative or absolute paths
-    let jsPaths: string[] = [];
+    const jsPaths: string[] = [];
     for (const tag of scriptTags) {
         const src = $(tag).attr("src");
         if (src && !src.startsWith("http")) {
@@ -43,7 +43,7 @@ const vue_severalJsFilesHome = async (url: string): Promise<string[]> => {
     }
 
     // now that there are files, go through those and get the full path of those
-    let fullJsUrls: string[] = [];
+    const fullJsUrls: string[] = [];
     for (const path of jsPaths) {
         const fullUrl = new URL(path, url).href;
         fullJsUrls.push(fullUrl);

@@ -4,7 +4,6 @@
 // counting how many appear in the bundle's own CS-MAST signature set.
 
 import fs from "fs";
-import chalk from "chalk";
 import { ScatCategory } from "@shriyanss/cs-mast";
 import {
     TECH_TO_BRANCH,
@@ -25,6 +24,7 @@ import {
 import { loadRefactorConfig } from "../refactor/remote/config.js";
 import { generateBundleSignatures } from "../refactor/remote/version-detect.js";
 import { Chunks } from "../utility/interfaces.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 // Maps run-module framework names to candidate refactor tech identifiers.
 const FRAMEWORK_TO_TECHS: Record<string, string[]> = {
@@ -36,7 +36,40 @@ const FRAMEWORK_TO_TECHS: Record<string, string[]> = {
 
 const DETECTION_SCAT: ScatCategory[] = ["lit", "decl", "loop", "cond"];
 const DETECTION_SCAT_DIR = "lit-decl-loop-cond";
-const DETECTION_SAMPLE_SIZE = 15;
+// Current react-webpack/react-vite buckets hold ~36 collision files each for this scat.
+// Sampling only 15 of them left match counts sensitive to which random subset was drawn —
+// close calls (e.g. two candidates within a few percent of each other) could flip which
+// tech "won" between identical runs against the same bundle. Set high enough to cover the
+// full bucket at its current size; `randomSample` still caps it if the bucket grows well
+// past this.
+const DETECTION_SAMPLE_SIZE = 200;
+
+// Literal bundler-runtime markers, checked before the CS-MAST-S structural comparison.
+// Module-loader glue and preload polyfills are emitted verbatim by the bundler itself —
+// unlike app/library code, minifiers don't rename these literal property/string
+// accesses, so they're a cheap, high-confidence signal when exactly one candidate's
+// markers are present. CS-MAST-S structural signatures can't discriminate reliably here:
+// they're computed over app + vendored library code, which is largely bundler-agnostic,
+// so two candidates can score closely even when only one bundler's runtime is actually
+// present in the bundle.
+const BUNDLER_MARKERS: Record<string, RegExp[]> = {
+    "react-webpack": [/__webpack_require__/, /__webpack_modules__/, /webpackJsonp/],
+    "react-vite": [/\.supports\(\s*["']modulepreload["']\s*\)/, /__vite__mapDeps/, /__vitePreload/],
+};
+
+/**
+ * Checks bundle code for literal bundler-runtime markers unique to each candidate tech.
+ * Returns the matching tech only when exactly one candidate's markers are present —
+ * ambiguous (multiple or zero matches) cases are left to the CS-MAST-S comparison.
+ */
+export function detectByMarker(chunks: Chunks, candidateTechs: string[]): string | null {
+    const allCode = Object.values(chunks)
+        .map((c) => c.code)
+        .filter(Boolean)
+        .join("\n");
+    const matched = candidateTechs.filter((tech) => (BUNDLER_MARKERS[tech] ?? []).some((re) => re.test(allCode)));
+    return matched.length === 1 ? matched[0] : null;
+}
 
 function randomSample<T>(arr: T[], n: number): T[] {
     const copy = [...arr];
@@ -81,13 +114,22 @@ export async function detectBundler(
     try {
         chunks = JSON.parse(fs.readFileSync(mappedJsonPath, "utf8")) as Chunks;
     } catch {
-        console.log(chalk.yellow("[!] Bundler detection: could not read mapped.json — skipping refactor."));
+        printMsg(MSG.Warn, "[!] Bundler detection: could not read mapped.json — skipping refactor.");
         return null;
+    }
+
+    const markerTech = detectByMarker(chunks, availableTechs);
+    if (markerTech) {
+        printMsg(
+            MSG.Header,
+            `[i] Bundler detection: ${markerTech} — matched via bundler runtime marker (skipping CS-MAST-S sampling)`
+        );
+        return markerTech;
     }
 
     const bundleSigs = generateBundleSignatures(chunks, DETECTION_SCAT);
     if (bundleSigs.size === 0) {
-        console.log(chalk.yellow("[!] Bundler detection: bundle produced no CS-MAST signatures — skipping refactor."));
+        printMsg(MSG.Warn, "[!] Bundler detection: bundle produced no CS-MAST signatures — skipping refactor.");
         return null;
     }
 
@@ -101,7 +143,7 @@ export async function detectBundler(
         // Validate the HF bucket branch exists.
         const branchOk = await validateRemoteBranch(branch);
         if (!branchOk) {
-            console.log(chalk.yellow(`[!] Bundler detection: no signatures for ${tech} in remote bucket — skipping.`));
+            printMsg(MSG.Warn, `[!] Bundler detection: no signatures for ${tech} in remote bucket — skipping.`);
             continue;
         }
 
@@ -109,7 +151,7 @@ export async function detectBundler(
         let listCache = loadListCache();
         const branchMissingFromCache = !listCache?.branches[branch];
         if (shouldRefreshListCache(listCache, { refreshCache: false, skipCacheChecks }) || branchMissingFromCache) {
-            console.log(chalk.cyan(`[i] Refreshing file list cache for ${branch}...`));
+            printMsg(MSG.Header, `[i] Refreshing file list cache for ${branch}...`);
             const paths = await listCollisionsFiles(branch, DETECTION_SCAT_DIR);
             const now = Date.now();
             const branches: Record<string, string[]> = listCache?.branches ?? {};
@@ -123,10 +165,9 @@ export async function detectBundler(
         );
 
         if (allPaths.length === 0) {
-            console.log(
-                chalk.yellow(
-                    `[!] Bundler detection: no collision files for scat "${DETECTION_SCAT_DIR}" in branch "${branch}" — skipping.`
-                )
+            printMsg(
+                MSG.Warn,
+                `[!] Bundler detection: no collision files for scat "${DETECTION_SCAT_DIR}" in branch "${branch}" — skipping.`
             );
             continue;
         }
@@ -143,10 +184,9 @@ export async function detectBundler(
             try {
                 remoteHashes = await listCollisionsFileHashes(branch, DETECTION_SCAT_DIR);
             } catch (e) {
-                console.log(
-                    chalk.yellow(
-                        `[!] Could not fetch upstream content hashes for cache validation (${(e as Error).message}) — falling back to age-based cache checks.`
-                    )
+                printMsg(
+                    MSG.Warn,
+                    `[!] Could not fetch upstream content hashes for cache validation (${(e as Error).message}) — falling back to age-based cache checks.`
                 );
             }
         }
@@ -172,8 +212,9 @@ export async function detectBundler(
             }
         }
 
-        console.log(
-            chalk.cyan(`[i] Bundler detection: ${tech} — ${matchCount} signature match(es) (threshold: ${threshold})`)
+        printMsg(
+            MSG.Header,
+            `[i] Bundler detection: ${tech} — ${matchCount} signature match(es) (threshold: ${threshold})`
         );
 
         if (matchCount > bestMatchCount) {

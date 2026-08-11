@@ -49,6 +49,7 @@ const hasCompatibleContentType = (url: string, rawContentType: string | null): b
 
     const assetKind = getDownloadedAssetKind(url);
     if (assetKind === "json") {
+        // eslint-disable-next-line security/detect-unsafe-regex -- anchored, no nested/ambiguous quantifiers — not exploitable
         return contentType === "text/json" || /^application\/(?:[a-z0-9.+-]+\+)?json$/.test(contentType);
     }
     if (assetKind === "vue") {

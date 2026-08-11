@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
-import chalk from "chalk";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
@@ -16,8 +16,8 @@ const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
  * @returns Promise that resolves to an array of discovered paths/URLs
  */
 const client_jsFilesHref = async (directory: string): Promise<string[]> => {
-    console.log(chalk.cyan("[i] Searching for `href` in the JS chunks"));
-    let discoveredPaths = [];
+    printMsg(MSG.Header, "[i] Searching for `href` in the JS chunks");
+    const discoveredPaths = [];
     // index all the files in the directory
     let files;
     files = fs.readdirSync(directory, { recursive: true });

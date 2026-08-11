@@ -1,6 +1,6 @@
 import makeRequest from "../../utility/makeReq.js";
-import chalk from "chalk";
 import resolvePath from "../../utility/resolvePath.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
  * Probes the SvelteKit-specific version.json endpoint.
@@ -20,7 +20,7 @@ const svelte_getVersionJson = async (baseUrl: string, appDir: string = "_app"): 
     try {
         const res = await makeRequest(versionJsonUrl, {});
         if (res && res.status === 200) {
-            console.log(chalk.green(`[✓] Found SvelteKit version.json at ${versionJsonUrl}`));
+            printMsg(MSG.Run, `[✓] Found SvelteKit version.json at ${versionJsonUrl}`);
             return [versionJsonUrl];
         }
     } catch {

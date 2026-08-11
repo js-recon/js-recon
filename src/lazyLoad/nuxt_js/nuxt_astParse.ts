@@ -3,11 +3,11 @@ import _traverse from "@babel/traverse";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import execFunc from "../../utility/runSandboxed.js";
 import makeRequest from "../../utility/makeReq.js";
-import chalk from "chalk";
 import inquirer from "inquirer";
 import t from "@babel/types";
 import resolvePath from "../../utility/resolvePath.js";
 import * as globals from "../../utility/globals.js";
+import { printMsg, MSG } from "../../utility/printMsg.js";
 
 export type ChunkBuilderFunction = {
     name: string;
@@ -65,14 +65,14 @@ export const extractChunkBuilderFunctions = (jsContent: string): ChunkBuilderFun
  * Finds all the lazy loaded JS files from a given URL using a Nuxt.js specific approach.
  */
 const nuxt_astParse = async (url: string) => {
-    let filesFound = [];
+    const filesFound = [];
     const resp = await makeRequest(url, {});
     const body = await resp.text();
 
     const functions = extractChunkBuilderFunctions(body);
 
     if (functions.length === 0) {
-        console.error(chalk.red("[!] Error parsing JS file: ", url));
+        printMsg(MSG.Err, `[!] Error parsing JS file: ${url}`);
         return filesFound;
     }
 
@@ -85,14 +85,14 @@ const nuxt_astParse = async (url: string) => {
             errorRecovery: true,
         });
     } catch (error) {
-        console.error(chalk.red("[!] Error parsing JS file: ", url));
+        printMsg(MSG.Err, `[!] Error parsing JS file: ${url}`);
         return filesFound;
     }
 
     for (const func of functions) {
         {
-            console.log(chalk.green(`[✓] Found JS chunk having the following source:`));
-            console.log(chalk.yellow(func.source));
+            printMsg(MSG.Run, `[✓] Found JS chunk having the following source:`);
+            printMsg(MSG.Warn, func.source);
 
             let user_verified;
             if (!globals.getYes()) {
@@ -113,9 +113,9 @@ const nuxt_astParse = async (url: string) => {
                 user_verified = true;
             }
             if (user_verified === true) {
-                console.log(chalk.cyan("[i] Proceeding with the selected function to fetch files"));
+                printMsg(MSG.Header, "[i] Proceeding with the selected function to fetch files");
             } else {
-                console.error(chalk.red("[!] Not executing function."));
+                printMsg(MSG.Err, "[!] Not executing function.");
                 continue;
             }
             // get the value of the unknown vars
@@ -125,7 +125,7 @@ const nuxt_astParse = async (url: string) => {
                 plugins: ["jsx", "typescript"],
                 errorRecovery: true,
             });
-            let memberExpressions = [];
+            const memberExpressions = [];
             traverse(unknownVarAst, {
                 MemberExpression(path) {
                     // Only collect identifiers like f.p (not obj["x"])
@@ -170,13 +170,14 @@ const nuxt_astParse = async (url: string) => {
 
             // replace the unknown var with the value
             const funcSource = func.source.replace(
+                // eslint-disable-next-line security/detect-non-literal-regexp -- unknownVar values are AST-derived identifier/property names, which cannot contain regex metacharacters
                 new RegExp(`${unknownVar[0]}.${unknownVar[1]}`),
                 `"${unknownVarValue}"`
             );
 
             // continue to executing the function with all possible numbers
             const urlBuilderFunc = `(() => (${funcSource}))()`;
-            let js_paths = [];
+            const js_paths = [];
 
             try {
                 // rather than fuzzing, grep the integers from the func code
@@ -194,7 +195,7 @@ const nuxt_astParse = async (url: string) => {
                     }
                 }
             } catch (error) {
-                console.error(chalk.red("[!] Error executing function: ", error));
+                printMsg(MSG.Err, `[!] Error executing function: ${error}`);
             }
 
             if (js_paths.length > 0) {
@@ -208,7 +209,7 @@ const nuxt_astParse = async (url: string) => {
     }
 
     if (filesFound.length > 0) {
-        console.log(chalk.green(`[✓] Found ${filesFound.length} JS chunks`));
+        printMsg(MSG.Run, `[✓] Found ${filesFound.length} JS chunks`);
     }
 
     return filesFound;

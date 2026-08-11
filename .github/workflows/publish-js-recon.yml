@@ -7,6 +7,9 @@ on:
   release:
     types: [created]
 
+permissions:
+  contents: read
+
 jobs:
   version_check:
     runs-on: ubuntu-latest
@@ -90,12 +93,14 @@ jobs:
       - publish-npm
     runs-on: ubuntu-latest
     environment: commit-signing
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
       - name: Configure SSH commit signing
-        uses: shriyanss/verified-commit-action@v1
+        uses: shriyanss/verified-commit-action@1d7638e44a6bab6d3ac35653af7ef9f343074662 # v1.0.2
         with:
           ssh-private-key: ${{ secrets.JS_RECON_SIGNING_KEY }}
           commit-name: "js-recon-bot"

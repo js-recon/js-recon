@@ -6,7 +6,7 @@ import { runWithConcurrency } from "../../utility/concurrency.js";
 const next_scriptTagsSubsequentRequests = async (url: string, endpointsFile: string, threads: number = 1) => {
     console.log(chalk.cyan("[i] Getting JS files from subsequent requests (script tags)"));
 
-    let endpoints = JSON.parse(fs.readFileSync(endpointsFile, "utf8")).paths;
+    const endpoints = JSON.parse(fs.readFileSync(endpointsFile, "utf8")).paths;
 
     endpoints.push("/");
 

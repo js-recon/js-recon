@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import path from "path";
 import fs from "fs";
 import prettier from "prettier";
@@ -7,6 +6,8 @@ import { getURLDirectory, hostMatchesScope } from "../utility/urlUtils.js";
 import { getScope, getMaxReqQueue } from "./globals.js"; // Import scope and max_req_queue functions
 import { getSanitizedAssetFilename, resolveAssetOutputDirectory } from "./outputPath.js";
 import { getDownloadedAssetKind, readDownloadedAssetResponse } from "./downloadResponse.js";
+import * as globalsUtil from "../utility/globals.js";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 /**
  * Downloads the provided JavaScript or JSON URLs and stores them in the given output directory.
@@ -24,7 +25,7 @@ import { getDownloadedAssetKind, readDownloadedAssetResponse } from "./downloadR
 const PRETTIER_SIZE_LIMIT = 500 * 1024; // 500 KB
 
 const downloadFiles = async (urls: string[], output: string) => {
-    console.log(chalk.cyan(`[i] Attempting to download ${urls.length} JS chunks`));
+    printMsg(MSG.Header, `[i] Attempting to download ${urls.length} JS chunks`);
     fs.mkdirSync(output, { recursive: true });
 
     const ignoredJSFiles: string[] = [];
@@ -39,7 +40,7 @@ const downloadFiles = async (urls: string[], output: string) => {
                 !url.match(/(\.mjs\.map|\.mjs|\.js|\.json|\.js\.map|\.vue)/) ||
                 url.match(/lang\.(css|scss|sass|less|styl)/)
             ) {
-                console.log(chalk.yellow(`[i] Ignored ${url}`));
+                printMsg(MSG.Warn, `[i] Ignored ${url}`);
                 return;
             }
 
@@ -57,7 +58,7 @@ const downloadFiles = async (urls: string[], output: string) => {
             try {
                 res = await makeRequest(url, { reportErrors: true });
             } catch (err) {
-                console.error(chalk.red(`[!] Failed to download: ${url}`));
+                printMsg(MSG.Err, `[!] Failed to download: ${url}`);
                 return;
             }
 
@@ -69,7 +70,7 @@ const downloadFiles = async (urls: string[], output: string) => {
             const responseResult = await readDownloadedAssetResponse(url, res);
             if (responseResult.ok === false) {
                 const label = responseResult.failure === "invalidResponse" ? "Invalid response" : "Failed to download";
-                console.error(chalk.red(`[!] ${label}: ${url} : ${responseResult.reason}`));
+                printMsg(MSG.Err, `[!] ${label}: ${url} : ${responseResult.reason}`);
                 return;
             }
 
@@ -80,7 +81,7 @@ const downloadFiles = async (urls: string[], output: string) => {
             const filename = getSanitizedAssetFilename(url);
 
             if (!filename) {
-                console.warn(chalk.yellow(`[!] Could not determine filename for URL: ${url}. Skipping.`));
+                printMsg(MSG.Warn, `[!] Could not determine filename for URL: ${url}. Skipping.`);
                 return;
             }
 
@@ -99,7 +100,7 @@ const downloadFiles = async (urls: string[], output: string) => {
                         file.length <= PRETTIER_SIZE_LIMIT ? await prettier.format(file, { parser: "babel" }) : file;
                 }
             } catch (formatErr) {
-                console.error(chalk.red(`[!] Failed to format file: ${filePath} : ${formatErr}`));
+                printMsg(MSG.Err, `[!] Failed to format file: ${filePath} : ${formatErr}`);
                 return;
             }
 
@@ -107,12 +108,14 @@ const downloadFiles = async (urls: string[], output: string) => {
                 fs.mkdirSync(childDir, { recursive: true });
                 fs.writeFileSync(filePath, formatted);
             } catch (writeErr) {
-                console.error(chalk.red(`[!] Failed to write file: ${filePath} : ${writeErr}`));
+                if (globalsUtil.getVerbose()) {
+                    printMsg(MSG.Err, `[!] Failed to write file: ${filePath} : ${writeErr}`);
+                }
                 return;
             }
             download_count++;
         } catch (err) {
-            console.error(chalk.red(`[!] Failed to download: ${url} : ${err}`));
+            printMsg(MSG.Err, `[!] Failed to download: ${url} : ${err}`);
         }
     };
 
@@ -129,15 +132,14 @@ const downloadFiles = async (urls: string[], output: string) => {
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
     if (ignoredJSFiles.length > 0) {
-        console.log(
-            chalk.yellow(
-                `[i] Ignored ${ignoredJSFiles.length} JS files across ${ignoredJSDomains.length} domain(s) - ${ignoredJSDomains.join(", ")}`
-            )
+        printMsg(
+            MSG.Warn,
+            `[i] Ignored ${ignoredJSFiles.length} JS files across ${ignoredJSDomains.length} domain(s) - ${ignoredJSDomains.join(", ")}`
         );
     }
 
     if (download_count > 0) {
-        console.log(chalk.green(`[✓] Downloaded ${download_count} JS chunks to ${output} directory`));
+        printMsg(MSG.Run, `[✓] Downloaded ${download_count} JS chunks to ${output} directory`);
     }
 };
 

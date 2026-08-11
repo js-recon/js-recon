@@ -142,8 +142,8 @@ const legacyEnvironmentAliases: Readonly<Record<string, readonly string[]>> = Ob
     "run.outputOverwrite": ["JS_RECON_OUTPUT_OVERWRITE"],
     "run.disableRulesVersionCheck": ["JS_RECON_DISABLE_RULES_VERSION_CHECK"],
     "analyze.disableRulesVersionCheck": ["JS_RECON_DISABLE_RULES_VERSION_CHECK"],
-    "run.openaiApiKey": ["OPENAI_API_KEY"],
-    "map.openaiApiKey": ["OPENAI_API_KEY"],
+    "run.aiApiKey": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
+    "map.aiApiKey": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
     "proxy.awsAccessKey": ["AWS_ACCESS_KEY_ID"],
     "proxy.awsSecretKey": ["AWS_SECRET_ACCESS_KEY"],
     "proxy.proxyMethod": ["JS_RECON_PROXY_METHOD"],
@@ -411,6 +411,7 @@ const findCliConfigPath = (program: Command, argv: readonly string[]): string | 
 
     for (let index = 2; index < argv.length; index += 1) {
         const token = argv[index];
+        // eslint-disable-next-line security/detect-possible-timing-attacks -- comparing CLI argument/command-name strings, not secrets or credentials — timing is not security-relevant here
         if (token === "--config") {
             if (index + 1 >= argv.length) {
                 throw new ApplicationConfigError("--config requires a file path");

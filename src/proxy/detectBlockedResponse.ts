@@ -118,6 +118,7 @@ const STATUS_DENIAL_PATTERNS: Readonly<Record<number, readonly Readonly<{ patter
     Object.freeze({
         403: Object.freeze([
             Object.freeze({ pattern: /\baccess\s+denied\b/i, label: "access denied" }),
+            // eslint-disable-next-line security/detect-unsafe-regex -- literal-heavy, no nested/ambiguous quantifiers — not exploitable
             Object.freeze({ pattern: /\brequest\s+(?:was\s+)?blocked\b/i, label: "request blocked" }),
         ]),
         429: Object.freeze([
@@ -177,6 +178,7 @@ const blockedResult = (
 const isHtmlDocument = (headers: NormalizedHeaders, body: string): boolean =>
     !JAVASCRIPT_CONTENT_TYPE.test(headers["content-type"] ?? "") && HTML_DOCUMENT_START.test(body);
 
+// eslint-disable-next-line security/detect-unsafe-regex -- single lazy scan to the next literal, no nested quantifiers — not exploitable
 const normalizedTitle = (body: string): string | null => {
     const match = /<title(?:\s[^>]*)?>([\s\S]*?)<\/title\s*>/i.exec(body);
     return match ? match[1].replace(/\s+/g, " ").trim() : null;

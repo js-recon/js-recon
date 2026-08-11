@@ -3,13 +3,13 @@ import { MemberExpression, CallExpression, VariableDeclarator, ObjectProperty } 
 import _traverse from "@babel/traverse";
 import * as fs from "fs";
 import * as fsPath from "path";
-import chalk from "chalk";
 import { Chunks } from "../../../utility/interfaces.js";
 import * as globals from "../../../utility/globals.js";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
 import { resolveNodeValue, resolveStringOps } from "../utils.js";
 import { processExportedEndpoints } from "./processExportedEndpoints.js";
 import { getThirdArg } from "../resolveAxios.js";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -117,10 +117,9 @@ export const handleZDotCreate = (
     }
 
     if (axiosCreateVarName !== "") {
-        console.log(
-            chalk.magenta(
-                `[✓] .Z.create() assigned to '${axiosCreateVarName}' in chunk ${chunkName} ("${directory}/${chunks[chunkName].file}":${axiosCreateLineNumber})`
-            )
+        printMsg(
+            MSG.Run,
+            `[✓] .Z.create() assigned to '${axiosCreateVarName}' in chunk ${chunkName} ("${directory}/${chunks[chunkName].file}":${axiosCreateLineNumber})`
         );
 
         // After detecting Z.create(), check for exported endpoint wrappers
@@ -220,8 +219,12 @@ export const processZDotCreateCall = (
             const axiosFirstArg = args[0];
             const axiosFirstArgText = chunkCode.slice(axiosFirstArg.start, axiosFirstArg.end);
 
-            const concatRegex = /\".*\"(\\.concat\(.+\))+/;
-            if (concatRegex.test(axiosFirstArgText)) {
+            const concatRegex = /"[^"]*"(?:\.concat\([^()]*\))+/;
+            // Bound the probe length before running this regex against attacker-controlled bundle
+            // text: the nested `(\.concat\(.+\))+` quantifiers are catastrophically backtracking on
+            // crafted input, so a maliciously long argument could hang the analysis pipeline.
+            const MAX_CONCAT_PROBE_LENGTH = 2000;
+            if (axiosFirstArgText.length <= MAX_CONCAT_PROBE_LENGTH && concatRegex.test(axiosFirstArgText)) {
                 callUrl = resolveStringOps(axiosFirstArgText);
             } else if (axiosFirstArg.type === "StringLiteral") {
                 callUrl = axiosFirstArg.value;
@@ -299,16 +302,14 @@ export const processZDotCreateCall = (
         }
     }
 
-    console.log(
-        chalk.blue(`[+] Found Z.create() axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`)
-    );
-    console.log(chalk.green(`    URL: ${callUrl}`));
-    console.log(chalk.green(`    Method: ${callMethod}`));
+    printMsg(MSG.Info, `[+] Found Z.create() axios call in chunk ${chunkName} ("${functionFile}":${functionFileLine})`);
+    printMsg(MSG.Run, `    URL: ${callUrl}`);
+    printMsg(MSG.Run, `    Method: ${callMethod}`);
     if (callBody) {
-        console.log(chalk.green(`    Body: ${callBody}`));
+        printMsg(MSG.Run, `    Body: ${callBody}`);
     }
     if (Object.keys(callHeaders).length > 0) {
-        console.log(chalk.green(`    Headers: ${JSON.stringify(callHeaders)}`));
+        printMsg(MSG.Run, `    Headers: ${JSON.stringify(callHeaders)}`);
     }
 
     globals.addOpenapiOutput({

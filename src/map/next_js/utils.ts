@@ -1544,7 +1544,15 @@ export const resolveNodeValue = (
                     // .concat() with varying arguments end up here. They needs to be resolved as a string
 
                     // first, match as regex
-                    if (nodeCode.replace(/\n\s*/g, "").match(/^"[^"]*"(\.concat\(.+\))+$/)) {
+                    // Bound the probe length before running this regex against attacker-controlled bundle
+                    // text: the nested `(\.concat\(.+\))+` quantifiers are catastrophically backtracking on
+                    // crafted input, so a maliciously long node could hang the analysis pipeline.
+                    const MAX_CONCAT_PROBE_LENGTH = 2000;
+                    const normalizedNodeCode = nodeCode.replace(/\n\s*/g, "");
+                    if (
+                        normalizedNodeCode.length <= MAX_CONCAT_PROBE_LENGTH &&
+                        normalizedNodeCode.match(/^"[^"]*"(?:\.concat\([^()]*\))+$/)
+                    ) {
                         // parse it separately with ast
                         let ast;
                         try {
@@ -1572,7 +1580,7 @@ export const resolveNodeValue = (
                                 case "Identifier":
                                     return `[var ${arg.name}]`; // Format identifiers as [var name]
                                 default:
-                                    // @ts-ignore
+                                    // @ts-expect-error -- arg.property is not narrowed to MemberExpression by this point
                                     return `[${arg.type} -> ${arg.type === "MemberExpression" ? arg.property?.name : ""}]`;
                             }
                         };

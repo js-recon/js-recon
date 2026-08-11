@@ -38,8 +38,8 @@ const checkAngularJS = async ($: cheerio.CheerioAPI, url: string) => {
         if (attribs) {
             for (const [attrName, attrValue] of Object.entries(attribs)) {
                 if (attrName === "src") {
-                    // @ts-ignore
                     // Match main.js (dev builds) and main-HASH.js (production builds)
+                    // eslint-disable-next-line security/detect-unsafe-regex -- anchored at $, bounded groups — not exploitable
                     if (/(?:^|\/)main(-[a-zA-Z0-9]+)?\.js(\?.*)?$/.test(attrValue)) {
                         hasMainJs = true;
 

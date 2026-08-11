@@ -1,5 +1,5 @@
-import chalk from "chalk";
 import fs from "fs";
+import { printMsg, MSG } from "../utility/printMsg.js";
 
 // Next.JS
 import client_subsequentRequests from "./next_js/client_subsequentRequests.js";
@@ -40,13 +40,13 @@ const endpoints = async (
     list: boolean | undefined,
     mappedJsonFile: string | undefined
 ): Promise<void> => {
-    console.log(chalk.cyan("[i] Loading endpoints module"));
+    printMsg(MSG.Header, "[i] Loading endpoints module");
 
     // list available technologies
     if (list) {
-        console.log(chalk.cyan("[i] Listing available technologies"));
+        printMsg(MSG.Header, "[i] Listing available technologies");
         for (const tech of techs) {
-            console.log(chalk.greenBright(`- ${tech}`));
+            printMsg(MSG.Run, `- ${tech}`);
         }
         return;
     }
@@ -54,44 +54,43 @@ const endpoints = async (
     // iterate over the output format, and match it with the available output formats
     for (const format of outputFormat) {
         if (!outputFormats.includes(format)) {
-            console.error(chalk.red("[!] Invalid output format"));
+            printMsg(MSG.Err, "[!] Invalid output format");
             return;
         }
     }
 
     // check if the technology is present
     if (!tech) {
-        console.error(chalk.red("[!] Please provide a technology"));
+        printMsg(MSG.Err, "[!] Please provide a technology");
         return;
     }
 
     // check if the output file is present
     if (!output) {
-        console.error(chalk.red("[!] Please provide an output file"));
+        printMsg(MSG.Err, "[!] Please provide an output file");
         return;
     }
 
     // check if the url is present
     if (!url) {
-        console.error(chalk.red("[!] Please provide a URL"));
+        printMsg(MSG.Err, "[!] Please provide a URL");
         return;
     }
 
-    console.log(chalk.cyan("[i] Extracting endpoints"));
+    printMsg(MSG.Header, "[i] Extracting endpoints");
 
     if (tech === "next") {
-        console.log(chalk.cyan("[i] Checking for client-side paths for Next.JS"));
+        printMsg(MSG.Header, "[i] Checking for client-side paths for Next.JS");
 
         // var to store all the paths found
-        let final_client_side: string[] = [];
+        const final_client_side: string[] = [];
 
         if (directory) {
             const subsequentRequestsDir = directory + "/___subsequent_requests";
             if (!fs.existsSync(subsequentRequestsDir)) {
-                console.error(
-                    chalk.yellow(
-                        "[!] Directory containing subsequent requests does not exist — skipping subsequent requests extraction"
-                    )
+                printMsg(
+                    MSG.Warn,
+                    "[!] Directory containing subsequent requests does not exist — skipping subsequent requests extraction"
                 );
             } else {
                 const client_subsequentRequestsResult = await client_subsequentRequests(subsequentRequestsDir, url);

@@ -3,13 +3,13 @@ import { MemberExpression } from "@babel/types";
 import _traverse from "@babel/traverse";
 import * as fs from "fs";
 import * as fsPath from "path";
-import chalk from "chalk";
 import { Chunks } from "../../../utility/interfaces.js";
 import * as globals from "../../../utility/globals.js";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
 import { resolveNodeValue } from "../utils.js";
 import { traceAxiosInstanceExports } from "./traceAxiosInstanceExports.js";
 import { getThirdArg } from "../resolveAxios.js";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
 
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
@@ -58,11 +58,11 @@ export const handleAxiosCreate = (
     // We want 'p', not 'e'
 
     // First, traverse up to find if we're inside a function
-    let wrapperFunction = path.findParent((p) => p.isArrowFunctionExpression() || p.isFunctionExpression());
+    const wrapperFunction = path.findParent((p) => p.isArrowFunctionExpression() || p.isFunctionExpression());
 
     if (wrapperFunction) {
         // Now check if this function is assigned to a variable or wrapped in a call expression
-        let assignmentParent = wrapperFunction.findParent(
+        const assignmentParent = wrapperFunction.findParent(
             (p) => p.isAssignmentExpression() || p.isVariableDeclarator()
         );
 
@@ -101,14 +101,13 @@ export const handleAxiosCreate = (
     }
 
     if (axiosCreateVarName !== "") {
-        console.log(
-            chalk.magenta(
-                `[✓] axios.create() assigned to '${axiosCreateVarName}' in chunk ${chunkName} ("${directory}/${chunks[chunkName].file}":${axiosCreateLineNumber})`
-            )
+        printMsg(
+            MSG.Run,
+            `[✓] axios.create() assigned to '${axiosCreateVarName}' in chunk ${chunkName} ("${directory}/${chunks[chunkName].file}":${axiosCreateLineNumber})`
         );
 
         // Trace if this axios instance is exported and re-used in other chunks
-        console.log(chalk.blue(`    [→] Tracing axios instance '${axiosCreateVarName}' exports...`));
+        printMsg(MSG.Info, `    [→] Tracing axios instance '${axiosCreateVarName}' exports...`);
         traceAxiosInstanceExports(chunkName, axiosCreateVarName, chunks, directory);
 
         // get the arguments of this axios create. Like .create({})
@@ -146,10 +145,9 @@ export const handleAxiosCreate = (
                     let axiosCreateCallParams: any;
                     let axiosCreateCallHeaders: any;
 
-                    console.log(
-                        chalk.blue(
-                            `[+] Found axios.create() call in chunk ${chunkName} ("${directory}/${chunks[chunkName].file}":${axiosCreateCallLineNumber})`
-                        )
+                    printMsg(
+                        MSG.Info,
+                        `[+] Found axios.create() call in chunk ${chunkName} ("${directory}/${chunks[chunkName].file}":${axiosCreateCallLineNumber})`
                     );
 
                     if (firstArg.type === "ObjectExpression") {
@@ -185,12 +183,10 @@ export const handleAxiosCreate = (
                         }
                     }
 
-                    if (axiosCreateCallUrl)
-                        console.log(chalk.green(`    URL: ${axiosCreateBaseURL}${axiosCreateCallUrl}`));
-                    if (axiosCreateCallMethod)
-                        console.log(chalk.green(`    Method: ${axiosCreateCallMethod.toUpperCase()}`));
-                    if (axiosCreateCallParams) console.log(chalk.green(`    Params: ${axiosCreateCallParams}`));
-                    if (axiosCreateCallHeaders) console.log(chalk.green(`    Headers: ${axiosCreateCallHeaders}`));
+                    if (axiosCreateCallUrl) printMsg(MSG.Run, `    URL: ${axiosCreateBaseURL}${axiosCreateCallUrl}`);
+                    if (axiosCreateCallMethod) printMsg(MSG.Run, `    Method: ${axiosCreateCallMethod.toUpperCase()}`);
+                    if (axiosCreateCallParams) printMsg(MSG.Run, `    Params: ${axiosCreateCallParams}`);
+                    if (axiosCreateCallHeaders) printMsg(MSG.Run, `    Headers: ${axiosCreateCallHeaders}`);
 
                     globals.addOpenapiOutput({
                         url: axiosCreateCallUrl || "",

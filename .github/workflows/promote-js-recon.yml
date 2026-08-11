@@ -18,6 +18,8 @@ jobs:
   update-homebrew-tap:
     runs-on: ubuntu-latest
     environment: homebrew-publish
+    permissions:
+      contents: read
     steps:
       - name: Fetch published tarball and compute SHA256
         id: sha256
@@ -93,7 +95,7 @@ jobs:
           # Dockerfile.w-rules builds from this context and would otherwise bake
           # the writable GHCR credential into an image layer.
           persist-credentials: false
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -203,7 +205,7 @@ jobs:
         with:
           node-version: "22"
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -271,7 +273,7 @@ jobs:
         with:
           node-version: "22"
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
