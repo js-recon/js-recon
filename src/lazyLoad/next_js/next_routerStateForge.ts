@@ -503,7 +503,7 @@ const next_routerStateForge = async (
         }
         if (pageResult.success) return;
 
-        let metadataResult = await tryAttempts(ancestorAttempts, "metadata-only");
+        const metadataResult = await tryAttempts(ancestorAttempts, "metadata-only");
         if (!metadataResult.success || !metadataResult.matchedDynamic) {
             await tryAttempts(harvestBonusAttempts(), "metadata-only");
         }
