@@ -8,6 +8,14 @@
 - `load` (Caido/Burp import) now writes each imported entry directly into the SQLite cache instead of building one large in-memory JSON object and serializing it in a single `fs.writeFileSync` at the end. This also removes the "cache too large to serialize as one JSON string" `RangeError` failure mode entirely — SQLite has no equivalent whole-file size ceiling. (`load`)
 - `lazyload`'s cache pre-creation step now opens the SQLite cache DB up front (which also creates it and its schema if missing) instead of writing an empty `{}` JSON stub; a failure to open it is now a fatal error with a dedicated exit code (`32`), since this step's entire purpose is ensuring a writable cache exists before the crawl starts. (`lazyload`)
 
+### Security
+
+- Removed the `fs` npm package from dependencies. It was never referenced by the codebase — every `import fs from "fs"` resolves to Node's builtin module — and sat unused in `package-lock.json` as an extraneous entry. The `fs` package on npm (distinct from Node's builtin) is flagged as malicious by OSV (`MAL-2025-21003`); removing it clears the finding ahead of the new CI dependency audit below.
+
+### Added
+
+- Release CI (`publish-js-recon.yml`) now runs a `depx-audit` job before `publish-npm`: it downloads [`depx`](https://github.com/projectdiscovery/depx), verifies the binary's SHA256 against a hash pinned in the workflow, and runs `depx audit package-lock.json --require-clean` to block the release if any dependency is a known malicious package.
+
 ## 2.0.1-alpha.1 - (unreleased)
 
 ### Added
