@@ -103,7 +103,8 @@ const lazyLoad = async (
     stagnationTimeinMs: number = 0,
     stagnationPercentage: number = 80,
     stagnationMonitorMs: number = 60 * 1000,
-    rscParamBruteforceLimit: number = 20
+    rscParamBruteforceLimit: number = 20,
+    wordlist?: string
 ) => {
     const resolvedTargets = resolveTargetInputs(url);
     // Hoisted so the timeout handler can stop discovery and drain downloads.
@@ -216,6 +217,7 @@ const lazyLoad = async (
                         maxIterations,
                         maxPageVisits,
                         rscParamBruteforceLimit,
+                        wordlist,
                         onUrlsDiscovered: (urls) => enqueue(activeQueue!, urls),
                         includeMethods,
                         excludeMethods,

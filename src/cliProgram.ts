@@ -176,6 +176,10 @@ export function buildProgram(): Command {
             "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
             "20"
         )
+        .option(
+            "--wordlist <file>",
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to next_routerStateForge's candidate URLs"
+        )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
             "--max-redirects <n>",
@@ -318,7 +322,8 @@ export function buildProgram(): Command {
                 Number(cmd.stagnationTimein) * 60 * 1000,
                 Number(cmd.stagnationPercentage),
                 Number(cmd.stagnationMonitor) * 60 * 1000,
-                Number(cmd.rscParamBruteforceLimit)
+                Number(cmd.rscParamBruteforceLimit),
+                cmd.wordlist
             );
         });
 
@@ -832,6 +837,10 @@ export function buildProgram(): Command {
             "--rsc-param-bruteforce-limit <n>",
             "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
             "20"
+        )
+        .option(
+            "--wordlist <file>",
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to next_routerStateForge's candidate URLs"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(

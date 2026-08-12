@@ -161,7 +161,8 @@ const processUrl = async (
                 Number(cmd.stagnationTimein) * 60 * 1000,
                 Number(cmd.stagnationPercentage),
                 Number(cmd.stagnationMonitor) * 60 * 1000,
-                Number(cmd.rscParamBruteforceLimit)
+                Number(cmd.rscParamBruteforceLimit),
+                cmd.wordlist
             ),
         getSkipStepPromise()
     );
@@ -714,7 +715,8 @@ const processUrl = async (
                 Number(cmd.stagnationTimein) * 60 * 1000,
                 Number(cmd.stagnationPercentage),
                 Number(cmd.stagnationMonitor) * 60 * 1000,
-                Number(cmd.rscParamBruteforceLimit)
+                Number(cmd.rscParamBruteforceLimit),
+                cmd.wordlist
             ),
         getSkipStepPromise()
     );
@@ -777,7 +779,8 @@ const processUrl = async (
                 Number(cmd.stagnationTimein) * 60 * 1000,
                 Number(cmd.stagnationPercentage),
                 Number(cmd.stagnationMonitor) * 60 * 1000,
-                Number(cmd.rscParamBruteforceLimit)
+                Number(cmd.rscParamBruteforceLimit),
+                cmd.wordlist
             ),
         getSkipStepPromise()
     );
