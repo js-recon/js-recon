@@ -4,6 +4,8 @@ import { URL } from "url";
 import zlib from "zlib";
 import * as globals from "../utility/globals.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import { getCacheIdentityDigest } from "../utility/makeReq.js";
+import { getCacheDb, writeCacheEntryUnsafe } from "../utility/cacheDb.js";
 
 interface CaidoEntry {
     id: number;
@@ -181,13 +183,11 @@ const load = async (caidoFile: string, targetUrl: string): Promise<void> => {
     }
 
     const cacheFile = globals.getRespCacheFile();
-    let cache: Record<string, any> = {};
-    if (fs.existsSync(cacheFile)) {
-        try {
-            cache = JSON.parse(fs.readFileSync(cacheFile, "utf-8"));
-        } catch {
-            cache = {};
-        }
+    try {
+        getCacheDb();
+    } catch (err) {
+        printMsg(MSG.Err, `[!] Could not open response cache database: ${err?.message || err}`);
+        process.exit(32);
     }
 
     printMsg(MSG.Header, `[i] Filtering Caido entries for ${targetScheme}//${targetHost}:${targetPort} → ${cacheFile}`);
@@ -242,32 +242,21 @@ const load = async (caidoFile: string, targetUrl: string): Promise<void> => {
 
         const status = entry.response.status_code || parseInt(respParsed.firstLine.split(/\s+/)[1] || "200", 10);
 
-        const isRsc = Object.keys(reqHeaders).some((h) => h.toUpperCase() === "RSC");
-        const entryKey = isRsc ? "rsc" : "normal";
-
         for (const url of buildUrlVariants(entry)) {
-            if (!cache[url]) cache[url] = {};
-            cache[url][entryKey] = {
-                req_headers: reqHeaders,
+            const identityDigest = getCacheIdentityDigest(url, reqHeaders);
+            writeCacheEntryUnsafe({
+                identityDigest,
+                url,
                 status,
-                body_b64: bodyB64,
-                resp_headers: respHeaders,
-            };
+                statusText: "",
+                bodyBase64: bodyB64,
+                responseHeaders: respHeaders,
+            });
             stored++;
         }
     }
 
     process.stdout.write("\r");
-
-    try {
-        fs.writeFileSync(cacheFile, JSON.stringify(cache));
-    } catch (err: any) {
-        if (err instanceof RangeError) {
-            printMsg(MSG.Err, `[!] Cache too large to serialize as one JSON string.`);
-            process.exit(1);
-        }
-        throw err;
-    }
 
     printMsg(
         MSG.Run,

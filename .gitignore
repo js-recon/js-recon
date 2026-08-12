@@ -142,6 +142,7 @@ extracted_urls*
 .proxy_config.json.cleanup/
 .resp_cache.json
 .resp_cache.json.entries/
+.resp_cache.db*
 .vscode/*
 !.vscode/tasks.json
 output*/

@@ -38,7 +38,8 @@ const vue_discoverJsFiles = async (
     threads: number = 1,
     showProgress: boolean = true,
     allowPrompts: boolean = true,
-    onTechnique?: TechniqueRecorder
+    onTechnique?: TechniqueRecorder,
+    output: string = ""
 ): Promise<VueDiscoveryResult> => {
     let jsFiles: string[] = [];
 
@@ -119,7 +120,7 @@ const vue_discoverJsFiles = async (
     // reconstruct sourceMappingURL references
     if (shouldRunMethod("vue_reconstructSourceMaps", inc, exc)) {
         const beforeSourceMaps = new Set(jsFiles.map(normalize));
-        const fromSourceMaps = await vue_reconstructSourceMaps(url, jsFiles, threads);
+        const fromSourceMaps = await vue_reconstructSourceMaps(url, jsFiles, threads, output);
         emit("vue_reconstructSourceMaps", fromSourceMaps);
         const newSourceMaps = countNew(fromSourceMaps, beforeSourceMaps);
         if (newSourceMaps > 0) {

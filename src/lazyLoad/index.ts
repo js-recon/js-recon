@@ -48,6 +48,7 @@ import resolveGenericScope from "./generic/generic_resolveScope.js";
 import path from "path";
 import { join } from "path";
 import { extractSourceMaps } from "../sourcemaps/index.js";
+import { discoverSourcemapUrls } from "./sourcemap.js";
 
 // import global vars
 import * as lazyLoadGlobals from "./globals.js";
@@ -60,6 +61,7 @@ import { withRequestSignal } from "../utility/makeReq.js";
 import { resolveTargetInputs, type TargetInput } from "../utility/targetInputs.js";
 import { accumulateTechnique, createTechniqueRecorder } from "./researchUtils.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import { getCacheDb } from "../utility/cacheDb.js";
 
 /**
  * Downloads the required JavaScript files for a given URL
@@ -101,7 +103,8 @@ const lazyLoad = async (
     stagnationTimeinMs: number = 0,
     stagnationPercentage: number = 80,
     stagnationMonitorMs: number = 60 * 1000,
-    rscParamBruteforceLimit: number = 20
+    rscParamBruteforceLimit: number = 20,
+    wordlist?: string
 ) => {
     const resolvedTargets = resolveTargetInputs(url);
     // Hoisted so the timeout handler can stop discovery and drain downloads.
@@ -145,10 +148,13 @@ const lazyLoad = async (
             printMsg(MSG.Warn, "[!] Running in insecure mode. SSL certificate verification disabled");
         }
 
-        // if cache enabled, check if the cache file exists or not. If no, then create a new one
+        // if cache enabled, ensure the cache DB can be opened (this also creates it + its schema if missing)
         if (!globals.getDisableCache()) {
-            if (!fs.existsSync(globals.getRespCacheFile())) {
-                fs.writeFileSync(globals.getRespCacheFile(), "{}");
+            try {
+                getCacheDb();
+            } catch (err) {
+                printMsg(MSG.Err, `[!] Could not open response cache database: ${err?.message || err}`);
+                process.exit(32);
             }
         }
 
@@ -211,6 +217,7 @@ const lazyLoad = async (
                         maxIterations,
                         maxPageVisits,
                         rscParamBruteforceLimit,
+                        wordlist,
                         onUrlsDiscovered: (urls) => enqueue(activeQueue!, urls),
                         includeMethods,
                         excludeMethods,
@@ -226,8 +233,19 @@ const lazyLoad = async (
                     if (hardTimeoutReached) return;
                     await activeQueue.drain();
                     if (hardTimeoutReached) return;
+                    const nextSeenUrls = activeQueue.seenUrls;
                     activeQueue.printSummary();
                     activeQueue = null;
+
+                    if (shouldRunMethod("next_sourcemapUrls", includeMethods, excludeMethods)) {
+                        const jsUrlsForSourcemaps = nextSeenUrls.filter((u) => /\.m?js($|[?#])/.test(u));
+                        const mapUrls = await discoverSourcemapUrls(jsUrlsForSourcemaps, threads, output);
+                        if (mapUrls.length > 0) {
+                            const mapQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
+                            enqueue(mapQueue, mapUrls);
+                            await mapQueue.drain();
+                        }
+                    }
 
                     if (shouldRunMethod("next_serverActionIdScan", includeMethods, excludeMethods)) {
                         const scanDir = resolveHostOutputDirectory(output, new URL(url).host, isBatch);
@@ -291,7 +309,8 @@ const lazyLoad = async (
                         threads,
                         true,
                         true,
-                        vueOnTechnique
+                        vueOnTechnique,
+                        output
                     );
                     if (hardTimeoutReached) return;
 
@@ -303,7 +322,8 @@ const lazyLoad = async (
                         onFilesDiscovered,
                         includeMethods,
                         excludeMethods,
-                        vueOnTechnique
+                        vueOnTechnique,
+                        output
                     );
                     if (hardTimeoutReached) return;
 
@@ -341,14 +361,18 @@ const lazyLoad = async (
                     enqueue(queue, jsFilesFromPageSource);
                     if (research) accumulateTechnique(nuxtResearchMap, "nuxt_getFromPageSource", jsFilesFromPageSource);
 
-                    const jsFilesFromStringAnalysis = shouldRunMethod(
+                    const nuxtStringAnalysisResult = shouldRunMethod(
                         "nuxt_stringAnalysisJSFiles",
                         includeMethods,
                         excludeMethods
                     )
-                        ? await nuxt_stringAnalysisJSFiles(url, threads)
-                        : [];
+                        ? await nuxt_stringAnalysisJSFiles(url, threads, output)
+                        : { jsFiles: [], mapFiles: [] };
+                    const jsFilesFromStringAnalysis = nuxtStringAnalysisResult.jsFiles;
                     enqueue(queue, jsFilesFromStringAnalysis);
+                    if (nuxtStringAnalysisResult.mapFiles.length > 0) {
+                        enqueue(queue, nuxtStringAnalysisResult.mapFiles);
+                    }
                     if (research)
                         accumulateTechnique(nuxtResearchMap, "nuxt_stringAnalysisJSFiles", jsFilesFromStringAnalysis);
 
@@ -386,6 +410,9 @@ const lazyLoad = async (
                             "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
                         );
                     }
+
+                    // extract the source maps
+                    await extractSourceMaps(output, join(output, sourcemapDir));
                 } else if (tech.name === "svelte") {
                     printMsg(MSG.Run, "[✓] Svelte detected");
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
@@ -430,7 +457,7 @@ const lazyLoad = async (
                     let jsFilesFromStringAnalysis: string[] = [];
                     let mapFilesFromStringAnalysis: string[] = [];
                     if (shouldRunMethod("svelte_stringAnalysisJSFiles", includeMethods, excludeMethods)) {
-                        const result = await svelte_stringAnalysisJSFiles(url, threads);
+                        const result = await svelte_stringAnalysisJSFiles(url, threads, output);
                         jsFilesFromStringAnalysis = result.jsFiles;
                         mapFilesFromStringAnalysis = result.mapFiles;
                         enqueue(queue, jsFilesFromStringAnalysis);
@@ -500,7 +527,7 @@ const lazyLoad = async (
                         shouldRunMethod("svelte_stringAnalysisJSFiles", includeMethods, excludeMethods)
                     ) {
                         const { jsFiles: jsFilesFromStringAnalysis2, mapFiles: mapFilesFromStringAnalysis2 } =
-                            await svelte_stringAnalysisJSFiles(url, threads);
+                            await svelte_stringAnalysisJSFiles(url, threads, output);
                         enqueue(queue, jsFilesFromStringAnalysis2);
                         if (mapFilesFromStringAnalysis2.length > 0) {
                             enqueue(queue, mapFilesFromStringAnalysis2);
@@ -590,6 +617,16 @@ const lazyLoad = async (
                     if (hardTimeoutReached) return;
                     queue.printSummary();
 
+                    if (shouldRunMethod("angular_sourcemapUrls", includeMethods, excludeMethods)) {
+                        const jsUrlsForSourcemaps = queue.seenUrls.filter((u) => /\.m?js($|[?#])/.test(u));
+                        const mapUrls = await discoverSourcemapUrls(jsUrlsForSourcemaps, threads, output);
+                        if (mapUrls.length > 0) {
+                            const mapQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
+                            enqueue(mapQueue, mapUrls);
+                            await mapQueue.drain();
+                        }
+                    }
+
                     if (research) {
                         fs.writeFileSync(researchOutput, JSON.stringify(angularResearchMap, null, 4));
                         printMsg(
@@ -597,6 +634,9 @@ const lazyLoad = async (
                             "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
                         );
                     }
+
+                    // extract the source maps
+                    await extractSourceMaps(output, join(output, sourcemapDir));
                 } else if (tech.name === "react") {
                     printMsg(MSG.Run, "[✓] React detected");
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
@@ -661,7 +701,7 @@ const lazyLoad = async (
                             !hardTimeoutReached &&
                             shouldRunMethod("react_sourcemapUrls", includeMethods, excludeMethods)
                         ) {
-                            const sourcemapUrls = await react_sourcemapUrls([...visited], threads);
+                            const sourcemapUrls = await react_sourcemapUrls([...visited], threads, output);
                             enqueue(queue, sourcemapUrls);
                             if (research) accumulateTechnique(reactResearchMap, "react_sourcemapUrls", sourcemapUrls);
                         }

@@ -30,6 +30,7 @@ import {
     resolveOxylabsFallback,
 } from "./proxy/oxylabsFallback.js";
 import { collectTargetInput } from "./utility/targetInputs.js";
+import { parseHeaderFlagValue, type CustomHeaderPair } from "./utility/customHeaders.js";
 
 /** Valid AI options for analysis modules */
 const validAiOptions = ["description"];
@@ -59,6 +60,21 @@ function validateAndSetTimeout(timeoutValue: string): void {
     } else {
         globalsUtil.setRequestTimeout(parsedTimeout);
     }
+}
+
+/**
+ * Parses `-H/--header` flag values into name/value pairs, exiting with an error on malformed input.
+ * @param headerValues Raw `--header` values accumulated from the CLI (one per occurrence).
+ */
+function resolveCustomHeaders(headerValues: string[]): CustomHeaderPair[] {
+    return headerValues.map((raw) => {
+        const pair = parseHeaderFlagValue(raw);
+        if (!pair) {
+            console.error(chalk.red(`[!] Invalid --header value (expected "Name: Value"): ${raw}`));
+            process.exit(1);
+        }
+        return pair;
+    });
 }
 
 /**
@@ -125,10 +141,16 @@ export function buildProgram(): Command {
         .option("--oxylabs-fallback-max-requests <count>", "Maximum paid Oxylabs fallback requests per origin", "10")
         .option("--oxylabs-fallback-max-total <count>", "Maximum paid Oxylabs fallback requests per run", "100")
         .option("--oxylabs-fallback-max-origins <count>", "Maximum distinct fallback origins per run", "25")
-        .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
+        .option("--cache-file <file>", "File to store response cache", ".resp_cache.db")
         .option("--disable-cache", "Disable response caching", false)
         .option("--cache-only", "Only use the response cache; never make network requests", false)
         .option("-y, --yes", "Auto-approve executing JS code from the target", false)
+        .option(
+            "-H, --header <name: value>",
+            "Custom header to send with every request, as 'Name: Value'. Can be passed multiple times.",
+            (val: string, prev: string[]) => [...prev, val],
+            [] as string[]
+        )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
         .option("-k, --insecure", "Disable SSL certificate verification", false)
         .option("--no-sandbox", "Disable browser sandbox")
@@ -153,6 +175,10 @@ export function buildProgram(): Command {
             "--rsc-param-bruteforce-limit <n>",
             "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
             "20"
+        )
+        .option(
+            "--wordlist <file>",
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to next_routerStateForge's candidate URLs"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
@@ -263,6 +289,7 @@ export function buildProgram(): Command {
             globalsUtil.setCacheOnly(cmd.cacheOnly);
             globalsUtil.setYes(cmd.yes);
             globalsUtil.setVerbose(cmd.verbose);
+            globalsUtil.setCustomHeaders(resolveCustomHeaders(cmd.header));
             validateAndSetTimeout(cmd.timeout);
 
             configureSandbox(cmd);
@@ -295,7 +322,8 @@ export function buildProgram(): Command {
                 Number(cmd.stagnationTimein) * 60 * 1000,
                 Number(cmd.stagnationPercentage),
                 Number(cmd.stagnationMonitor) * 60 * 1000,
-                Number(cmd.rscParamBruteforceLimit)
+                Number(cmd.rscParamBruteforceLimit),
+                cmd.wordlist
             );
         });
 
@@ -634,6 +662,12 @@ export function buildProgram(): Command {
         )
         .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` module)", ".proxy_config.json")
         .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
+        .option(
+            "-H, --header <name: value>",
+            "Custom header to send with every request, as 'Name: Value'. Can be passed multiple times.",
+            (val: string, prev: string[]) => [...prev, val],
+            [] as string[]
+        )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
         .option("-k, --insecure", "Disable SSL certificate verification", false)
         .action(async (cmd) => {
@@ -654,6 +688,7 @@ export function buildProgram(): Command {
 
             configureProxy(cmd);
             validateAndSetTimeout(cmd.timeout);
+            globalsUtil.setCustomHeaders(resolveCustomHeaders(cmd.header));
             if (cmd.insecure) {
                 globalsUtil.setInsecure(true);
                 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; // lgtm[js/disabling-certificate-validation]: opt-in via -k/--insecure, same as lazyload/run
@@ -744,10 +779,16 @@ export function buildProgram(): Command {
         .option("--oxylabs-fallback-max-requests <count>", "Maximum paid Oxylabs fallback requests per origin", "10")
         .option("--oxylabs-fallback-max-total <count>", "Maximum paid Oxylabs fallback requests per run", "100")
         .option("--oxylabs-fallback-max-origins <count>", "Maximum distinct fallback origins per run", "25")
-        .option("--cache-file <file>", "File to store response cache", ".resp_cache.json")
+        .option("--cache-file <file>", "File to store response cache", ".resp_cache.db")
         .option("--disable-cache", "Disable response caching", false)
         .option("--cache-only", "Only use the response cache; never make network requests", false)
         .option("-y, --yes", "Auto-approve executing JS code from the target", false)
+        .option(
+            "-H, --header <name: value>",
+            "Custom header to send with every request, as 'Name: Value'. Can be passed multiple times.",
+            (val: string, prev: string[]) => [...prev, val],
+            [] as string[]
+        )
         .option("--secrets", "Scan for secrets", false)
         .option("--trufflehog", "Run TruffleHog secret scanner on the output directory", false)
         .option("--trufflehog-bin <path>", "Path to the trufflehog binary (skips auto-download)", "trufflehog")
@@ -796,6 +837,10 @@ export function buildProgram(): Command {
             "--rsc-param-bruteforce-limit <n>",
             "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
             "20"
+        )
+        .option(
+            "--wordlist <file>",
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to next_routerStateForge's candidate URLs"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
@@ -930,6 +975,7 @@ export function buildProgram(): Command {
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             globalsUtil.setCacheOnly(cmd.cacheOnly);
             globalsUtil.setVerbose(cmd.verbose);
+            globalsUtil.setCustomHeaders(resolveCustomHeaders(cmd.header));
 
             configureSandbox(cmd);
 
@@ -950,7 +996,7 @@ export function buildProgram(): Command {
         .description("Populate response cache from a Caido/Burp request history export")
         .requiredOption("-c, --caido <file>", "Caido JSON export file")
         .requiredOption("-u, --url <url>", "Target URL — only entries matching this host/port/scheme are loaded")
-        .option("--cache-file <file>", "Response cache file to write", ".resp_cache.json")
+        .option("--cache-file <file>", "Response cache file to write", ".resp_cache.db")
         .action(async (cmd) => {
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             await load(cmd.caido, cmd.url);

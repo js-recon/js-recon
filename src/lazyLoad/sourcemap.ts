@@ -4,6 +4,14 @@
  * Extracts original source code from minified JavaScript using source maps.
  */
 
+import fs from "fs";
+import path from "path";
+import chalk from "chalk";
+import makeRequest from "../utility/makeReq.js";
+import { runWithConcurrency } from "../utility/concurrency.js";
+import { progressLog } from "../utility/progressLog.js";
+import { getSanitizedAssetFilename, resolveAssetOutputDirectory } from "./outputPath.js";
+
 /**
  * Source map JSON structure (v3)
  */
@@ -255,6 +263,114 @@ function joinPaths(base: string, path: string): string {
     const pathClean = path.startsWith("/") ? path.slice(1) : path;
 
     return `${baseClean}/${pathClean}`;
+}
+
+/**
+ * Decode an inline `data:` URI sourceMappingURL reference into raw source-map JSON text.
+ *
+ * Handles both base64-encoded (`data:application/json;base64,<...>`, with or without a
+ * `charset` parameter) and percent-encoded (`data:application/json,<...>`) payloads.
+ * Verifies the decoded content actually looks like a source map (has a `sources` array)
+ * before returning it, so an unrelated `data:` URI that happens to be valid JSON doesn't
+ * get treated as a sourcemap.
+ *
+ * @param rawRef - The raw string following `sourceMappingURL=`
+ * @returns The decoded JSON text, or null if `rawRef` isn't a decodable inline source map
+ */
+export function decodeInlineSourceMapDataUri(rawRef: string): string | null {
+    if (!rawRef.startsWith("data:")) return null;
+
+    const commaIndex = rawRef.indexOf(",");
+    if (commaIndex === -1) return null;
+
+    const meta = rawRef.slice(5, commaIndex);
+    const payload = rawRef.slice(commaIndex + 1);
+    const isBase64 = meta.split(";").includes("base64");
+
+    try {
+        const decoded = isBase64 ? Buffer.from(payload, "base64").toString("utf-8") : decodeURIComponent(payload);
+        const parsed = JSON.parse(decoded);
+        if (typeof parsed !== "object" || parsed === null || !Array.isArray(parsed.sources)) return null;
+        return decoded;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Write a decoded inline source map to disk at the same location a real downloaded
+ * `.map` file for this JS URL would land at, so the existing `extractSourceMaps` disk
+ * scan (which matches by `.map` extension, not by naming convention) picks it up.
+ *
+ * Best-effort: swallows all errors, per this directory's "sourcemap fetch is best-effort"
+ * convention. Never throws.
+ */
+export function writeInlineSourceMap(output: string, jsUrl: string, mapContent: string): void {
+    try {
+        const filename = getSanitizedAssetFilename(jsUrl);
+        if (!filename) return;
+        const dir = resolveAssetOutputDirectory(output, jsUrl);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, `${filename}.map`), mapContent);
+    } catch {
+        // best-effort; never fatal
+    }
+}
+
+/**
+ * Discover sourcemaps referenced by a list of JS files.
+ *
+ * For each file, fetches its content and looks for a `//# sourceMappingURL=...` comment.
+ * Inline `data:` URI references are decoded and written directly to `output` (no HTTP
+ * fetch needed). Real relative/absolute references are resolved to absolute URLs and
+ * returned so the caller can enqueue them for download, same as before.
+ *
+ * @param jsFiles - JS file URLs to scan
+ * @param threads - concurrency for the fetch loop
+ * @param output - output directory inline maps are written under
+ * @returns Absolute URLs of real (non-inline) sourcemaps found
+ */
+export async function discoverSourcemapUrls(
+    jsFiles: string[],
+    threads: number = 1,
+    output: string = ""
+): Promise<string[]> {
+    const mapUrls: string[] = [];
+    let inlineCount = 0;
+
+    await runWithConcurrency(jsFiles, threads, async (jsUrl) => {
+        try {
+            const res = await makeRequest(jsUrl, { reportErrors: false });
+            if (!res) return;
+            const body = await res.text();
+            const match = body.match(/\/\/# sourceMappingURL=(.+)$/m);
+            if (!match) return;
+
+            const rawRef = match[1].trim();
+            if (rawRef.startsWith("data:")) {
+                const decoded = decodeInlineSourceMapDataUri(rawRef);
+                if (decoded) {
+                    writeInlineSourceMap(output, jsUrl, decoded);
+                    inlineCount++;
+                }
+                return;
+            }
+
+            const mapUrl: string = new URL(rawRef, jsUrl).href;
+            mapUrls.push(mapUrl);
+        } catch (_) {
+            // skip files that fail to fetch
+        }
+    });
+
+    if (mapUrls.length > 0) {
+        progressLog(chalk.green(`[✓] Found ${mapUrls.length} sourcemaps from ${jsFiles.length} JS files`));
+    }
+    if (inlineCount > 0) {
+        progressLog(chalk.green(`[✓] Decoded ${inlineCount} inline (base64) sourcemap(s)`));
+    }
+
+    return mapUrls;
 }
 
 // Default export for convenience

@@ -62,9 +62,33 @@ jobs:
       - run: npm run build
       - run: npm run test
 
+  depx-audit:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Download and verify depx (SHA256-pinned)
+        run: |
+          set -euo pipefail
+          VERSION="0.1.1"
+          EXPECTED_SHA256="9f00c8133369eb75741a1ed52eb0d4102f965b1da413b09f190332981264338f"
+          URL="https://github.com/projectdiscovery/depx/releases/download/v${VERSION}/depx_${VERSION}_linux_amd64.zip"
+          curl -sSL -o depx.zip "$URL"
+          ACTUAL_SHA256=$(sha256sum depx.zip | awk '{print $1}')
+          if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
+            echo "depx binary SHA256 mismatch: expected $EXPECTED_SHA256, got $ACTUAL_SHA256"
+            exit 1
+          fi
+          unzip -q depx.zip -d depx-bin
+          chmod +x depx-bin/depx
+          echo "$PWD/depx-bin" >> "$GITHUB_PATH"
+      - name: Run depx audit against package-lock.json
+        run: depx audit package-lock.json --require-clean
 
   publish-npm:
-    needs: build
+    needs:
+      - build
+      - depx-audit
     runs-on: ubuntu-latest
     permissions:
       id-token: write

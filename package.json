@@ -1,6 +1,6 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "2.0.1-alpha.1",
+    "version": "2.0.1-alpha.2",
     "description": "JS Recon Tool",
     "main": "build/index.js",
     "type": "module",
@@ -18,7 +18,7 @@
         "test:build": "node build/index.js -h",
         "lint": "eslint src",
         "postinstall": "patch-package || true; node scripts/postinstall-completion.mjs",
-        "cleanup": "rm -rf build output output_refactored .resp_cache.json .resp_cache.json.entries endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* swagger-jacker-results.json && tsc"
+        "cleanup": "rm -rf build output output_refactored .resp_cache.json .resp_cache.json.entries .resp_cache.db endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* swagger-jacker-results.json && tsc"
     },
     "keywords": [],
     "author": "Shriyans Sudhi",
@@ -46,7 +46,6 @@
         "esquery": "^1.6.0",
         "express": "^5.2.1",
         "extract-zip": "^2.0.1",
-        "fs": "^0.0.2",
         "graphql": "^16.14.1",
         "highlight.js": "^11.11.1",
         "inquirer": "^12.6.3",

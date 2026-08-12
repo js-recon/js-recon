@@ -14,6 +14,7 @@ import * as globals from "../../utility/globals.js";
 import { activateBarLogger, computeBarSize, watchBarResize, withProgressResources } from "../../utility/progressLog.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
+import { customHeadersToRecord } from "../../utility/customHeaders.js";
 
 type MatchedFunction = {
     source: string;
@@ -55,6 +56,8 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
     if (proxyArgs.authenticate) {
         await page.authenticate(proxyArgs.authenticate);
     }
+    const customHeaders = customHeadersToRecord(globals.getCustomHeaders());
+    if (Object.keys(customHeaders).length > 0) await page.setExtraHTTPHeaders(customHeaders);
 
     const cdp = await page.createCDPSession();
     await cdp.send("Page.setDownloadBehavior", { behavior: "deny" });

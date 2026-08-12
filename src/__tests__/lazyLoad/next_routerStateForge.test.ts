@@ -32,8 +32,15 @@ describe("buildStateTreeHeader", () => {
         ]);
     });
 
-    it("encodes a dynamic-segment ancestor as a [paramName, value, 'd'] tuple, matching Next.js's matchSegment", () => {
+    it("encodes a dynamic-segment ancestor as a [paramName, cacheKey, 'd', null] tuple by default, matching Next.js 16.3.0+'s flightRouterStateSchema", () => {
         const decoded = JSON.parse(decodeURIComponent(buildStateTreeHeader([{ paramName: "org", value: "acme" }])));
+        expect(decoded).toEqual(["", { children: [["org", "acme", "d", null], { children: ["__PAGE__", {}] }] }]);
+    });
+
+    it("encodes a dynamic-segment ancestor as a 3-element tuple when tupleLength=3, matching pre-16.3.0 Next.js's flightRouterStateSchema", () => {
+        const decoded = JSON.parse(
+            decodeURIComponent(buildStateTreeHeader([{ paramName: "org", value: "acme" }], "page", 3))
+        );
         expect(decoded).toEqual(["", { children: [["org", "acme", "d"], { children: ["__PAGE__", {}] }] }]);
     });
 
@@ -44,7 +51,7 @@ describe("buildStateTreeHeader", () => {
         expect(decoded).toEqual([
             "",
             {
-                children: ["organizations", { children: [["org", "acme", "d"], { children: ["__PAGE__", {}] }] }],
+                children: ["organizations", { children: [["org", "acme", "d", null], { children: ["__PAGE__", {}] }] }],
             },
         ]);
     });
@@ -128,15 +135,16 @@ describe("buildAncestorAttempts", () => {
         expect(buildAncestorAttempts(["dashboard", "secret"])).toEqual([["dashboard"]]);
     });
 
-    it("tries first-segment, all-but-leaf, and dynamic-param guesses on the last ancestor for a deeper path", () => {
+    it("tries dynamic-param guesses on the last ancestor first, then all-but-leaf, then first-segment, for a deeper path", () => {
         const attempts = buildAncestorAttempts(["organizations", "acme", "reports"]);
-        expect(attempts[0]).toEqual(["organizations"]);
-        expect(attempts[1]).toEqual(["organizations", "acme"]);
-        // Every subsequent attempt re-tries the same ancestor set with "acme" as a guessed
-        // dynamic param value instead of a literal static segment.
-        expect(attempts.slice(2)).toEqual(
-            attempts.slice(2).map((_, i) => ["organizations", { paramName: expect.any(String), value: "acme" }])
+        // Every attempt but the last two re-tries the same ancestor set with "acme" as a
+        // guessed dynamic param value instead of a literal static segment — most specific
+        // (and only shape that can match a real dynamic ancestor) first.
+        expect(attempts.slice(0, -2)).toEqual(
+            attempts.slice(0, -2).map(() => ["organizations", { paramName: expect.any(String), value: "acme" }])
         );
+        expect(attempts[attempts.length - 2]).toEqual(["organizations", "acme"]);
+        expect(attempts[attempts.length - 1]).toEqual(["organizations"]);
         expect(attempts.length).toBeGreaterThan(2);
     });
 
@@ -153,9 +161,9 @@ describe("buildAncestorAttempts", () => {
     it("uses a custom candidate list instead of the default wordlist when provided", () => {
         const attempts = buildAncestorAttempts(["organizations", "acme", "reports"], ["workspace"]);
         expect(attempts).toEqual([
-            ["organizations"],
-            ["organizations", "acme"],
             ["organizations", { paramName: "workspace", value: "acme" }],
+            ["organizations", "acme"],
+            ["organizations"],
         ]);
     });
 });

@@ -1,4 +1,5 @@
 import { URL } from "url";
+import fs from "fs";
 
 import next_getJSScript from "./next_GetJSScript.js";
 import next_GetLazyResourcesWebpackJs from "./next_GetLazyResourcesWebpackJs.js";
@@ -28,6 +29,10 @@ interface NextJsCrawlerOptions {
     /** Max harvested dynamic-route param-name candidates `next_routerStateForge` tries per
      * URL in its RSC-body keyword fallback (0 = disable the fallback). */
     rscParamBruteforceLimit?: number;
+    /** Path to a newline-separated wordlist file of path segments/prefixes (e.g. "admin").
+     * Each entry is resolved to `<origin>/<entry>` and added to next_routerStateForge's
+     * candidate URLs. Undefined = no extra candidates from this source. */
+    wordlist?: string;
     /** Called with newly discovered downloadable URLs as they are found. */
     onUrlsDiscovered?: (urls: string[]) => void;
     /** Whitelist of method names to run (empty = run all). */
@@ -77,6 +82,9 @@ class NextJsCrawler {
     /** Passed through to `next_routerStateForge`'s RSC-body keyword fallback. */
     private readonly rscParamBruteforceLimit: number;
 
+    /** Path to a newline-separated wordlist file feeding extra next_routerStateForge candidates. */
+    private readonly wordlist?: string;
+
     /** Total HTML pages visited across all recursive passes. */
     private totalPagesVisited = 0;
 
@@ -107,6 +115,7 @@ class NextJsCrawler {
         this.MAX_ITERATIONS = options.maxIterations;
         this.MAX_PAGE_VISITS = options.maxPageVisits ?? 200;
         this.rscParamBruteforceLimit = options.rscParamBruteforceLimit ?? 20;
+        this.wordlist = options.wordlist;
         this.onUrlsDiscovered = options.onUrlsDiscovered;
         this.includeMethods = options.includeMethods ?? [];
         this.excludeMethods = options.excludeMethods ?? [];
@@ -171,6 +180,55 @@ class NextJsCrawler {
     /** Snapshot the current size so we can detect growth. */
     private get size(): number {
         return this.discoveredUrls.size;
+    }
+
+    /**
+     * Reads path-like strings previously extracted by the `strings` module (`extracted_urls.json`,
+     * `{ urls, paths }` shape) and resolves each `paths` entry against `this.url`. Used as an extra
+     * next_routerStateForge candidate source (internal#165) — silently returns [] if the file
+     * doesn't exist yet (e.g. the very first lazyload pass, before `strings` has run).
+     */
+    private readStringsPathCandidates(): string[] {
+        if (!this.urlsFile || !fs.existsSync(this.urlsFile)) return [];
+        try {
+            const parsed = JSON.parse(fs.readFileSync(this.urlsFile, "utf8"));
+            const paths: string[] = Array.isArray(parsed?.paths) ? parsed.paths : [];
+            const resolved: string[] = [];
+            for (const p of paths) {
+                try {
+                    resolved.push(new URL(p, this.url).toString());
+                } catch {
+                    // not resolvable relative to the target — skip
+                }
+            }
+            return resolved;
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Reads a newline-separated wordlist file of path segments/prefixes and resolves each entry
+     * to `<origin>/<entry>`. Used as an extra next_routerStateForge candidate source for routes
+     * with zero client-visible trace (internal#165). No `--wordlist` supplied = no candidates.
+     */
+    private readWordlistCandidates(): string[] {
+        if (!this.wordlist) return [];
+        if (!fs.existsSync(this.wordlist)) {
+            printMsg(MSG.Warn, `[!] --wordlist file ${this.wordlist} does not exist, skipping`);
+            return [];
+        }
+        try {
+            const origin = new URL(this.url).origin;
+            return fs
+                .readFileSync(this.wordlist, "utf-8")
+                .split(/\r?\n/)
+                .map((l) => l.trim())
+                .filter(Boolean)
+                .map((entry) => `${origin}/${entry.replace(/^\/+/, "")}`);
+        } catch {
+            return [];
+        }
     }
 
     // ── initial discovery (run-once methods) ─────────────────────────────
@@ -454,8 +512,14 @@ class NextJsCrawler {
                     return false;
                 }
             });
+            // internal#165: also feed in path-like strings already extracted by the `strings`
+            // module and, optionally, --wordlist entries — additive to the crawl-discovered set,
+            // so routes with no client-visible trace at all still get a forge attempt.
+            const candidateUrls = [
+                ...new Set([...pageUrls, ...this.readStringsPathCandidates(), ...this.readWordlistCandidates()]),
+            ];
             const { bypassedUrls, metadataOnlyBypassedUrls, legacyKeyAcceptedUrls, newJsUrls } =
-                await next_routerStateForge(pageUrls, this.threads, undefined, this.rscParamBruteforceLimit);
+                await next_routerStateForge(candidateUrls, this.threads, undefined, this.rscParamBruteforceLimit);
             this.techniqueEfficiencyMapping["next_routerStateForge"] = bypassedUrls;
             this.techniqueEfficiencyMapping["next_routerStateForge_metadataOnly"] = metadataOnlyBypassedUrls;
             this.techniqueEfficiencyMapping["next_routerStateForge_legacyKeyAccepted"] = legacyKeyAcceptedUrls;

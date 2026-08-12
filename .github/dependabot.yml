@@ -1,0 +1,50 @@
+# Dependabot version updates.
+# Reference: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+#
+# One update stream per package ecosystem present in this repo (npm, the Dockerfile base images,
+# and GitHub Actions). Minor + patch bumps are grouped into a single weekly PR per ecosystem to
+# cut noise; major bumps open individually so breaking changes get a dedicated review. PRs target
+# `dev` — `main` only receives changes via the release flow (publish-js-recon.yml).
+version: 2
+
+updates:
+  # npm — root package.json / package-lock.json.
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Docker — covers Dockerfile and Dockerfile.release. Dockerfile.w-rules uses an ARG-only
+  # FROM ${BASE_IMAGE} with no fixed tag, so it has nothing for Dependabot to bump.
+  - package-ecosystem: "docker"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      docker-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions — all uses: refs are pinned to full commit SHAs (Plumber policy); Dependabot
+  # updates the SHA and the trailing "# vX.Y.Z" comment together.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]

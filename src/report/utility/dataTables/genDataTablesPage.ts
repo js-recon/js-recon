@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import hljs from "highlight.js";
+import { severityBadgeHtml } from "../severityColors.js";
 
 interface AnalysisFinding {
     ruleId: string;
@@ -124,7 +125,7 @@ const genDataTablesPage = (db: Database.Database): string => {
                 <td>${escapeHtml(f.ruleDescription)}</td>
                 <td>${escapeHtml(f.ruleAuthor)}</td>
                 <td>${escapeHtml(f.ruleTech)}</td>
-                <td data-order="${severityRank(f.severity)}">${escapeHtml(f.severity)}</td>
+                <td data-order="${severityRank(f.severity)}">${severityBadgeHtml(f.severity)}</td>
                 <td>${escapeHtml(f.message)}</td>
                 <td>${renderJsCode(f.findingLocation)}</td>
             </tr>`
