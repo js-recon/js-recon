@@ -14,6 +14,7 @@ import { checkReact } from "./checkReact.js";
 import { isValidInterceptedJsEvidence } from "./checkInterceptedEvidence.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { customHeadersToRecord } from "../../utility/customHeaders.js";
 
 // Every request Puppeteer intercepted during the most recent frameworkDetect() call,
 // including anything a runtime-injected script requested (e.g. Cloudflare's own
@@ -96,6 +97,8 @@ const frameworkDetect = async (
             if (proxyArgs.authenticate) {
                 await page.authenticate(proxyArgs.authenticate);
             }
+            const customHeaders = customHeadersToRecord(globalsUtil.getCustomHeaders());
+            if (Object.keys(customHeaders).length > 0) await page.setExtraHTTPHeaders(customHeaders);
             page.setDefaultNavigationTimeout(30000);
 
             const cdp = await page.createCDPSession();

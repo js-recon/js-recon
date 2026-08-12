@@ -16,6 +16,7 @@ import { isSigintHandlerActive } from "../run/interruptHandler.js";
 import detectBlockedResponse from "../proxy/detectBlockedResponse.js";
 import { claimOxylabsFallback, getOxylabsFallbackConfiguration } from "../proxy/oxylabsFallback.js";
 import { deleteCacheEntry, readCacheEntry, writeCacheEntryUnsafe } from "./cacheDb.js";
+import { customHeadersToRecord } from "./customHeaders.js";
 
 /**
  * Proxy-wiring layer. This is the single place a resolved proxy config (see
@@ -403,6 +404,8 @@ const handleFirewall = async (
         if (signal?.aborted) return null;
         const page = await browser.newPage();
         if (proxyArgs.authenticate) await page.authenticate(proxyArgs.authenticate);
+        const customHeaders = customHeadersToRecord(globals.getCustomHeaders());
+        if (Object.keys(customHeaders).length > 0) await page.setExtraHTTPHeaders(customHeaders);
         await page.goto(url);
         if (signal?.aborted) return null;
         await new Promise<void>((resolve) => {
@@ -478,16 +481,21 @@ const makeRequest = async (
         if (reportErrors) reportInvalidUrl(url);
         return null;
     }
+    const baseRequestHeaders =
+        restArgs.headers ??
+        ({
+            ...baseHeaders,
+            Referer: parsedOrigin,
+            Origin: parsedOrigin,
+        } satisfies HeadersInit);
+    const mergedHeaders = new Headers(baseRequestHeaders);
+    for (const [name, value] of Object.entries(customHeadersToRecord(globals.getCustomHeaders()))) {
+        mergedHeaders.set(name, value);
+    }
     const requestOptions: RequestInit = {
         ...restArgs,
         ...(effectiveSignal ? { signal: effectiveSignal } : {}),
-        headers:
-            restArgs.headers ??
-            ({
-                ...baseHeaders,
-                Referer: parsedOrigin,
-                Origin: parsedOrigin,
-            } satisfies HeadersInit),
+        headers: mergedHeaders,
     };
 
     // A successful default-header request may have used the no-Referer fallback.
@@ -740,11 +748,13 @@ const makeRequest = async (
         // When using default headers, try both with and without Referer/Origin
         // to handle servers that return 404 for one but 200 for the other
         if (usingDefaultHeaders) {
+            const customHeaderOverrides = customHeadersToRecord(globals.getCustomHeaders());
             // First try: with Referer and Origin
             const headersWithReferer = {
                 ...baseHeaders,
                 Referer: new URL(url).origin,
                 Origin: new URL(url).origin,
+                ...customHeaderOverrides,
             };
             const directDataWithReferer = await singleFetch(
                 url,
@@ -757,7 +767,7 @@ const makeRequest = async (
             if (withRefererResponse) return withRefererResponse;
 
             // Second try: without Referer and Origin
-            const headersWithoutReferer = { ...baseHeaders };
+            const headersWithoutReferer = { ...baseHeaders, ...customHeaderOverrides };
             const directDataWithoutReferer = await singleFetch(
                 url,
                 { ...requestOptions, headers: headersWithoutReferer },

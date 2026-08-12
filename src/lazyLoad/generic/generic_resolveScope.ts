@@ -1,4 +1,6 @@
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { customHeadersToRecord } from "../../utility/customHeaders.js";
+import * as globals from "../../utility/globals.js";
 
 /**
  * Extracts the host (scheme-independent, matches the format used throughout
@@ -22,7 +24,10 @@ export const resolveRedirectChain = async (
     for (let i = 0; i < maxRedirects; i++) {
         let res: Response;
         try {
-            res = await fetchImpl(currentUrl, { redirect: "manual" });
+            res = await fetchImpl(currentUrl, {
+                redirect: "manual",
+                headers: customHeadersToRecord(globals.getCustomHeaders()),
+            });
         } catch {
             return currentUrl;
         }

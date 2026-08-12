@@ -30,6 +30,7 @@ import {
     resolveOxylabsFallback,
 } from "./proxy/oxylabsFallback.js";
 import { collectTargetInput } from "./utility/targetInputs.js";
+import { parseHeaderFlagValue, type CustomHeaderPair } from "./utility/customHeaders.js";
 
 /** Valid AI options for analysis modules */
 const validAiOptions = ["description"];
@@ -59,6 +60,21 @@ function validateAndSetTimeout(timeoutValue: string): void {
     } else {
         globalsUtil.setRequestTimeout(parsedTimeout);
     }
+}
+
+/**
+ * Parses `-H/--header` flag values into name/value pairs, exiting with an error on malformed input.
+ * @param headerValues Raw `--header` values accumulated from the CLI (one per occurrence).
+ */
+function resolveCustomHeaders(headerValues: string[]): CustomHeaderPair[] {
+    return headerValues.map((raw) => {
+        const pair = parseHeaderFlagValue(raw);
+        if (!pair) {
+            console.error(chalk.red(`[!] Invalid --header value (expected "Name: Value"): ${raw}`));
+            process.exit(1);
+        }
+        return pair;
+    });
 }
 
 /**
@@ -129,6 +145,12 @@ export function buildProgram(): Command {
         .option("--disable-cache", "Disable response caching", false)
         .option("--cache-only", "Only use the response cache; never make network requests", false)
         .option("-y, --yes", "Auto-approve executing JS code from the target", false)
+        .option(
+            "-H, --header <name: value>",
+            "Custom header to send with every request, as 'Name: Value'. Can be passed multiple times.",
+            (val: string, prev: string[]) => [...prev, val],
+            [] as string[]
+        )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
         .option("-k, --insecure", "Disable SSL certificate verification", false)
         .option("--no-sandbox", "Disable browser sandbox")
@@ -263,6 +285,7 @@ export function buildProgram(): Command {
             globalsUtil.setCacheOnly(cmd.cacheOnly);
             globalsUtil.setYes(cmd.yes);
             globalsUtil.setVerbose(cmd.verbose);
+            globalsUtil.setCustomHeaders(resolveCustomHeaders(cmd.header));
             validateAndSetTimeout(cmd.timeout);
 
             configureSandbox(cmd);
@@ -634,6 +657,12 @@ export function buildProgram(): Command {
         )
         .option("--proxy-config <file>", "Proxy config file (generated via the `proxy` module)", ".proxy_config.json")
         .option("--ignore-proxy-env", "Skip JS_RECON_* proxy environment variables during resolution", false)
+        .option(
+            "-H, --header <name: value>",
+            "Custom header to send with every request, as 'Name: Value'. Can be passed multiple times.",
+            (val: string, prev: string[]) => [...prev, val],
+            [] as string[]
+        )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
         .option("-k, --insecure", "Disable SSL certificate verification", false)
         .action(async (cmd) => {
@@ -654,6 +683,7 @@ export function buildProgram(): Command {
 
             configureProxy(cmd);
             validateAndSetTimeout(cmd.timeout);
+            globalsUtil.setCustomHeaders(resolveCustomHeaders(cmd.header));
             if (cmd.insecure) {
                 globalsUtil.setInsecure(true);
                 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; // lgtm[js/disabling-certificate-validation]: opt-in via -k/--insecure, same as lazyload/run
@@ -748,6 +778,12 @@ export function buildProgram(): Command {
         .option("--disable-cache", "Disable response caching", false)
         .option("--cache-only", "Only use the response cache; never make network requests", false)
         .option("-y, --yes", "Auto-approve executing JS code from the target", false)
+        .option(
+            "-H, --header <name: value>",
+            "Custom header to send with every request, as 'Name: Value'. Can be passed multiple times.",
+            (val: string, prev: string[]) => [...prev, val],
+            [] as string[]
+        )
         .option("--secrets", "Scan for secrets", false)
         .option("--trufflehog", "Run TruffleHog secret scanner on the output directory", false)
         .option("--trufflehog-bin <path>", "Path to the trufflehog binary (skips auto-download)", "trufflehog")
@@ -930,6 +966,7 @@ export function buildProgram(): Command {
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             globalsUtil.setCacheOnly(cmd.cacheOnly);
             globalsUtil.setVerbose(cmd.verbose);
+            globalsUtil.setCustomHeaders(resolveCustomHeaders(cmd.header));
 
             configureSandbox(cmd);
 

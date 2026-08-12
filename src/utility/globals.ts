@@ -242,6 +242,26 @@ export const getRequestTimeout = (): number => {
     return requestTimeout;
 };
 
+// Custom Header Configuration
+/** Custom headers to send with every outbound request (name/value pairs; later entries win on duplicate names) */
+export let customHeaders: { name: string; value: string }[] = [];
+
+/**
+ * Sets the custom headers to send with every outbound request.
+ * @param value - Array of name/value header pairs
+ */
+export const setCustomHeaders = (value: { name: string; value: string }[]): void => {
+    customHeaders = value;
+};
+
+/**
+ * Gets the custom headers to send with every outbound request.
+ * @returns Array of name/value header pairs
+ */
+export const getCustomHeaders = (): { name: string; value: string }[] => {
+    return customHeaders;
+};
+
 // AI Configuration
 /** Array of AI analysis options */
 export let ai: string[] = [];
