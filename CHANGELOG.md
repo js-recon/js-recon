@@ -11,6 +11,7 @@
 ### Security
 
 - Removed the `fs` npm package from dependencies. It was never referenced by the codebase — every `import fs from "fs"` resolves to Node's builtin module — and sat unused in `package-lock.json` as an extraneous entry. The `fs` package on npm (distinct from Node's builtin) is flagged as malicious by OSV (`MAL-2025-21003`); removing it clears the finding ahead of the new CI dependency audit below.
+- Enabled Dependabot version updates (`.github/dependabot.yml`) for the npm, Docker, and GitHub Actions ecosystems, opening weekly PRs against `dev` so outdated dependencies surface automatically instead of only being caught at release time by `depx-audit`. Minor/patch bumps per ecosystem are grouped into a single PR; majors open individually for dedicated review.
 
 ### Added
 
