@@ -1,6 +1,6 @@
 # Change Log
 
-## 2.0.1-alpha.2 - (unreleased)
+## 2.0.1-alpha.2 - 2026-08-12
 
 ### Fixed
 
@@ -20,7 +20,7 @@
 - `report.html` has a fancier, dark-mode-aware UI: a light/dark theme toggle (defaults to the OS color scheme, persisted via `localStorage`) restyles the navbar, collapsible sections, and the DataTables findings/mapped views; severity values render as colored badges in both the Home markdown view and the sortable Data Tables view. The generator also closes a gap in the "single self-contained file" contract — `highlight.js`'s code-block theme and the `marked` markdown-rendering library were previously always pulled from a CDN at view time; both are now inlined from local `node_modules` at generation time (the About page's markdown is pre-rendered server-side instead), so `report.html` no longer depends on any CDN to render correctly, including when opened directly via `file://`. (`report`)
 - New `-H/--header <name: value>` flag for authenticated scanning: repeatable, parses each value as `Name: Value` and stores the result on a new `customHeaders` global (`src/utility/globals.ts`) rather than threading it through every request call site. `makeReq.ts`'s header-building logic (both the default-headers Referer/no-Referer retry path and the explicit-headers path) merges these in before the request goes out, so all five outbound methods — direct, SOCKS, HTTP, Oxylabs, and AWS — carry them identically, since SOCKS/HTTP/Oxylabs/direct share one dispatcher-agnostic header object and AWS reads the same object via `Object.fromEntries(new Headers(...))`. Puppeteer's initial page load (the front-end-framework crawl and tech detection) and its firewall-bypass fallback now call `page.setExtraHTTPHeaders()` before navigating, since that transport previously had no header-injection path at all. The `generic`-tech redirect-chain scope resolver and `exploit`'s raw-request helper (a separate fetch client from `makeReq.ts`) merge the same global in too, so a target requiring auth is scoped and probed correctly instead of only being crawled with it. Available on `lazyload`, `run`, and `exploit`. (`lazyload`, `run`, `exploit`)
 
-## 2.0.1-alpha.1 - (unreleased)
+## 2.0.1-alpha.1 - 2026-08-11
 
 ### Added
 
