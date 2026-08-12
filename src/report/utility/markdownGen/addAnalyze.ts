@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { severityBadgeHtml } from "../severityColors.js";
 
 interface AnalysisFinding {
     ruleId: string;
@@ -45,7 +46,7 @@ const addAnalyze = async (markdown: string, db: Database.Database): Promise<stri
                 }
                 toReturn += `${findingLocationBlock}\n`;
                 toReturn += `- **Rule ID:** ${finding.ruleId}\n`;
-                toReturn += `- **Severity:** ${finding.severity}\n`;
+                toReturn += `- **Severity:** ${severityBadgeHtml(finding.severity)}\n`;
                 toReturn += `- **Message:** ${finding.message}\n`;
                 toReturn += `- **Author:** ${finding.ruleAuthor}\n`;
                 toReturn += `- **Technology:** ${finding.ruleTech}\n\n`;
