@@ -2,8 +2,14 @@ import makeRequest from "../../utility/makeReq.js";
 import chalk from "chalk";
 import { runWithConcurrency } from "../../utility/concurrency.js";
 import { progressError, progressLog } from "../../utility/progressLog.js";
+import { decodeInlineSourceMapDataUri, writeInlineSourceMap } from "../sourcemap.js";
 
-const vue_reconstructSourceMaps = async (url: string, jsFilesToDownload: string[], threads: number = 1) => {
+const vue_reconstructSourceMaps = async (
+    url: string,
+    jsFilesToDownload: string[],
+    threads: number = 1,
+    output: string = ""
+) => {
     // get the contents of first file, and check if it has the sourceMappingURL
 
     const sourceMapUrls: string[] = [];
@@ -40,6 +46,15 @@ const vue_reconstructSourceMaps = async (url: string, jsFilesToDownload: string[
         if (sourceMappingURL_reg) {
             // strip the newline, and assign to a new var
             const sourceMappingURL = sourceMappingURL_reg[1].replace(/\n/g, "");
+
+            // inline base64/percent-encoded sourcemap: decode and write directly, no HTTP fetch needed
+            if (sourceMappingURL.startsWith("data:")) {
+                const decoded = decodeInlineSourceMapDataUri(sourceMappingURL);
+                if (decoded) {
+                    writeInlineSourceMap(output, jsFile, decoded);
+                }
+                return;
+            }
 
             // reconstruct the URL
             let reconstructedUrl: string = "";

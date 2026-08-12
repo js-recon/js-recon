@@ -8,6 +8,7 @@ import parser from "@babel/parser";
 import _traverse from "@babel/traverse";
 import { FoundJsFiles } from "../../utility/interfaces.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
+import { decodeInlineSourceMapDataUri, writeInlineSourceMap } from "../sourcemap.js";
 const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 const analyzedFiles = [];
@@ -57,7 +58,7 @@ export const parseJSFileContent = async (content) => {
  * @param {string} url - The URL of the webpage to fetch and parse.
  * @returns {Promise<string[]>} - A promise that resolves to an array of absolute URLs pointing to JavaScript files found in the page.
  */
-const svelte_stringAnalysisJSFiles = async (url, threads: number = 1) => {
+const svelte_stringAnalysisJSFiles = async (url, threads: number = 1, output: string = "") => {
     console.log(chalk.cyan("[i] Analyzing strings in the files found"));
 
     while (true) {
@@ -95,9 +96,16 @@ const svelte_stringAnalysisJSFiles = async (url, threads: number = 1) => {
             const sourcemapMatch = respText.match(/\/\/# sourceMappingURL=(.+)$/m);
             if (sourcemapMatch) {
                 const rawRef = sourcemapMatch[1].trim();
-                const mapUrl = new URL(rawRef, js_url).href;
-                if (!mapFilesFound.includes(mapUrl)) {
-                    mapFilesFound.push(mapUrl);
+                if (rawRef.startsWith("data:")) {
+                    const decoded = decodeInlineSourceMapDataUri(rawRef);
+                    if (decoded) {
+                        writeInlineSourceMap(output, js_url, decoded);
+                    }
+                } else {
+                    const mapUrl = new URL(rawRef, js_url).href;
+                    if (!mapFilesFound.includes(mapUrl)) {
+                        mapFilesFound.push(mapUrl);
+                    }
                 }
             }
 

@@ -99,6 +99,11 @@ export class DownloadQueue {
         return this.seen.size;
     }
 
+    /** Every URL ever enqueued to this queue, regardless of download outcome. */
+    get seenUrls(): string[] {
+        return [...this.seen];
+    }
+
     get progress(): DownloadProgressSnapshot {
         return this.createProgressSnapshot();
     }
