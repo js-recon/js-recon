@@ -24,7 +24,7 @@
     "author": "Shriyans Sudhi",
     "license": "MIT",
     "dependencies": {
-        "@anthropic-ai/sdk": "^0.102.0",
+        "@anthropic-ai/sdk": "^0.116.0",
         "@aws-sdk/client-api-gateway": "^3.958.0",
         "@babel/parser": "^7.28.5",
         "@babel/traverse": "^7.28.5",
