@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.0.1-alpha.3 - 2026-08-13
+
+### Fixed
+
+- `lazyload`'s Svelte/SvelteKit inline-`<script type="module">` boot-pattern scan (`svelte_getFromPageSource`) now also matches a **static** ES `import ... from "...js"` declaration, in addition to the dynamic `import("...")` call form it already handled. Some SvelteKit builds bootstrap the client via a static import (`import { start } from "./_app/immutable/start-<hash>.js"; start(...)`) instead of the `Promise.all([import(...)])` pattern; since the entry chunk seeds the entire downstream chunk-discovery graph, missing it caused the whole crawl to collapse to a single JS file even though framework detection succeeded. (`lazyload`)
+
 ## 2.0.1-alpha.2 - 2026-08-12
 
 ### Fixed
