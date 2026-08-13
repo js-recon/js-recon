@@ -5,6 +5,38 @@ import { getJsUrls, pushToJsUrls } from "../globals.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
+ * Scans an inline `<script>` tag body for `.js` paths referenced by either a dynamic
+ * `import("...")` call (SvelteKit `adapter-node`'s `Promise.all([import("./_app/immutable/entry/start.js"), ...])`
+ * boot pattern) or a static ES `import ... from "...js"` declaration (SvelteKit's
+ * `import { start } from "./_app/immutable/start-<hash>.js"` boot pattern inside a
+ * `<script type="module">` block). Returns deduped paths in first-seen order.
+ *
+ * @param {string} body - The inline script tag's text content.
+ * @returns {string[]} - Deduped `.js` paths found in the body.
+ */
+export const extractInlineScriptJsPaths = (body: string): string[] => {
+    const paths: string[] = [];
+    const seen = new Set<string>();
+
+    const patterns = [
+        /\bimport\(\s*["']([^"']+\.js)["']\s*\)/g,
+        /\bimport\s+(?:[\w${},\s*]+\s+from\s+)?["']([^"']+\.js)["']/g,
+    ];
+
+    for (const pattern of patterns) {
+        for (const m of body.matchAll(pattern)) {
+            const importPath = m[1];
+            if (!seen.has(importPath)) {
+                seen.add(importPath);
+                paths.push(importPath);
+            }
+        }
+    }
+
+    return paths;
+};
+
+/**
  * Finds all the lazy loaded JavaScript files from a webpage by parsing the page source.
  * It looks for all `<link>` tags with `rel="modulepreload"` attribute and `<script>` tags with `src` attribute.
  * It then resolves the relative URLs to absolute URLs and returns an array of all the JS files found.
@@ -49,12 +81,11 @@ const svelte_getFromPageSource = async (url) => {
                 foundUrls.push(await resolvePath(url, srcAttr));
             }
         } else {
-            // SvelteKit adapter-node boots the client via an inline <script> block using
-            // Promise.all([import("./_app/immutable/entry/start.js"), ...]) — no src attribute.
-            // Extract the string arguments from every import("...") call in the tag body.
+            // SvelteKit adapter-node boots the client via an inline <script> block, either via
+            // Promise.all([import("./_app/immutable/entry/start.js"), ...]) or a static
+            // import { start } from "./_app/immutable/start-<hash>.js" declaration — no src attribute.
             const body = $(scriptTag).html() ?? "";
-            for (const m of body.matchAll(/\bimport\(\s*["']([^"']+\.js)["']\s*\)/g)) {
-                const importPath = m[1];
+            for (const importPath of extractInlineScriptJsPaths(body)) {
                 if (importPath.startsWith("http")) {
                     foundUrls.push(importPath);
                 } else {
