@@ -45,7 +45,6 @@
         "datatables.net-dt": "^2.3.6",
         "esquery": "^1.6.0",
         "express": "^5.2.1",
-        "extract-zip": "^2.0.1",
         "graphql": "^16.14.1",
         "highlight.js": "^11.11.1",
         "inquirer": "^12.6.3",

@@ -6,6 +6,10 @@
 
 - `lazyload`'s Svelte/SvelteKit inline-`<script type="module">` boot-pattern scan (`svelte_getFromPageSource`) now also matches a **static** ES `import ... from "...js"` declaration, in addition to the dynamic `import("...")` call form it already handled. Some SvelteKit builds bootstrap the client via a static import (`import { start } from "./_app/immutable/start-<hash>.js"; start(...)`) instead of the `Promise.all([import(...)])` pattern; since the entry chunk seeds the entire downstream chunk-discovery graph, missing it caused the whole crawl to collapse to a single JS file even though framework detection succeeded. (`lazyload`)
 
+### Security
+
+- Removed the `extract-zip` dependency, which carried a high-severity, unfixed advisory (`GHSA-jmr9-qjv8-65gv`, unvalidated symlink path traversal on archive extraction) with no patched release available upstream. `analyze`'s rules downloader (`initRules`) now fetches the `js-recon-rules` release as a tarball (GitHub's `tarball_url`, alongside the existing `zipball_url`) and extracts it with the already-depended-on, actively maintained `tar` package instead. (`analyze`)
+
 ## 2.0.1-alpha.2 - 2026-08-12
 
 ### Fixed
