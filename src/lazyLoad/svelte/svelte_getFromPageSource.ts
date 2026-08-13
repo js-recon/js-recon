@@ -7,9 +7,13 @@ import { printMsg, MSG } from "../../utility/printMsg.js";
 /**
  * Scans an inline `<script>` tag body for `.js` paths referenced by either a dynamic
  * `import("...")` call (SvelteKit `adapter-node`'s `Promise.all([import("./_app/immutable/entry/start.js"), ...])`
- * boot pattern) or a static ES `import ... from "...js"` declaration (SvelteKit's
+ * boot pattern), a static ES `import ... from "...js"` declaration (SvelteKit's
  * `import { start } from "./_app/immutable/start-<hash>.js"` boot pattern inside a
- * `<script type="module">` block). Returns deduped paths in first-seen order.
+ * `<script type="module">` block), or — only when neither import form matches anything —
+ * a plain quoted string literal ending in `.js` (Sapper's legacy boot pattern, where the
+ * entry-chunk path is assigned to a variable and later used to set `.src` on a
+ * `document.createElement("script")` element at runtime, with no `import(...)` call and no
+ * `<script src>` anywhere in the markup). Returns deduped paths in first-seen order.
  *
  * @param {string} body - The inline script tag's text content.
  * @returns {string[]} - Deduped `.js` paths found in the body.
@@ -29,6 +33,32 @@ export const extractInlineScriptJsPaths = (body: string): string[] => {
             if (!seen.has(importPath)) {
                 seen.add(importPath);
                 paths.push(importPath);
+            }
+        }
+    }
+
+    if (paths.length === 0) {
+        const literalPattern = /["']((?:https?:\/\/|\.{0,2}\/)[^"'\s]*\.js)["']/g;
+        const literalPaths: string[] = [];
+        const literalSeen = new Set<string>();
+
+        for (const m of body.matchAll(literalPattern)) {
+            const literalPath = m[1];
+            if (!literalSeen.has(literalPath)) {
+                literalSeen.add(literalPath);
+                literalPaths.push(literalPath);
+            }
+        }
+
+        // Sapper ships duplicate "modern" and "/legacy/" builds of the same bundle for
+        // different browser capability tiers — prefer the modern one when both are found.
+        for (const literalPath of literalPaths) {
+            if (literalPath.includes("/legacy/") && literalPaths.includes(literalPath.replace("/legacy/", "/"))) {
+                continue;
+            }
+            if (!seen.has(literalPath)) {
+                seen.add(literalPath);
+                paths.push(literalPath);
             }
         }
     }
