@@ -261,7 +261,8 @@ const frameworkDetect = async (
         const evidence =
             result_checkSvelte.evidence !== "" ? result_checkSvelte.evidence : result_checkSvelte_res.evidence;
         const isDevServer =
-            isSvelteDevServer($, url, interceptedUrls) || ($res ? isSvelteDevServer($res, url, interceptedUrls) : false);
+            isSvelteDevServer($, url, interceptedUrls) ||
+            ($res ? isSvelteDevServer($res, url, interceptedUrls) : false);
         return { name: isDevServer ? "svelte-dev" : "svelte", evidence };
     } else if (result_checkAngular.detected === true || result_checkAngularJS_res.detected === true) {
         const evidence =

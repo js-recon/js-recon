@@ -184,9 +184,18 @@ const processUrl = async (
     }
 
     if (
-        !["next", "next-dev", "vue", "vue-dev", "nuxt", "react", "react-dev", "svelte", "svelte-dev", "angular"].includes(
-            globalsUtil.getTech()
-        )
+        ![
+            "next",
+            "next-dev",
+            "vue",
+            "vue-dev",
+            "nuxt",
+            "react",
+            "react-dev",
+            "svelte",
+            "svelte-dev",
+            "angular",
+        ].includes(globalsUtil.getTech())
     ) {
         printMsg(
             MSG.Warn,
