@@ -195,6 +195,7 @@ const processUrl = async (
             "svelte",
             "svelte-dev",
             "angular",
+            "angular-dev",
         ].includes(globalsUtil.getTech())
     ) {
         printMsg(
@@ -224,7 +225,9 @@ const processUrl = async (
                 ? "react"
                 : detectedTech === "svelte-dev"
                   ? "svelte"
-                  : detectedTech;
+                  : detectedTech === "angular-dev"
+                    ? "angular"
+                    : detectedTech;
 
     if (detectedTech === "react" || detectedTech === "react-dev") {
         const mappedFileReact = isBatch ? `${workingDir}/mapped` : "mapped";
@@ -620,7 +623,7 @@ const processUrl = async (
         return;
     }
 
-    if (detectedTech === "angular") {
+    if (detectedTech === "angular" || detectedTech === "angular-dev") {
         // Angular pipeline: lazyload (done) + map + analyze + report.
         // Angular CLI (esbuild) chunks land directly under output/<host>/ with no
         // static/js subdirectory, so we scan the whole host dir.

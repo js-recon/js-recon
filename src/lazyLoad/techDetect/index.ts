@@ -7,6 +7,7 @@ import { getChromiumPath } from "../../utility/getChromiumPath.js";
 import path from "path";
 import { checkNextJS } from "./checkNextJS.js";
 import { isNextDevServer } from "./checkNextDevServer.js";
+import { isAngularDevServer } from "./checkAngularDevServer.js";
 import { checkNuxtJS } from "./checkNuxtJS.js";
 import { checkSvelte } from "./checkSvelte.js";
 import { isSvelteDevServer } from "./checkSvelteDevServer.js";
@@ -267,7 +268,10 @@ const frameworkDetect = async (
     } else if (result_checkAngular.detected === true || result_checkAngularJS_res.detected === true) {
         const evidence =
             result_checkAngular.evidence !== "" ? result_checkAngular.evidence : result_checkAngularJS_res.evidence;
-        return { name: "angular", evidence };
+        const isDevServer =
+            isAngularDevServer($, url, interceptedUrls) ||
+            ($res ? isAngularDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "angular-dev" : "angular", evidence };
     } else if (result_checkReact.detected === true || result_checkReact_res.detected === true) {
         const evidence =
             result_checkReact.evidence !== "" ? result_checkReact.evidence : result_checkReact_res.evidence;
