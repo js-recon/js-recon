@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.0.1-alpha.4 - (unreleased)
+
+### Added
+
+- New `vue-dev` tech: detects a Vue.js dev server (`npm run dev` under Vite, or `vue-cli-service serve` under webpack) as a distinct tech from a production `vue` build, mirroring `next-dev` (#137). `checkVueDevServer.ts` looks for a `<script type="module">` whose pathname resolves to `/@vite/client` or an inline `<script>` containing `import.meta.hot` (Vite, live-validated); or `webpackHotUpdate` in an inline script, a `/sockjs-node/`-pathname URL, or an unhashed `app.js`/`chunk-vendors.js` entry filename (webpack/`vue-cli`, implemented from spec but not live-validated — no webpack-based Vue dev-server test app was available). The gate is checked only after `checkVueJS` matches and the Nuxt sub-check returns false, so `nuxt dev` (also Vite-based) isn't misclassified. `lazyload`'s existing `src/lazyLoad/vue/*` pipeline is reused wholesale for `vue-dev` — no dedicated crawler was needed once two small, additive gaps were fixed: `vue_jsImports.ts` now also follows dynamic `import("...")` calls (not just static `import` declarations — Vite dev servers serve Vue Router's lazy-route pattern as a literal dynamic import), and `downloadResponse.ts` now accepts JS content types for `.vue`-pathname downloads (Vite compiles a requested `.vue` file to `text/javascript`, not raw SFC source). `run`'s tech allow-list and `map`/`analyze` remap (`vue-dev` → `vue`, same pattern as `next-dev` → `next`) were extended accordingly. Benchmarked at 100% source-file recovery across three Vite-based test apps against both the known source tree and an independent `katana` crawl. New `scripts/dev-server-benchmark.mjs` generalizes the katana-diff benchmark methodology into reusable tooling for re-checking dev-server discovery coverage as a regression check. (`lazyload`, `run`)
+
 ## 2.0.1-alpha.3 - 2026-08-13
 
 ### Fixed

@@ -55,7 +55,11 @@ const hasCompatibleContentType = (url: string, rawContentType: string | null): b
     if (assetKind === "vue") {
         // Some development servers serve SFC source as text/html. The body
         // check below distinguishes an SFC from a complete HTML fallback.
-        return VUE_CONTENT_TYPES.has(contentType) || contentType === "text/html";
+        // Vite's dev server compiles a requested .vue file's script block into a runnable
+        // ES module and serves it as text/javascript rather than raw SFC source, so JS
+        // content types must be accepted here too — otherwise every .vue request against a
+        // Vite dev server is rejected outright.
+        return VUE_CONTENT_TYPES.has(contentType) || contentType === "text/html" || JAVASCRIPT_CONTENT_TYPES.has(contentType);
     }
     return JAVASCRIPT_CONTENT_TYPES.has(contentType);
 };

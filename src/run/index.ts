@@ -183,7 +183,7 @@ const processUrl = async (
         process.exit(10);
     }
 
-    if (!["next", "next-dev", "vue", "nuxt", "react", "svelte", "angular"].includes(globalsUtil.getTech())) {
+    if (!["next", "next-dev", "vue", "vue-dev", "nuxt", "react", "svelte", "angular"].includes(globalsUtil.getTech())) {
         printMsg(
             MSG.Warn,
             `[!] The tool supports Next.JS, Vue.JS, Nuxt.JS, React, Svelte/Astro, and Angular in the run module. For ${globalsUtil.getTech()}, only downloading JS files is supported`
@@ -196,12 +196,14 @@ const processUrl = async (
     // on the second crawl. Using the captured value ensures map and analyze always receive
     // the tech that was confirmed in step 1.
     const detectedTech = globalsUtil.getTech();
-    // Dev-server bundles are still standard Next.js webpack modules — map/analyze reuse the
-    // "next" tech logic wholesale rather than duplicating it under a second branch. Kept as a
-    // distinct global tech value everywhere else (output labeling, bundler/refactor detection,
-    // benchmark/bug-report separation per js-recon-internal-docs#137) so next-dev's discovery
-    // coverage isn't silently conflated with the already-benchmarked prod pipeline.
-    const mapAnalyzeTech = detectedTech === "next-dev" ? "next" : detectedTech;
+    // Dev-server bundles are still standard modules for their respective bundler — map/analyze
+    // reuse the prod tech logic wholesale rather than duplicating it under a second branch.
+    // Kept as a distinct global tech value everywhere else (output labeling, bundler/refactor
+    // detection, benchmark/bug-report separation per js-recon-internal-docs#137 and #190) so
+    // next-dev's / vue-dev's discovery coverage isn't silently conflated with the
+    // already-benchmarked prod pipelines.
+    const mapAnalyzeTech =
+        detectedTech === "next-dev" ? "next" : detectedTech === "vue-dev" ? "vue" : detectedTech;
 
     if (detectedTech === "react") {
         const mappedFileReact = isBatch ? `${workingDir}/mapped` : "mapped";
@@ -320,10 +322,14 @@ const processUrl = async (
         return;
     }
 
-    if (detectedTech === "vue") {
+    if (detectedTech === "vue" || detectedTech === "vue-dev") {
         // Vue.JS pipeline: lazyload (done) + map + analyze + report.
         // Scan the whole download directory: Vue builds frequently spread chunks
         // across multiple asset hosts, and relative imports resolve within each tree.
+        // vue-dev (Vite dev server) reuses this pipeline wholesale — map/analyze operate on
+        // plain ES modules either way; see js-recon-internal-docs#190 for the research spike
+        // confirming coverage. All map/analyze/report calls below pass the literal "vue" tech
+        // string regardless of detectedTech, matching next-dev's mapAnalyzeTech precedent.
         const mappedFileVue = isBatch ? `${workingDir}/mapped` : "mapped";
         const mappedJsonFileVue = isBatch ? `${workingDir}/mapped.json` : "mapped.json";
         const openapiFile = isBatch ? `${workingDir}/mapped-openapi.json` : "mapped-openapi.json";

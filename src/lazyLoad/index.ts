@@ -341,6 +341,67 @@ const lazyLoad = async (
 
                     // extract the source maps
                     await extractSourceMaps(output, join(output, sourcemapDir));
+                } else if (tech.name === "vue-dev") {
+                    printMsg(MSG.Run, "[✓] Vue.js dev server detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
+
+                    // Confirmed via research spike (js-recon-internal-docs#190) that the
+                    // production Vue discovery pipeline (vue_discoverJsFiles +
+                    // vue_recursiveClientSidePathDownload), together with two small additive
+                    // fixes — dynamic import() following in vue_jsImports.ts, and accepting
+                    // JS content types for .vue downloads in downloadResponse.ts — fully
+                    // recovers a Vite dev server's source tree (SFCs, stores, route-based
+                    // lazy-loaded views). No dev-specific crawler was needed. Kept as its own
+                    // branch (rather than folded into the "vue" branch above) so vue-dev's
+                    // discovery coverage stays a separately trackable/benchmarkable identifier,
+                    // mirroring the next-dev branch's precedent.
+                    activeQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
+                    const queue = activeQueue;
+                    const onFilesDiscovered = (files: string[]) => enqueue(queue, files);
+
+                    const vueDevResearchMap: Record<string, string[]> = {};
+                    const vueDevOnTechnique = research ? createTechniqueRecorder(vueDevResearchMap) : undefined;
+
+                    const { clientSidePaths } = await vue_discoverJsFiles(
+                        url,
+                        maxJsSizeMb,
+                        onFilesDiscovered,
+                        includeMethods,
+                        excludeMethods,
+                        threads,
+                        true,
+                        true,
+                        vueDevOnTechnique,
+                        output
+                    );
+                    if (hardTimeoutReached) return;
+
+                    await vue_recursiveClientSidePathDownload(
+                        clientSidePaths,
+                        threads,
+                        maxJsSizeMb,
+                        onFilesDiscovered,
+                        includeMethods,
+                        excludeMethods,
+                        vueDevOnTechnique,
+                        output
+                    );
+                    if (hardTimeoutReached) return;
+
+                    await queue.drain();
+                    if (hardTimeoutReached) return;
+                    queue.printSummary();
+
+                    if (research) {
+                        fs.writeFileSync(researchOutput, JSON.stringify(vueDevResearchMap, null, 4));
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
+                        );
+                    }
+
+                    // extract the source maps
+                    await extractSourceMaps(output, join(output, sourcemapDir));
                 } else if (tech.name === "nuxt") {
                     printMsg(MSG.Run, "[✓] Nuxt.js detected");
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);

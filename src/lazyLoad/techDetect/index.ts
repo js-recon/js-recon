@@ -10,6 +10,7 @@ import { isNextDevServer } from "./checkNextDevServer.js";
 import { checkNuxtJS } from "./checkNuxtJS.js";
 import { checkSvelte } from "./checkSvelte.js";
 import { checkVueJS } from "./checkVueJS.js";
+import { isVueDevServer } from "./checkVueDevServer.js";
 import { checkAngularJS } from "./checkAngularJS.js";
 import { checkReact } from "./checkReact.js";
 import { isValidInterceptedJsEvidence } from "./checkInterceptedEvidence.js";
@@ -251,7 +252,9 @@ const frameworkDetect = async (
         }
         const evidence =
             result_checkVueJS.evidence !== "" ? result_checkVueJS.evidence : result_checkVueJS_res.evidence;
-        return { name: "vue", evidence };
+        const isDevServer =
+            isVueDevServer($, url, interceptedUrls) || ($res ? isVueDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "vue-dev" : "vue", evidence };
     } else if (result_checkSvelte.detected === true || result_checkSvelte_res.detected === true) {
         const evidence =
             result_checkSvelte.evidence !== "" ? result_checkSvelte.evidence : result_checkSvelte_res.evidence;
@@ -285,6 +288,11 @@ const frameworkDetect = async (
             // Vite React plugin dev-mode HMR runtime — requested by every Vite/React dev server.
             candidateName = "react";
         }
+        // No /@vite/client fallback arm here: unlike /_next/ or /@react-refresh, the Vite dev
+        // client is framework-agnostic (React, Svelte, Solid, and vanilla Vite apps request it
+        // too), so it can't be used to identify Vue specifically without a Vue-detection signal
+        // to pair it with. The HTML-level isVueDevServer() check above already covers the
+        // primary case (Vue's entry script tag showing up in static HTML).
         if (candidateName === null) continue;
 
         const evidence = responseEvidence.get(interceptedUrl);
