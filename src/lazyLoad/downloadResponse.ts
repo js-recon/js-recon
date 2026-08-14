@@ -2,8 +2,7 @@ export type DownloadResponseFailure = "download" | "invalidResponse";
 export type DownloadedAssetKind = "javascript" | "json" | "vue" | "typescript";
 
 export type DownloadResponseResult =
-    | Readonly<{ ok: true; body: string }>
-    | Readonly<{ ok: false; failure: DownloadResponseFailure; reason: string }>;
+    Readonly<{ ok: true; body: string }> | Readonly<{ ok: false; failure: DownloadResponseFailure; reason: string }>;
 
 const JAVASCRIPT_CONTENT_TYPES = new Set([
     "application/ecmascript",
