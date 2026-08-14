@@ -9,6 +9,7 @@ import { checkNextJS } from "./checkNextJS.js";
 import { isNextDevServer } from "./checkNextDevServer.js";
 import { checkNuxtJS } from "./checkNuxtJS.js";
 import { checkSvelte } from "./checkSvelte.js";
+import { isSvelteDevServer } from "./checkSvelteDevServer.js";
 import { checkVueJS } from "./checkVueJS.js";
 import { isVueDevServer } from "./checkVueDevServer.js";
 import { checkAngularJS } from "./checkAngularJS.js";
@@ -259,7 +260,9 @@ const frameworkDetect = async (
     } else if (result_checkSvelte.detected === true || result_checkSvelte_res.detected === true) {
         const evidence =
             result_checkSvelte.evidence !== "" ? result_checkSvelte.evidence : result_checkSvelte_res.evidence;
-        return { name: "svelte", evidence };
+        const isDevServer =
+            isSvelteDevServer($, url, interceptedUrls) || ($res ? isSvelteDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "svelte-dev" : "svelte", evidence };
     } else if (result_checkAngular.detected === true || result_checkAngularJS_res.detected === true) {
         const evidence =
             result_checkAngular.evidence !== "" ? result_checkAngular.evidence : result_checkAngularJS_res.evidence;
@@ -287,7 +290,7 @@ const frameworkDetect = async (
         } else if (interceptedUrl.includes("/_next/")) {
             candidateName = isNextDevServer($, url, [interceptedUrl]) ? "next-dev" : "next";
         } else if (interceptedUrl.includes("/_app/immutable/")) {
-            candidateName = "svelte";
+            candidateName = isSvelteDevServer($, url, [interceptedUrl]) ? "svelte-dev" : "svelte";
         } else if (interceptedUrl.includes("/@react-refresh")) {
             // Vite React plugin dev-mode HMR runtime — requested by every Vite/React dev server.
             candidateName = "react-dev";

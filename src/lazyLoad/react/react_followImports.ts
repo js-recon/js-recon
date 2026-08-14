@@ -16,10 +16,18 @@ import { progressWarn } from "../../utility/progressLog.js";
  * "/src/App.jsx"`) and vendor deps carry a cache-busting `?v=<hash>` suffix (`"/node_modules/
  * .vite/deps/react.js?v=0f5f446c"`) — both silently unmatched by the original `\.m?js["'`]`
  * pattern, which requires the extension to be immediately followed by the closing quote.
+ *
+ * `.svelte` was added for `svelte-dev` (js-recon-internal-docs#192): SvelteKit's dev-mode
+ * per-route node files re-export the compiled component directly from its source path
+ * (`export { default as component } from "/src/routes/+page.svelte"`). Vite serves a
+ * requested `.svelte` file as fully-compiled JS, so once this extension is followed the
+ * component's own `.vite/deps`/`@sveltejs/kit` runtime sub-imports resolve via the existing
+ * alternatives above — without it, the entire `.svelte` source subtree (and everything only
+ * reachable through it) is invisible to the crawler.
  */
 const extractImports = (content: string, fileUrl: string, baseUrl: string): string[] => {
     const found: string[] = [];
-    const EXT_WITH_OPTIONAL_QUERY = /\.(?:mjs|jsx?|tsx?)(?:\?[^"'`]*)?/.source;
+    const EXT_WITH_OPTIONAL_QUERY = /\.(?:mjs|jsx?|tsx?|svelte)(?:\?[^"'`]*)?/.source;
 
     // Static imports: from "..." / from '...' / from `...`
     for (const m of content.matchAll(new RegExp(`\\bfrom\\s*["'\`]([^"'\`]+${EXT_WITH_OPTIONAL_QUERY})["'\`]`, "g"))) {

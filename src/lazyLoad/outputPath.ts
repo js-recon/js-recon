@@ -11,7 +11,10 @@ const MAX_FILENAME_LENGTH = 180;
 // being compiled down to a bare .js filename the way a production build's output is — without
 // these, a genuinely discovered .jsx URL (already past downloadQueue's own extension pre-filter)
 // silently fails to get a filename here and is dropped as "ignored".
-const ASSET_EXTENSION = /(\.mjs\.map|\.js\.map|\.mjs|\.json|\.jsx|\.tsx|\.ts|\.js|\.vue)$/i;
+// .svelte exists for svelte-dev (js-recon-internal-docs#192) for the same reason: SvelteKit's
+// dev-mode node files re-export a route's compiled component directly from its .svelte source
+// path.
+const ASSET_EXTENSION = /(\.mjs\.map|\.js\.map|\.mjs|\.json|\.jsx|\.tsx|\.ts|\.js|\.vue|\.svelte)$/i;
 const ENCODED_SEGMENT_PREFIX = "__jsr_";
 
 const decodePathSegment = (segment: string): string => {

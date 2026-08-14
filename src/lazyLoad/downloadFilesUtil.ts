@@ -37,7 +37,7 @@ const downloadFiles = async (urls: string[], output: string) => {
     const processOne = async (url: string) => {
         try {
             if (
-                !url.match(/(\.mjs\.map|\.mjs|\.js|\.json|\.js\.map|\.vue)/) ||
+                !url.match(/(\.mjs\.map|\.mjs|\.js|\.json|\.js\.map|\.vue|\.ts|\.svelte)/) ||
                 url.match(/lang\.(css|scss|sass|less|styl)/)
             ) {
                 printMsg(MSG.Warn, `[i] Ignored ${url}`);

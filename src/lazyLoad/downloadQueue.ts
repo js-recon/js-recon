@@ -237,7 +237,7 @@ export class DownloadQueue {
                 return;
             }
             if (
-                !url.match(/(\.mjs\.map|\.mjs|\.js|\.json|\.js\.map|\.vue)/) ||
+                !url.match(/(\.mjs\.map|\.mjs|\.js|\.json|\.js\.map|\.vue|\.ts|\.svelte)/) ||
                 url.match(/lang\.(css|scss|sass|less|styl)/)
             ) {
                 this.ignoredCount++;

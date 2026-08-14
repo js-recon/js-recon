@@ -474,8 +474,8 @@ const lazyLoad = async (
 
                     // extract the source maps
                     await extractSourceMaps(output, join(output, sourcemapDir));
-                } else if (tech.name === "svelte") {
-                    printMsg(MSG.Run, "[✓] Svelte detected");
+                } else if (tech.name === "svelte" || tech.name === "svelte-dev") {
+                    printMsg(MSG.Run, tech.name === "svelte-dev" ? "[✓] Svelte dev server detected" : "[✓] Svelte detected");
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });

@@ -184,7 +184,7 @@ const processUrl = async (
     }
 
     if (
-        !["next", "next-dev", "vue", "vue-dev", "nuxt", "react", "react-dev", "svelte", "angular"].includes(
+        !["next", "next-dev", "vue", "vue-dev", "nuxt", "react", "react-dev", "svelte", "svelte-dev", "angular"].includes(
             globalsUtil.getTech()
         )
     ) {
@@ -213,7 +213,9 @@ const processUrl = async (
               ? "vue"
               : detectedTech === "react-dev"
                 ? "react"
-                : detectedTech;
+                : detectedTech === "svelte-dev"
+                  ? "svelte"
+                  : detectedTech;
 
     if (detectedTech === "react" || detectedTech === "react-dev") {
         const mappedFileReact = isBatch ? `${workingDir}/mapped` : "mapped";
@@ -537,7 +539,7 @@ const processUrl = async (
         return;
     }
 
-    if (detectedTech === "svelte") {
+    if (detectedTech === "svelte" || detectedTech === "svelte-dev") {
         const mappedFileSvelte = isBatch ? `${workingDir}/mapped` : "mapped";
         const mappedJsonFileSvelte = isBatch ? `${workingDir}/mapped.json` : "mapped.json";
         const openapiFile = isBatch ? `${workingDir}/mapped-openapi.json` : "mapped-openapi.json";
