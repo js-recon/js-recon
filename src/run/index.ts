@@ -131,41 +131,47 @@ const processUrl = async (
 
     printMsg(MSG.Header, "[1/8] Running lazyload to download JavaScript files...");
     resetSkipStep();
-    await awaitCancellableStep(
-        (signal) =>
-            lazyLoad(
-                url,
-                outputDir,
-                cmd.strictScope,
-                cmd.scope.split(","),
-                cmd.threads,
-                false,
-                "",
-                cmd.insecure,
-                false,
-                cmd.sourcemapDir,
-                cmd.research,
-                cmd.researchOutput,
-                Number(cmd.maxIterations),
-                Number(cmd.maxJsSize),
-                Number(cmd.lazyloadTimeout) * 60 * 1000,
-                Number(cmd.maxPages),
-                includeMethods,
-                excludeMethods,
-                Number(cmd.detectionTimeout) * 1000,
-                signal,
-                isBatch,
-                Number(cmd.maxRedirects),
-                cmd.strings,
-                Number(cmd.stringsMaxIterations),
-                Number(cmd.stagnationTimein) * 60 * 1000,
-                Number(cmd.stagnationPercentage),
-                Number(cmd.stagnationMonitor) * 60 * 1000,
-                Number(cmd.rscParamBruteforceLimit),
-                cmd.wordlist
-            ),
-        getSkipStepPromise()
-    );
+    try {
+        await awaitCancellableStep(
+            (signal) =>
+                lazyLoad(
+                    url,
+                    outputDir,
+                    cmd.strictScope,
+                    cmd.scope.split(","),
+                    cmd.threads,
+                    false,
+                    "",
+                    cmd.insecure,
+                    false,
+                    cmd.sourcemapDir,
+                    cmd.research,
+                    cmd.researchOutput,
+                    Number(cmd.maxIterations),
+                    Number(cmd.maxJsSize),
+                    Number(cmd.lazyloadTimeout) * 60 * 1000,
+                    Number(cmd.maxPages),
+                    includeMethods,
+                    excludeMethods,
+                    Number(cmd.detectionTimeout) * 1000,
+                    signal,
+                    isBatch,
+                    Number(cmd.maxRedirects),
+                    cmd.strings,
+                    Number(cmd.stringsMaxIterations),
+                    Number(cmd.stagnationTimein) * 60 * 1000,
+                    Number(cmd.stagnationPercentage),
+                    Number(cmd.stagnationMonitor) * 60 * 1000,
+                    Number(cmd.rscParamBruteforceLimit),
+                    cmd.wordlist
+                ),
+            getSkipStepPromise()
+        );
+    } catch (error) {
+        printMsg(MSG.Err, `[!] Lazyload step failed: ${error}. ${isBatch ? "Skipping this target." : "Quitting."}`);
+        if (isBatch) return;
+        process.exit(33);
+    }
     printMsg(MSG.Run, "[+] Lazyload complete.");
     if (shouldSkipTarget()) return;
 

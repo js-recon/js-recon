@@ -77,16 +77,23 @@ const frameworkDetect = async (
     if (!globalsUtil.getCacheOnly()) {
         const chromiumPath = getChromiumPath();
         const proxyArgs = getActivePuppeteerProxyArgs();
-        const browser = await puppeteer.launch({
-            executablePath: chromiumPath,
-            args: [
-                ...(globalsUtil.getDisableSandbox()
-                    ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-                    : []),
-                ...(proxyArgs.arg ? [proxyArgs.arg] : []),
-            ],
-            handleSIGINT: !isSigintHandlerActive(),
-        });
+        let browser;
+        try {
+            browser = await puppeteer.launch({
+                executablePath: chromiumPath,
+                args: [
+                    ...(globalsUtil.getDisableSandbox()
+                        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+                        : []),
+                    ...(proxyArgs.arg ? [proxyArgs.arg] : []),
+                ],
+                handleSIGINT: !isSigintHandlerActive(),
+            });
+        } catch (err) {
+            const message = (err as any)?.message || err;
+            log(chalk.red(`[!] Puppeteer browser launch failed: ${message}`));
+            throw new Error(`Puppeteer browser launch failed: ${message}`);
+        }
         const abortBrowser = () => {
             void browser.close().catch(() => undefined);
         };
