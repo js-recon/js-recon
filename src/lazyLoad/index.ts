@@ -723,6 +723,39 @@ const lazyLoad = async (
                     }
 
                     await extractSourceMaps(output, join(output, sourcemapDir));
+                } else if (tech.name === "next-dev") {
+                    printMsg(MSG.Run, "[✓] Next.js dev server detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
+
+                    activeQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
+                    const queue = activeQueue;
+
+                    const nextDevResearchMap: Record<string, string[]> = {};
+
+                    // Dev-mode webpack serves every initial chunk directly as a <script src>
+                    // tag rather than through a build manifest — no manifest/chunk-path
+                    // resolution needed like the production NextJsCrawler.
+                    const jsFilesFromPageSource = shouldRunMethod("react_getScriptTags", includeMethods, excludeMethods)
+                        ? await react_getScriptTags(url, maxJsSizeMb, output, isBatch)
+                        : [];
+                    if (hardTimeoutReached) return;
+                    enqueue(queue, jsFilesFromPageSource);
+                    if (research) accumulateTechnique(nextDevResearchMap, "react_getScriptTags", jsFilesFromPageSource);
+
+                    await queue.drain();
+                    if (hardTimeoutReached) return;
+                    queue.printSummary();
+                    activeQueue = null;
+
+                    if (research) {
+                        fs.writeFileSync(researchOutput, JSON.stringify(nextDevResearchMap, null, 4));
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
+                        );
+                    }
+
+                    await extractSourceMaps(output, join(output, sourcemapDir));
                 }
             } else {
                 printMsg(MSG.Warn, "[i] Framework not detected — falling back to generic JS extraction");

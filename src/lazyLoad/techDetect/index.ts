@@ -6,6 +6,7 @@ import * as globalsUtil from "../../utility/globals.js";
 import { getChromiumPath } from "../../utility/getChromiumPath.js";
 import path from "path";
 import { checkNextJS } from "./checkNextJS.js";
+import { isNextDevServer } from "./checkNextDevServer.js";
 import { checkNuxtJS } from "./checkNuxtJS.js";
 import { checkSvelte } from "./checkSvelte.js";
 import { checkVueJS } from "./checkVueJS.js";
@@ -235,7 +236,9 @@ const frameworkDetect = async (
     if (result_checkNextJS.detected === true || result_checkNextJS_res.detected === true) {
         const evidence =
             result_checkNextJS.evidence !== "" ? result_checkNextJS.evidence : result_checkNextJS_res.evidence;
-        return { name: "next", evidence };
+        const isDevServer =
+            isNextDevServer($, url, interceptedUrls) || ($res ? isNextDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "next-dev" : "next", evidence };
     } else if (result_checkVueJS.detected === true || result_checkVueJS_res.detected === true) {
         log(chalk.green("[✓] Vue.js detected"));
         log(chalk.cyan(`[i] Checking Nuxt.JS`), chalk.dim("(Nuxt.JS is built on Vue.js)"));
@@ -275,7 +278,7 @@ const frameworkDetect = async (
         if (interceptedUrl.includes("/_nuxt/")) {
             candidateName = "nuxt";
         } else if (interceptedUrl.includes("/_next/")) {
-            candidateName = "next";
+            candidateName = isNextDevServer($, url, [interceptedUrl]) ? "next-dev" : "next";
         } else if (interceptedUrl.includes("/_app/immutable/")) {
             candidateName = "svelte";
         } else if (interceptedUrl.includes("/@react-refresh")) {

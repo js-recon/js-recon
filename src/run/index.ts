@@ -183,7 +183,7 @@ const processUrl = async (
         process.exit(10);
     }
 
-    if (!["next", "vue", "nuxt", "react", "svelte", "angular"].includes(globalsUtil.getTech())) {
+    if (!["next", "next-dev", "vue", "nuxt", "react", "svelte", "angular"].includes(globalsUtil.getTech())) {
         printMsg(
             MSG.Warn,
             `[!] The tool supports Next.JS, Vue.JS, Nuxt.JS, React, Svelte/Astro, and Angular in the run module. For ${globalsUtil.getTech()}, only downloading JS files is supported`
@@ -196,6 +196,12 @@ const processUrl = async (
     // on the second crawl. Using the captured value ensures map and analyze always receive
     // the tech that was confirmed in step 1.
     const detectedTech = globalsUtil.getTech();
+    // Dev-server bundles are still standard Next.js webpack modules — map/analyze reuse the
+    // "next" tech logic wholesale rather than duplicating it under a second branch. Kept as a
+    // distinct global tech value everywhere else (output labeling, bundler/refactor detection,
+    // benchmark/bug-report separation per js-recon-internal-docs#137) so next-dev's discovery
+    // coverage isn't silently conflated with the already-benchmarked prod pipeline.
+    const mapAnalyzeTech = detectedTech === "next-dev" ? "next" : detectedTech;
 
     if (detectedTech === "react") {
         const mappedFileReact = isBatch ? `${workingDir}/mapped` : "mapped";
@@ -827,7 +833,7 @@ const processUrl = async (
     }
     resetSkipStep();
     await Promise.race([
-        map(cdnOutputDir, mappedFile, ["json"], detectedTech, false, false, cmd.command || []),
+        map(cdnOutputDir, mappedFile, ["json"], mapAnalyzeTech, false, false, cmd.command || []),
         getSkipStepPromise(),
     ]);
     printMsg(MSG.Run, "[+] Map complete.");
@@ -856,7 +862,7 @@ const processUrl = async (
         analyze(
             cmd.rules || "",
             mappedJsonFile,
-            detectedTech as "next" | "vue" | "svelte" | "angular" | "react",
+            mapAnalyzeTech as "next" | "vue" | "svelte" | "angular" | "react",
             false,
             openapiFile,
             false,
