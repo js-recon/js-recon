@@ -1,6 +1,6 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "2.0.1-alpha.2",
+    "version": "2.0.1-alpha.3",
     "description": "JS Recon Tool",
     "main": "build/index.js",
     "type": "module",
@@ -45,7 +45,6 @@
         "datatables.net-dt": "^2.3.6",
         "esquery": "^1.6.0",
         "express": "^5.2.1",
-        "extract-zip": "^2.0.1",
         "graphql": "^16.14.1",
         "highlight.js": "^11.11.1",
         "inquirer": "^12.6.3",

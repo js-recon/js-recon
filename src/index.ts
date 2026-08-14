@@ -6,6 +6,9 @@ import { ApplicationConfigError } from "./config/applicationConfig.js";
 import { OxylabsFallbackConfigurationError } from "./proxy/oxylabsFallback.js";
 import { TargetInputError } from "./utility/targetInputs.js";
 import { RunOutputDirectoryError } from "./run/outputDirectory.js";
+import { registerFatalHandlers } from "./utility/fatalHandlers.js";
+
+registerFatalHandlers();
 
 const args = process.argv.slice(2);
 const isVersionFlag = args.length === 1 && (args[0] === "-V" || args[0] === "--version");

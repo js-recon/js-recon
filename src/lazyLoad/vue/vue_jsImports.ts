@@ -25,22 +25,33 @@ const parseJsFile = async (url: string, maxJsSizeMb: number) => {
     try {
         ast = parser.parse(reqText, {
             sourceType: "module",
-            plugins: ["importAssertions"],
+            plugins: ["importAssertions", "typescript"],
         });
     } catch {
         return foundUrls;
     }
 
-    // get all the import statements
+    // get all the import statements — both static `import ... from "..."` declarations and
+    // dynamic `import("...")` calls. Vite's dev server serves route-based lazy-loading as
+    // literal dynamic import() calls with a string argument (e.g. a Vue Router route's
+    // `component: () => import("/src/views/HomeView.vue")`) rather than compiling them into
+    // a chunk-manifest reference the way a production build does — without following these,
+    // every dynamically-imported route/component is missed entirely.
+    const addImportSource = (source: string) => {
+        if (source.startsWith("./") || source.startsWith("../") || source.startsWith("/")) {
+            foundUrls.add(new URL(source, url).href);
+        } else {
+            progressError(chalk.red(`Found import statement but can't resolve it: ${source} - on ${url}`));
+        }
+    };
     traverse(ast, {
         ImportDeclaration(path) {
-            const source = path.node.source.value;
-
-            if (source.startsWith("./") || source.startsWith("../") || source.startsWith("/")) {
-                foundUrls.add(new URL(source, url).href);
-            } else {
-                progressError(chalk.red(`Found import statement but can't resolve it: ${source} - on ${url}`));
-            }
+            addImportSource(path.node.source.value);
+        },
+        CallExpression(path) {
+            if (path.node.callee.type !== "Import") return;
+            const arg = path.node.arguments[0];
+            if (arg?.type === "StringLiteral") addImportSource(arg.value);
         },
     });
 

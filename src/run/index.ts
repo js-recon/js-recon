@@ -131,41 +131,47 @@ const processUrl = async (
 
     printMsg(MSG.Header, "[1/8] Running lazyload to download JavaScript files...");
     resetSkipStep();
-    await awaitCancellableStep(
-        (signal) =>
-            lazyLoad(
-                url,
-                outputDir,
-                cmd.strictScope,
-                cmd.scope.split(","),
-                cmd.threads,
-                false,
-                "",
-                cmd.insecure,
-                false,
-                cmd.sourcemapDir,
-                cmd.research,
-                cmd.researchOutput,
-                Number(cmd.maxIterations),
-                Number(cmd.maxJsSize),
-                Number(cmd.lazyloadTimeout) * 60 * 1000,
-                Number(cmd.maxPages),
-                includeMethods,
-                excludeMethods,
-                Number(cmd.detectionTimeout) * 1000,
-                signal,
-                isBatch,
-                Number(cmd.maxRedirects),
-                cmd.strings,
-                Number(cmd.stringsMaxIterations),
-                Number(cmd.stagnationTimein) * 60 * 1000,
-                Number(cmd.stagnationPercentage),
-                Number(cmd.stagnationMonitor) * 60 * 1000,
-                Number(cmd.rscParamBruteforceLimit),
-                cmd.wordlist
-            ),
-        getSkipStepPromise()
-    );
+    try {
+        await awaitCancellableStep(
+            (signal) =>
+                lazyLoad(
+                    url,
+                    outputDir,
+                    cmd.strictScope,
+                    cmd.scope.split(","),
+                    cmd.threads,
+                    false,
+                    "",
+                    cmd.insecure,
+                    false,
+                    cmd.sourcemapDir,
+                    cmd.research,
+                    cmd.researchOutput,
+                    Number(cmd.maxIterations),
+                    Number(cmd.maxJsSize),
+                    Number(cmd.lazyloadTimeout) * 60 * 1000,
+                    Number(cmd.maxPages),
+                    includeMethods,
+                    excludeMethods,
+                    Number(cmd.detectionTimeout) * 1000,
+                    signal,
+                    isBatch,
+                    Number(cmd.maxRedirects),
+                    cmd.strings,
+                    Number(cmd.stringsMaxIterations),
+                    Number(cmd.stagnationTimein) * 60 * 1000,
+                    Number(cmd.stagnationPercentage),
+                    Number(cmd.stagnationMonitor) * 60 * 1000,
+                    Number(cmd.rscParamBruteforceLimit),
+                    cmd.wordlist
+                ),
+            getSkipStepPromise()
+        );
+    } catch (error) {
+        printMsg(MSG.Err, `[!] Lazyload step failed: ${error}. ${isBatch ? "Skipping this target." : "Quitting."}`);
+        if (isBatch) return;
+        process.exit(33);
+    }
     printMsg(MSG.Run, "[+] Lazyload complete.");
     if (shouldSkipTarget()) return;
 
@@ -177,7 +183,21 @@ const processUrl = async (
         process.exit(10);
     }
 
-    if (!["next", "vue", "nuxt", "react", "svelte", "angular"].includes(globalsUtil.getTech())) {
+    if (
+        ![
+            "next",
+            "next-dev",
+            "vue",
+            "vue-dev",
+            "nuxt",
+            "react",
+            "react-dev",
+            "svelte",
+            "svelte-dev",
+            "angular",
+            "angular-dev",
+        ].includes(globalsUtil.getTech())
+    ) {
         printMsg(
             MSG.Warn,
             `[!] The tool supports Next.JS, Vue.JS, Nuxt.JS, React, Svelte/Astro, and Angular in the run module. For ${globalsUtil.getTech()}, only downloading JS files is supported`
@@ -190,8 +210,26 @@ const processUrl = async (
     // on the second crawl. Using the captured value ensures map and analyze always receive
     // the tech that was confirmed in step 1.
     const detectedTech = globalsUtil.getTech();
+    // Dev-server bundles are still standard modules for their respective bundler — map/analyze
+    // reuse the prod tech logic wholesale rather than duplicating it under a second branch.
+    // Kept as a distinct global tech value everywhere else (output labeling, bundler/refactor
+    // detection, benchmark/bug-report separation per js-recon-internal-docs#137 and #190) so
+    // next-dev's / vue-dev's discovery coverage isn't silently conflated with the
+    // already-benchmarked prod pipelines.
+    const mapAnalyzeTech =
+        detectedTech === "next-dev"
+            ? "next"
+            : detectedTech === "vue-dev"
+              ? "vue"
+              : detectedTech === "react-dev"
+                ? "react"
+                : detectedTech === "svelte-dev"
+                  ? "svelte"
+                  : detectedTech === "angular-dev"
+                    ? "angular"
+                    : detectedTech;
 
-    if (detectedTech === "react") {
+    if (detectedTech === "react" || detectedTech === "react-dev") {
         const mappedFileReact = isBatch ? `${workingDir}/mapped` : "mapped";
         const mappedJsonFileReact = isBatch ? `${workingDir}/mapped.json` : "mapped.json";
         const openapiFile = isBatch ? `${workingDir}/mapped-openapi.json` : "mapped-openapi.json";
@@ -211,7 +249,7 @@ const processUrl = async (
         }
         resetSkipStep();
         await Promise.race([
-            map(outputDir, mappedFileReact, ["json"], "react", false, false, cmd.command || []),
+            map(outputDir, mappedFileReact, ["json"], mapAnalyzeTech, false, false, cmd.command || []),
             getSkipStepPromise(),
         ]);
         printMsg(MSG.Run, "[+] Map complete.");
@@ -223,7 +261,7 @@ const processUrl = async (
             analyze(
                 cmd.rules || "",
                 mappedJsonFileReact,
-                "react",
+                mapAnalyzeTech as "next" | "vue" | "react" | "svelte" | "angular",
                 false,
                 openapiFile,
                 false,
@@ -264,7 +302,7 @@ const processUrl = async (
             printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
             const detectedBundlerTechReact = await detectBundler(
                 mappedJsonFileReact,
-                "react",
+                mapAnalyzeTech,
                 Number(cmd.csMastTechDetectThreshold ?? 50)
             );
             if (detectedBundlerTechReact) {
@@ -308,10 +346,14 @@ const processUrl = async (
         return;
     }
 
-    if (detectedTech === "vue") {
+    if (detectedTech === "vue" || detectedTech === "vue-dev") {
         // Vue.JS pipeline: lazyload (done) + map + analyze + report.
         // Scan the whole download directory: Vue builds frequently spread chunks
         // across multiple asset hosts, and relative imports resolve within each tree.
+        // vue-dev (Vite dev server) reuses this pipeline wholesale — map/analyze operate on
+        // plain ES modules either way; see js-recon-internal-docs#190 for the research spike
+        // confirming coverage. All map/analyze/report calls below pass the literal "vue" tech
+        // string regardless of detectedTech, matching next-dev's mapAnalyzeTech precedent.
         const mappedFileVue = isBatch ? `${workingDir}/mapped` : "mapped";
         const mappedJsonFileVue = isBatch ? `${workingDir}/mapped.json` : "mapped.json";
         const openapiFile = isBatch ? `${workingDir}/mapped-openapi.json` : "mapped-openapi.json";
@@ -509,7 +551,7 @@ const processUrl = async (
         return;
     }
 
-    if (detectedTech === "svelte") {
+    if (detectedTech === "svelte" || detectedTech === "svelte-dev") {
         const mappedFileSvelte = isBatch ? `${workingDir}/mapped` : "mapped";
         const mappedJsonFileSvelte = isBatch ? `${workingDir}/mapped.json` : "mapped.json";
         const openapiFile = isBatch ? `${workingDir}/mapped-openapi.json` : "mapped-openapi.json";
@@ -581,7 +623,7 @@ const processUrl = async (
         return;
     }
 
-    if (detectedTech === "angular") {
+    if (detectedTech === "angular" || detectedTech === "angular-dev") {
         // Angular pipeline: lazyload (done) + map + analyze + report.
         // Angular CLI (esbuild) chunks land directly under output/<host>/ with no
         // static/js subdirectory, so we scan the whole host dir.
@@ -821,7 +863,7 @@ const processUrl = async (
     }
     resetSkipStep();
     await Promise.race([
-        map(cdnOutputDir, mappedFile, ["json"], detectedTech, false, false, cmd.command || []),
+        map(cdnOutputDir, mappedFile, ["json"], mapAnalyzeTech, false, false, cmd.command || []),
         getSkipStepPromise(),
     ]);
     printMsg(MSG.Run, "[+] Map complete.");
@@ -850,7 +892,7 @@ const processUrl = async (
         analyze(
             cmd.rules || "",
             mappedJsonFile,
-            detectedTech as "next" | "vue" | "svelte" | "angular" | "react",
+            mapAnalyzeTech as "next" | "vue" | "svelte" | "angular" | "react",
             false,
             openapiFile,
             false,

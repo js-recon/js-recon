@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import extract from "extract-zip";
+import * as tar from "tar";
 import { withActiveProxyDispatcher, type FetchOptsWithDispatcher } from "../../utility/makeReq.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 
@@ -8,7 +8,7 @@ const RULES_RELEASE_URL = "https://api.github.com/repos/js-recon/js-recon-rules/
 
 interface RulesRelease {
     readonly tagName: string;
-    readonly zipballUrl: string;
+    readonly tarballUrl: string;
 }
 
 const fetchLatestRulesRelease = async (options: FetchOptsWithDispatcher): Promise<RulesRelease> => {
@@ -21,26 +21,28 @@ const fetchLatestRulesRelease = async (options: FetchOptsWithDispatcher): Promis
     if (typeof release !== "object" || release === null) {
         throw new Error("Rules release response was not an object");
     }
-    const { tag_name: tagName, zipball_url: zipballUrl } = release as Record<string, unknown>;
-    if (typeof tagName !== "string" || typeof zipballUrl !== "string") {
-        throw new Error("Rules release response is missing tag_name or zipball_url");
+    const { tag_name: tagName, tarball_url: tarballUrl } = release as Record<string, unknown>;
+    if (typeof tagName !== "string" || typeof tarballUrl !== "string") {
+        throw new Error("Rules release response is missing tag_name or tarball_url");
     }
 
-    const parsedZipballUrl = new URL(zipballUrl);
+    const releaseUrl = new URL(RULES_RELEASE_URL);
+    const repositoryPath = releaseUrl.pathname.replace(/\/releases\/latest$/, "");
+    const parsedTarballUrl = new URL(tarballUrl);
     if (
-        parsedZipballUrl.protocol !== "https:" ||
-        parsedZipballUrl.hostname !== "api.github.com" ||
-        !parsedZipballUrl.pathname.startsWith("/repos/js-recon/js-recon-rules/zipball/")
+        parsedTarballUrl.protocol !== "https:" ||
+        parsedTarballUrl.origin !== releaseUrl.origin ||
+        !parsedTarballUrl.pathname.startsWith(`${repositoryPath}/tarball/`)
     ) {
-        throw new Error("Rules release response contains an unexpected zipball URL");
+        throw new Error("Rules release response contains an unexpected tarball URL");
     }
-    return Object.freeze({ tagName, zipballUrl: parsedZipballUrl.toString() });
+    return Object.freeze({ tagName, tarballUrl: parsedTarballUrl.toString() });
 };
 
 /**
  * Downloads and extracts the latest analysis rules from the GitHub repository.
  *
- * Fetches the latest release from the js-recon-rules repository, downloads the zipball,
+ * Fetches the latest release from the js-recon-rules repository, downloads the tarball,
  * extracts it to the user's home directory, and performs cleanup operations.
  *
  * @param homeDir - The user's home directory path
@@ -50,7 +52,7 @@ const downloadRules = async (homeDir: string): Promise<void> => {
     printMsg(MSG.Header, "[i] Rules not found. Downloading from GitHub...");
     const buffer = await withActiveProxyDispatcher(async (options) => {
         const release = await fetchLatestRulesRelease(options);
-        const downloadResponse = await fetch(release.zipballUrl, options);
+        const downloadResponse = await fetch(release.tarballUrl, options);
 
         if (!downloadResponse.ok) {
             throw new Error(`Failed to download rules: ${downloadResponse.statusText}`);
@@ -58,12 +60,12 @@ const downloadRules = async (homeDir: string): Promise<void> => {
         return Buffer.from(await downloadResponse.arrayBuffer());
     });
 
-    const zipPath = path.join(homeDir, "/.js-recon/rules.zip");
-    fs.writeFileSync(zipPath, buffer);
+    const tarPath = path.join(homeDir, "/.js-recon/rules.tar.gz");
+    fs.writeFileSync(tarPath, buffer);
 
-    printMsg(MSG.Header, "[i] Unzipping rules...");
+    printMsg(MSG.Header, "[i] Extracting rules...");
     const extractPath = path.join(homeDir, "/.js-recon");
-    await extract(zipPath, { dir: extractPath });
+    await tar.x({ file: tarPath, cwd: extractPath });
 
     // Find the extracted directory
     const files = fs.readdirSync(extractPath);
@@ -77,7 +79,7 @@ const downloadRules = async (homeDir: string): Promise<void> => {
         throw new Error("Could not find extracted rules directory.");
     }
 
-    fs.unlinkSync(zipPath); // Clean up the zip file
+    fs.unlinkSync(tarPath); // Clean up the downloaded tarball
     // remove the directory .js-recon/rules/.github
     fs.rmSync(path.join(homeDir, "/.js-recon/rules/.github"), { recursive: true });
 

@@ -6,11 +6,16 @@ import * as globalsUtil from "../../utility/globals.js";
 import { getChromiumPath } from "../../utility/getChromiumPath.js";
 import path from "path";
 import { checkNextJS } from "./checkNextJS.js";
+import { isNextDevServer } from "./checkNextDevServer.js";
+import { isAngularDevServer } from "./checkAngularDevServer.js";
 import { checkNuxtJS } from "./checkNuxtJS.js";
 import { checkSvelte } from "./checkSvelte.js";
+import { isSvelteDevServer } from "./checkSvelteDevServer.js";
 import { checkVueJS } from "./checkVueJS.js";
+import { isVueDevServer } from "./checkVueDevServer.js";
 import { checkAngularJS } from "./checkAngularJS.js";
 import { checkReact } from "./checkReact.js";
+import { isReactDevServer } from "./checkReactDevServer.js";
 import { isValidInterceptedJsEvidence } from "./checkInterceptedEvidence.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
@@ -77,16 +82,23 @@ const frameworkDetect = async (
     if (!globalsUtil.getCacheOnly()) {
         const chromiumPath = getChromiumPath();
         const proxyArgs = getActivePuppeteerProxyArgs();
-        const browser = await puppeteer.launch({
-            executablePath: chromiumPath,
-            args: [
-                ...(globalsUtil.getDisableSandbox()
-                    ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-                    : []),
-                ...(proxyArgs.arg ? [proxyArgs.arg] : []),
-            ],
-            handleSIGINT: !isSigintHandlerActive(),
-        });
+        let browser;
+        try {
+            browser = await puppeteer.launch({
+                executablePath: chromiumPath,
+                args: [
+                    ...(globalsUtil.getDisableSandbox()
+                        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+                        : []),
+                    ...(proxyArgs.arg ? [proxyArgs.arg] : []),
+                ],
+                handleSIGINT: !isSigintHandlerActive(),
+            });
+        } catch (err) {
+            const message = (err as any)?.message || err;
+            log(chalk.red(`[!] Puppeteer browser launch failed: ${message}`));
+            throw new Error(`Puppeteer browser launch failed: ${message}`);
+        }
         const abortBrowser = () => {
             void browser.close().catch(() => undefined);
         };
@@ -228,7 +240,9 @@ const frameworkDetect = async (
     if (result_checkNextJS.detected === true || result_checkNextJS_res.detected === true) {
         const evidence =
             result_checkNextJS.evidence !== "" ? result_checkNextJS.evidence : result_checkNextJS_res.evidence;
-        return { name: "next", evidence };
+        const isDevServer =
+            isNextDevServer($, url, interceptedUrls) || ($res ? isNextDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "next-dev" : "next", evidence };
     } else if (result_checkVueJS.detected === true || result_checkVueJS_res.detected === true) {
         log(chalk.green("[✓] Vue.js detected"));
         log(chalk.cyan(`[i] Checking Nuxt.JS`), chalk.dim("(Nuxt.JS is built on Vue.js)"));
@@ -241,19 +255,30 @@ const frameworkDetect = async (
         }
         const evidence =
             result_checkVueJS.evidence !== "" ? result_checkVueJS.evidence : result_checkVueJS_res.evidence;
-        return { name: "vue", evidence };
+        const isDevServer =
+            isVueDevServer($, url, interceptedUrls) || ($res ? isVueDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "vue-dev" : "vue", evidence };
     } else if (result_checkSvelte.detected === true || result_checkSvelte_res.detected === true) {
         const evidence =
             result_checkSvelte.evidence !== "" ? result_checkSvelte.evidence : result_checkSvelte_res.evidence;
-        return { name: "svelte", evidence };
+        const isDevServer =
+            isSvelteDevServer($, url, interceptedUrls) ||
+            ($res ? isSvelteDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "svelte-dev" : "svelte", evidence };
     } else if (result_checkAngular.detected === true || result_checkAngularJS_res.detected === true) {
         const evidence =
             result_checkAngular.evidence !== "" ? result_checkAngular.evidence : result_checkAngularJS_res.evidence;
-        return { name: "angular", evidence };
+        const isDevServer =
+            isAngularDevServer($, url, interceptedUrls) ||
+            ($res ? isAngularDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "angular-dev" : "angular", evidence };
     } else if (result_checkReact.detected === true || result_checkReact_res.detected === true) {
         const evidence =
             result_checkReact.evidence !== "" ? result_checkReact.evidence : result_checkReact_res.evidence;
-        return { name: "react", evidence };
+        const isDevServer =
+            (await isReactDevServer($, url, interceptedUrls)) ||
+            ($res ? await isReactDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "react-dev" : "react", evidence };
     }
 
     // Fallback: check URLs intercepted by Puppeteer during page load.
@@ -268,13 +293,18 @@ const frameworkDetect = async (
         if (interceptedUrl.includes("/_nuxt/")) {
             candidateName = "nuxt";
         } else if (interceptedUrl.includes("/_next/")) {
-            candidateName = "next";
+            candidateName = isNextDevServer($, url, [interceptedUrl]) ? "next-dev" : "next";
         } else if (interceptedUrl.includes("/_app/immutable/")) {
-            candidateName = "svelte";
+            candidateName = isSvelteDevServer($, url, [interceptedUrl]) ? "svelte-dev" : "svelte";
         } else if (interceptedUrl.includes("/@react-refresh")) {
             // Vite React plugin dev-mode HMR runtime — requested by every Vite/React dev server.
-            candidateName = "react";
+            candidateName = "react-dev";
         }
+        // No /@vite/client fallback arm here: unlike /_next/ or /@react-refresh, the Vite dev
+        // client is framework-agnostic (React, Svelte, Solid, and vanilla Vite apps request it
+        // too), so it can't be used to identify Vue specifically without a Vue-detection signal
+        // to pair it with. The HTML-level isVueDevServer() check above already covers the
+        // primary case (Vue's entry script tag showing up in static HTML).
         if (candidateName === null) continue;
 
         const evidence = responseEvidence.get(interceptedUrl);

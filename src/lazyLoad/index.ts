@@ -341,6 +341,67 @@ const lazyLoad = async (
 
                     // extract the source maps
                     await extractSourceMaps(output, join(output, sourcemapDir));
+                } else if (tech.name === "vue-dev") {
+                    printMsg(MSG.Run, "[✓] Vue.js dev server detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
+
+                    // Confirmed via research spike (js-recon-internal-docs#190) that the
+                    // production Vue discovery pipeline (vue_discoverJsFiles +
+                    // vue_recursiveClientSidePathDownload), together with two small additive
+                    // fixes — dynamic import() following in vue_jsImports.ts, and accepting
+                    // JS content types for .vue downloads in downloadResponse.ts — fully
+                    // recovers a Vite dev server's source tree (SFCs, stores, route-based
+                    // lazy-loaded views). No dev-specific crawler was needed. Kept as its own
+                    // branch (rather than folded into the "vue" branch above) so vue-dev's
+                    // discovery coverage stays a separately trackable/benchmarkable identifier,
+                    // mirroring the next-dev branch's precedent.
+                    activeQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
+                    const queue = activeQueue;
+                    const onFilesDiscovered = (files: string[]) => enqueue(queue, files);
+
+                    const vueDevResearchMap: Record<string, string[]> = {};
+                    const vueDevOnTechnique = research ? createTechniqueRecorder(vueDevResearchMap) : undefined;
+
+                    const { clientSidePaths } = await vue_discoverJsFiles(
+                        url,
+                        maxJsSizeMb,
+                        onFilesDiscovered,
+                        includeMethods,
+                        excludeMethods,
+                        threads,
+                        true,
+                        true,
+                        vueDevOnTechnique,
+                        output
+                    );
+                    if (hardTimeoutReached) return;
+
+                    await vue_recursiveClientSidePathDownload(
+                        clientSidePaths,
+                        threads,
+                        maxJsSizeMb,
+                        onFilesDiscovered,
+                        includeMethods,
+                        excludeMethods,
+                        vueDevOnTechnique,
+                        output
+                    );
+                    if (hardTimeoutReached) return;
+
+                    await queue.drain();
+                    if (hardTimeoutReached) return;
+                    queue.printSummary();
+
+                    if (research) {
+                        fs.writeFileSync(researchOutput, JSON.stringify(vueDevResearchMap, null, 4));
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
+                        );
+                    }
+
+                    // extract the source maps
+                    await extractSourceMaps(output, join(output, sourcemapDir));
                 } else if (tech.name === "nuxt") {
                     printMsg(MSG.Run, "[✓] Nuxt.js detected");
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
@@ -413,8 +474,11 @@ const lazyLoad = async (
 
                     // extract the source maps
                     await extractSourceMaps(output, join(output, sourcemapDir));
-                } else if (tech.name === "svelte") {
-                    printMsg(MSG.Run, "[✓] Svelte detected");
+                } else if (tech.name === "svelte" || tech.name === "svelte-dev") {
+                    printMsg(
+                        MSG.Run,
+                        tech.name === "svelte-dev" ? "[✓] Svelte dev server detected" : "[✓] Svelte detected"
+                    );
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
@@ -559,8 +623,11 @@ const lazyLoad = async (
                     }
 
                     await extractSourceMaps(output, join(output, sourcemapDir));
-                } else if (tech.name === "angular") {
-                    printMsg(MSG.Run, "[✓] Angular detected");
+                } else if (tech.name === "angular" || tech.name === "angular-dev") {
+                    printMsg(
+                        MSG.Run,
+                        tech.name === "angular-dev" ? "[✓] Angular dev server detected" : "[✓] Angular detected"
+                    );
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
@@ -637,8 +704,11 @@ const lazyLoad = async (
 
                     // extract the source maps
                     await extractSourceMaps(output, join(output, sourcemapDir));
-                } else if (tech.name === "react") {
-                    printMsg(MSG.Run, "[✓] React detected");
+                } else if (tech.name === "react" || tech.name === "react-dev") {
+                    printMsg(
+                        MSG.Run,
+                        tech.name === "react-dev" ? "[✓] React dev server detected" : "[✓] React detected"
+                    );
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads, {
@@ -716,6 +786,49 @@ const lazyLoad = async (
 
                     if (research) {
                         fs.writeFileSync(researchOutput, JSON.stringify(reactResearchMap, null, 4));
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
+                        );
+                    }
+
+                    await extractSourceMaps(output, join(output, sourcemapDir));
+                } else if (tech.name === "next-dev") {
+                    printMsg(MSG.Run, "[✓] Next.js dev server detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
+
+                    activeQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
+                    const queue = activeQueue;
+
+                    const nextDevResearchMap: Record<string, string[]> = {};
+
+                    // Dev-mode webpack serves every initial chunk directly as a <script src>
+                    // tag rather than through a build manifest — no manifest/chunk-path
+                    // resolution needed like the production NextJsCrawler.
+                    const jsFilesFromPageSource = shouldRunMethod("react_getScriptTags", includeMethods, excludeMethods)
+                        ? await react_getScriptTags(url, maxJsSizeMb, output, isBatch)
+                        : [];
+                    if (hardTimeoutReached) return;
+                    enqueue(queue, jsFilesFromPageSource);
+                    if (research) accumulateTechnique(nextDevResearchMap, "react_getScriptTags", jsFilesFromPageSource);
+
+                    await queue.drain();
+                    if (hardTimeoutReached) return;
+                    queue.printSummary();
+                    activeQueue = null;
+
+                    if (shouldRunMethod("next_sourcemapUrls", includeMethods, excludeMethods)) {
+                        const jsUrlsForSourcemaps = queue.seenUrls.filter((u) => /\.m?js($|[?#])/.test(u));
+                        const mapUrls = await discoverSourcemapUrls(jsUrlsForSourcemaps, threads, output);
+                        if (mapUrls.length > 0) {
+                            const mapQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
+                            enqueue(mapQueue, mapUrls);
+                            await mapQueue.drain();
+                        }
+                    }
+
+                    if (research) {
+                        fs.writeFileSync(researchOutput, JSON.stringify(nextDevResearchMap, null, 4));
                         printMsg(
                             MSG.Run,
                             "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
