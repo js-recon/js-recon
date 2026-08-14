@@ -25,7 +25,7 @@ const parseJsFile = async (url: string, maxJsSizeMb: number) => {
     try {
         ast = parser.parse(reqText, {
             sourceType: "module",
-            plugins: ["importAssertions"],
+            plugins: ["importAssertions", "typescript"],
         });
     } catch {
         return foundUrls;

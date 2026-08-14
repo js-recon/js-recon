@@ -31,6 +31,7 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from "fs
 import { tmpdir } from "os";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { normalize, normalizeSet } from "./dev-server-benchmark-utils.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const jsReconEntry = join(__dirname, "..", "build", "index.js");
@@ -74,95 +75,89 @@ function readTargets() {
         .filter((l) => l && !l.startsWith("#"));
 }
 
-function normalize(rawUrl) {
-    try {
-        const u = new URL(rawUrl.trim());
-        const collapsedPath = u.pathname.replace(/\/{2,}/g, "/");
-        return `${u.origin}${collapsedPath}`;
-    } catch {
-        return null;
-    }
-}
-
-function normalizeSet(urls) {
-    const out = new Set();
-    for (const raw of urls) {
-        const n = normalize(raw);
-        if (n) out.add(n);
-    }
-    return out;
-}
-
 function runKatana(target) {
     const outFile = join(tmpdir(), `jsr-katana-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
-    const katanaArgs = [
-        "-u",
-        target,
-        "-hl",
-        "-jsl",
-        "-jc",
-        "-fs",
-        "fqdn",
-        "-d",
-        "3",
-        "-mdp",
-        "300",
-        "-ct",
-        "5m",
-        "-silent",
-        "-o",
-        outFile,
-    ];
-    if (opts.insecure) katanaArgs.push("-tlsi");
-    const result = spawnSync("katana", katanaArgs, { encoding: "utf8", maxBuffer: 50 * 1024 * 1024 });
-    if (result.error) throw new Error(`katana failed to run: ${result.error.message}`);
-    if (!existsSync(outFile)) return [];
-    const lines = readFileSync(outFile, "utf8")
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-    rmSync(outFile, { force: true });
-    return lines.filter((l) => JS_FILE_RE.test(l));
+    try {
+        const katanaArgs = [
+            "-u",
+            target,
+            "-hl",
+            "-jsl",
+            "-jc",
+            "-fs",
+            "fqdn",
+            "-d",
+            "3",
+            "-mdp",
+            "300",
+            "-ct",
+            "5m",
+            "-silent",
+            "-o",
+            outFile,
+        ];
+        if (opts.insecure) katanaArgs.push("-tlsi");
+        const result = spawnSync("katana", katanaArgs, { encoding: "utf8", maxBuffer: 50 * 1024 * 1024 });
+        if (result.error) throw new Error(`katana failed to run: ${result.error.message}`);
+        if (result.status !== 0) {
+            throw new Error(`katana exited with status ${result.status}: ${(result.stderr || "").trim()}`);
+        }
+        if (!existsSync(outFile)) return [];
+        const lines = readFileSync(outFile, "utf8")
+            .split("\n")
+            .map((l) => l.trim())
+            .filter(Boolean);
+        return lines.filter((l) => JS_FILE_RE.test(l));
+    } finally {
+        rmSync(outFile, { force: true });
+    }
 }
 
 function runJsRecon(target) {
     const outputDir = mkdtempSync(join(tmpdir(), "jsr-devbench-"));
-    const researchOutput = join(outputDir, "research.json");
-    const jsReconArgs = [
-        jsReconEntry,
-        "lazyload",
-        "-u",
-        target,
-        "-y",
-        "--no-sandbox",
-        "-t",
-        opts.threads,
-        "--research",
-        "--research-output",
-        researchOutput,
-        "-o",
-        outputDir,
-        // Isolate the response cache per run — without this, successive benchmark runs
-        // against the same host:port (e.g. piloting Vite then webpack, both on
-        // localhost:3000) share the CWD-default .resp_cache.db and the second run silently
-        // serves the first run's cached HTML/responses instead of the new server's.
-        "--cache-file",
-        join(outputDir, ".resp_cache.db"),
-    ];
-    if (opts.insecure) jsReconArgs.push("-k");
-    const result = spawnSync("node", jsReconArgs, { encoding: "utf8", maxBuffer: 50 * 1024 * 1024 });
-    if (result.error) throw new Error(`js-recon lazyload failed to run: ${result.error.message}`);
+    try {
+        const researchOutput = join(outputDir, "research.json");
+        const jsReconArgs = [
+            jsReconEntry,
+            "lazyload",
+            "-u",
+            target,
+            "-y",
+            "--no-sandbox",
+            "-t",
+            opts.threads,
+            "--research",
+            "--research-output",
+            researchOutput,
+            "-o",
+            outputDir,
+            // Isolate the response cache per run — without this, successive benchmark runs
+            // against the same host:port (e.g. piloting Vite then webpack, both on
+            // localhost:3000) share the CWD-default .resp_cache.db and the second run silently
+            // serves the first run's cached HTML/responses instead of the new server's.
+            "--cache-file",
+            join(outputDir, ".resp_cache.db"),
+        ];
+        if (opts.insecure) jsReconArgs.push("-k");
+        const result = spawnSync("node", jsReconArgs, { encoding: "utf8", maxBuffer: 50 * 1024 * 1024 });
+        if (result.error) throw new Error(`js-recon lazyload failed to run: ${result.error.message}`);
+        if (result.status !== 0) {
+            throw new Error(`js-recon lazyload exited with status ${result.status}: ${(result.stderr || "").trim()}`);
+        }
 
-    let urls = [];
-    if (existsSync(researchOutput)) {
-        const research = JSON.parse(readFileSync(researchOutput, "utf8"));
-        urls = Object.values(research).flat();
+        let urls = [];
+        if (existsSync(researchOutput)) {
+            const research = JSON.parse(readFileSync(researchOutput, "utf8"));
+            urls = Object.values(research).flat();
+        }
+        return { urls, outputDir: opts.keepOutputDirs ? outputDir : null };
+    } finally {
+        if (!opts.keepOutputDirs) rmSync(outputDir, { recursive: true, force: true });
     }
-    if (!opts.keepOutputDirs) rmSync(outputDir, { recursive: true, force: true });
-    return { urls, outputDir: opts.keepOutputDirs ? outputDir : null };
 }
 
 const report = { generatedAt: null, targets: [] };
+const failedTargets = [];
 
 for (const target of readTargets()) {
     console.log(`\n[i] Benchmarking ${target}`);
@@ -171,12 +166,14 @@ for (const target of readTargets()) {
         katanaUrls = runKatana(target);
     } catch (err) {
         console.error(`[!] katana failed for ${target}: ${err.message}`);
+        failedTargets.push(target);
         continue;
     }
     try {
         jsReconResult = runJsRecon(target);
     } catch (err) {
         console.error(`[!] js-recon lazyload failed for ${target}: ${err.message}`);
+        failedTargets.push(target);
         continue;
     }
 
@@ -214,9 +211,15 @@ if (opts.output) {
     console.log(`\n[✓] Full report written to ${opts.output}`);
 }
 
+if (failedTargets.length > 0) {
+    console.error(`\n[!] ${failedTargets.length} target(s) failed to run: ${failedTargets.join(", ")}`);
+}
+
 const totalMissed = report.targets.reduce((sum, t) => sum + t.missedByJsRecon.length, 0);
 if (totalMissed > 0) {
     console.error(`\n[!] ${totalMissed} URL(s) missed by js-recon across ${report.targets.length} target(s).`);
+}
+if (totalMissed > 0 || failedTargets.length > 0) {
     process.exit(1);
 }
 console.log(`\n[✓] No discovery gaps found across ${report.targets.length} target(s).`);

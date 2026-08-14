@@ -381,7 +381,7 @@ npm run cleanup && npm run start -- run -u <target-url> -y -k
 
 ## Release process
 
-Releasing a new version touches three repos. Work on `dev` (js-recon, js-recon-rules) and `stage` (js-recon-docs). Do **not** touch `js-recon-research` — it is private and excluded from releases.
+Releasing a new version touches three repos directly during the npm/GitHub release and docs phases: work on `dev` (js-recon, js-recon-rules) and `stage` (js-recon-docs). `js-recon/homebrew-tap` is a fourth, separate post-release repo updated automatically by `promote-js-recon.yml` (see "Homebrew tap" below) — it's not part of the three-repo release flow above. Do **not** touch `js-recon-research` — it is private and excluded from releases.
 
 **Ordering is critical**: release js-recon first (including the GitHub release so CI publishes it to npm), then snapshot and PR js-recon-docs. This ensures the docs `version_check` CI step passes instead of failing due to a missing npm package.
 

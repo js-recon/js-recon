@@ -87,10 +87,14 @@ const matchesWebpackDevMarkers = async ($: CheerioAPI, baseUrl: string): Promise
             continue;
         }
 
-        const res = await makeRequest(resolvedUrl, {});
-        if (!res) continue;
-        const body = await res.text();
-        if (WEBPACK_DEV_MARKERS.some((marker) => body.includes(marker))) return true;
+        try {
+            const res = await makeRequest(resolvedUrl, {});
+            if (!res) continue;
+            const body = await res.text();
+            if (WEBPACK_DEV_MARKERS.some((marker) => body.includes(marker))) return true;
+        } catch {
+            continue;
+        }
     }
 
     return false;

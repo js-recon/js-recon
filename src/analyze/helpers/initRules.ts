@@ -26,11 +26,13 @@ const fetchLatestRulesRelease = async (options: FetchOptsWithDispatcher): Promis
         throw new Error("Rules release response is missing tag_name or tarball_url");
     }
 
+    const releaseUrl = new URL(RULES_RELEASE_URL);
+    const repositoryPath = releaseUrl.pathname.replace(/\/releases\/latest$/, "");
     const parsedTarballUrl = new URL(tarballUrl);
     if (
         parsedTarballUrl.protocol !== "https:" ||
-        parsedTarballUrl.hostname !== "api.github.com" ||
-        !parsedTarballUrl.pathname.startsWith("/repos/js-recon/js-recon-rules/tarball/")
+        parsedTarballUrl.origin !== releaseUrl.origin ||
+        !parsedTarballUrl.pathname.startsWith(`${repositoryPath}/tarball/`)
     ) {
         throw new Error("Rules release response contains an unexpected tarball URL");
     }

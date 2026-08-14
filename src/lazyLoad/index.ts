@@ -623,8 +623,11 @@ const lazyLoad = async (
                     }
 
                     await extractSourceMaps(output, join(output, sourcemapDir));
-                } else if (tech.name === "angular") {
-                    printMsg(MSG.Run, "[✓] Angular detected");
+                } else if (tech.name === "angular" || tech.name === "angular-dev") {
+                    printMsg(
+                        MSG.Run,
+                        tech.name === "angular-dev" ? "[✓] Angular dev server detected" : "[✓] Angular detected"
+                    );
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
@@ -813,6 +816,16 @@ const lazyLoad = async (
                     if (hardTimeoutReached) return;
                     queue.printSummary();
                     activeQueue = null;
+
+                    if (shouldRunMethod("next_sourcemapUrls", includeMethods, excludeMethods)) {
+                        const jsUrlsForSourcemaps = queue.seenUrls.filter((u) => /\.m?js($|[?#])/.test(u));
+                        const mapUrls = await discoverSourcemapUrls(jsUrlsForSourcemaps, threads, output);
+                        if (mapUrls.length > 0) {
+                            const mapQueue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
+                            enqueue(mapQueue, mapUrls);
+                            await mapQueue.drain();
+                        }
+                    }
 
                     if (research) {
                         fs.writeFileSync(researchOutput, JSON.stringify(nextDevResearchMap, null, 4));

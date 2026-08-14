@@ -312,6 +312,11 @@ export class DownloadQueue {
                 } else if (assetKind === "vue") {
                     formatted =
                         file.length <= PRETTIER_SIZE_LIMIT ? await prettier.format(file, { parser: "vue" }) : file;
+                } else if (assetKind === "typescript") {
+                    formatted =
+                        file.length <= PRETTIER_SIZE_LIMIT
+                            ? await prettier.format(file, { parser: "typescript" })
+                            : file;
                 } else {
                     formatted =
                         file.length <= PRETTIER_SIZE_LIMIT ? await prettier.format(file, { parser: "babel" }) : file;

@@ -1,8 +1,9 @@
 export type DownloadResponseFailure = "download" | "invalidResponse";
-export type DownloadedAssetKind = "javascript" | "json" | "vue";
+export type DownloadedAssetKind = "javascript" | "json" | "vue" | "typescript";
 
 export type DownloadResponseResult =
-    Readonly<{ ok: true; body: string }> | Readonly<{ ok: false; failure: DownloadResponseFailure; reason: string }>;
+    | Readonly<{ ok: true; body: string }>
+    | Readonly<{ ok: false; failure: DownloadResponseFailure; reason: string }>;
 
 const JAVASCRIPT_CONTENT_TYPES = new Set([
     "application/ecmascript",
@@ -38,6 +39,7 @@ export const getDownloadedAssetKind = (url: string): DownloadedAssetKind => {
     const pathname = downloadPathname(url);
     if (/(?:\.json|\.m?js\.map)$/.test(pathname)) return "json";
     if (pathname.endsWith(".vue")) return "vue";
+    if (/\.tsx?$/.test(pathname)) return "typescript";
     return "javascript";
 };
 
