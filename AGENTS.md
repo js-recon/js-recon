@@ -26,7 +26,7 @@ agent has a scoped tool set and a right-sized model/effort. Full reference (rost
 
 **MANDATORY enforcement — these are not optional:**
 
-- **Before *any* `git commit`** in every repo *except* `js-recon-internal-docs`, run
+- **Before _any_ `git commit`** in every repo _except_ `js-recon-internal-docs`, run
   **`confidential-info-guard`** on the staged diff. Do not commit if it reports issues.
 - **After any substantial code change**, run **`test-runner-advisor`** (it runs `npm test` and routes
   failures — code fixes come back to you; stale tests go to `test-writer`). This is in addition to the
@@ -58,19 +58,19 @@ npm run start -- <subcommand> [options]
 
 ## Subcommands
 
-| Command       | Purpose                                                                            |
-| ------------- | ---------------------------------------------------------------------------------- |
-| `lazyload`    | Download JS chunks from a target URL                                               |
-| `strings`     | Extract strings/paths/secrets from JS files                                        |
-| `map`         | Parse webpack/turbopack bundles into a structured `mapped.json`                    |
-| `endpoints`   | Extract client-side routes                                                         |
-| `analyze`     | Run YAML rules against `mapped.json` / OpenAPI spec                                |
-| `report`      | Generate HTML/SQLite report                                                        |
-| `run`         | Run all of the above in sequence (primary interface)                               |
-| `proxy`       | Configure/manage outbound proxying (AWS API Gateway IP rotation, SOCKS/HTTP, Oxylabs) |
-| `mcp`         | AI-powered CLI / one-shot chat (`-c`) / Model Context Protocol server (`--server`) |
-| `cs-mast`     | Compute CS-MAST structural hashes for downloaded JS files; find hash collisions    |
-| `sourcemaps`  | Extract source files from `.map` sourcemap file(s)                                 |
+| Command      | Purpose                                                                               |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `lazyload`   | Download JS chunks from a target URL                                                  |
+| `strings`    | Extract strings/paths/secrets from JS files                                           |
+| `map`        | Parse webpack/turbopack bundles into a structured `mapped.json`                       |
+| `endpoints`  | Extract client-side routes                                                            |
+| `analyze`    | Run YAML rules against `mapped.json` / OpenAPI spec                                   |
+| `report`     | Generate HTML/SQLite report                                                           |
+| `run`        | Run all of the above in sequence (primary interface)                                  |
+| `proxy`      | Configure/manage outbound proxying (AWS API Gateway IP rotation, SOCKS/HTTP, Oxylabs) |
+| `mcp`        | AI-powered CLI / one-shot chat (`-c`) / Model Context Protocol server (`--server`)    |
+| `cs-mast`    | Compute CS-MAST structural hashes for downloaded JS files; find hash collisions       |
+| `sourcemaps` | Extract source files from `.map` sourcemap file(s)                                    |
 
 ## Key source files
 
