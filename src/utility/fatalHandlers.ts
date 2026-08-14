@@ -8,13 +8,24 @@ import chalk from "chalk";
  * SES's and is what actually turns an orphaned rejection into a real non-zero exit instead of a
  * silent exit 0.
  */
-export const registerFatalHandlers = (): void => {
-    process.on("unhandledRejection", (reason) => {
-        console.error(chalk.red(`[!] Unhandled promise rejection: ${reason}`));
+export const registerFatalHandlers = (): (() => void) => {
+    // Passed as a separate console.error argument rather than interpolated into the template
+    // literal — reason/error can be a Symbol, and Symbol-to-string coercion throws, which would
+    // crash this handler itself before process.exit(34) runs.
+    const onUnhandledRejection = (reason: unknown) => {
+        console.error(chalk.red("[!] Unhandled promise rejection:"), reason);
         process.exit(34);
-    });
-    process.on("uncaughtException", (error) => {
-        console.error(chalk.red(`[!] Uncaught exception: ${error}`));
+    };
+    const onUncaughtException = (error: unknown) => {
+        console.error(chalk.red("[!] Uncaught exception:"), error);
         process.exit(34);
-    });
+    };
+
+    process.on("unhandledRejection", onUnhandledRejection);
+    process.on("uncaughtException", onUncaughtException);
+
+    return () => {
+        process.off("unhandledRejection", onUnhandledRejection);
+        process.off("uncaughtException", onUncaughtException);
+    };
 };
