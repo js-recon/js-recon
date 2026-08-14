@@ -55,7 +55,11 @@ export const isVueDevServer = ($: CheerioAPI, baseUrl: string, interceptedUrls: 
         if (found) return;
         const src = $(el).attr("src") ?? $(el).attr("href");
         if (!src) return;
-        if (isViteClientPath(src, baseUrl) || isSockjsNodePath(src, baseUrl) || isUnhashedWebpackEntryPath(src, baseUrl)) {
+        if (
+            isViteClientPath(src, baseUrl) ||
+            isSockjsNodePath(src, baseUrl) ||
+            isUnhashedWebpackEntryPath(src, baseUrl)
+        ) {
             found = true;
         }
     });

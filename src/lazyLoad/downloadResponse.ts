@@ -59,7 +59,11 @@ const hasCompatibleContentType = (url: string, rawContentType: string | null): b
         // ES module and serves it as text/javascript rather than raw SFC source, so JS
         // content types must be accepted here too — otherwise every .vue request against a
         // Vite dev server is rejected outright.
-        return VUE_CONTENT_TYPES.has(contentType) || contentType === "text/html" || JAVASCRIPT_CONTENT_TYPES.has(contentType);
+        return (
+            VUE_CONTENT_TYPES.has(contentType) ||
+            contentType === "text/html" ||
+            JAVASCRIPT_CONTENT_TYPES.has(contentType)
+        );
     }
     return JAVASCRIPT_CONTENT_TYPES.has(contentType);
 };
