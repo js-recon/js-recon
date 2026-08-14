@@ -3,6 +3,7 @@ import {
     extractObjectMapChunkEntries,
     extractIfChainChunkFilenames,
     extractExpressionBodyChunkFilenames,
+    extractStringKeyedChunkMap,
     extractWebpackChunkUrls,
 } from "../../../lazyLoad/shared/webpackChunkParsers.js";
 import { deduplicateWebpackChunkPaths } from "../../../lazyLoad/react/react_webpackChunkPaths.js";
@@ -139,6 +140,42 @@ describe("extractExpressionBodyChunkFilenames", () => {
 
     it("returns [] for invalid JS", () => {
         expect(extractExpressionBodyChunkFilenames("{{{{ not valid %%%%")).toEqual([]);
+    });
+});
+
+describe("extractStringKeyedChunkMap", () => {
+    it("resolves a string-keyed (named chunk ids) object map into full chunk paths", () => {
+        const code = `
+            __webpack_require__.u = (chunkId) => {
+                return "assets/" + chunkId + "." + {"vendor-react-dom":"116e84cbac9585426ed6","vendor-react":"52cf2773578b4a70417c","src_pages_Home_jsx":"9f24f491f39f5f30aee5"}[chunkId] + ".js";
+            }
+        `;
+        const urls = extractStringKeyedChunkMap(code, "http://localhost:3000/assets/main.abc123.js");
+        expect(urls).toContain("http://localhost:3000/assets/src_pages_Home_jsx.9f24f491f39f5f30aee5.js");
+        expect(urls).toContain("http://localhost:3000/assets/vendor-react-dom.116e84cbac9585426ed6.js");
+        expect(urls).toContain("http://localhost:3000/assets/vendor-react.52cf2773578b4a70417c.js");
+    });
+
+    it("skips numeric-keyed maps (extractObjectMapChunkEntries's territory)", () => {
+        const code = `
+            r.u = (e) => "assets/" + e + "." + {"123":"a","456":"b","789":"c"}[e] + ".js";
+        `;
+        expect(extractStringKeyedChunkMap(code, "http://localhost:3000/assets/entry.js")).toEqual([]);
+    });
+
+    it("skips a map with fewer than 3 string-keyed entries", () => {
+        const code = `
+            r.u = (e) => "assets/" + e + "." + {"only-one":"a","only-two":"b"}[e] + ".js";
+        `;
+        expect(extractStringKeyedChunkMap(code, "http://localhost:3000/assets/entry.js")).toEqual([]);
+    });
+
+    it("returns [] for content with no matching pattern", () => {
+        expect(extractStringKeyedChunkMap("const x = 1;", "http://localhost:3000/entry.js")).toEqual([]);
+    });
+
+    it("returns [] for invalid JS", () => {
+        expect(extractStringKeyedChunkMap("{{{{ not valid %%%%", "http://localhost:3000/entry.js")).toEqual([]);
     });
 });
 

@@ -24,3 +24,44 @@ describe("react_followImports compact output", () => {
         expect(warning).not.toContain("one.js");
     });
 });
+
+describe("react_followImports — Vite dev-server import specifiers (js-recon-internal-docs#191)", () => {
+    it("follows a .jsx import specifier, not just bare .js/.mjs", async () => {
+        makeRequest.mockImplementation(async (url: string) => ({
+            status: 200,
+            headers: { get: () => null },
+            text: async () =>
+                url.endsWith("/src/main.jsx") ? `import App from "/src/App.jsx";` : "export default function App() {}",
+        }));
+
+        const discovered = await reactFollowImports(
+            ["http://localhost:3000/src/main.jsx"],
+            20,
+            "http://localhost:3000",
+            new Set(),
+            1,
+            true
+        );
+
+        expect(discovered).toContain("http://localhost:3000/src/App.jsx");
+    });
+
+    it("follows an import specifier with a cache-busting query string", async () => {
+        makeRequest.mockImplementation(async () => ({
+            status: 200,
+            headers: { get: () => null },
+            text: async () => `import __r from "/node_modules/.vite/deps/react.js?v=0f5f446c";`,
+        }));
+
+        const discovered = await reactFollowImports(
+            ["http://localhost:3000/src/main.jsx"],
+            20,
+            "http://localhost:3000",
+            new Set(),
+            1,
+            true
+        );
+
+        expect(discovered).toContain("http://localhost:3000/node_modules/.vite/deps/react.js?v=0f5f446c");
+    });
+});

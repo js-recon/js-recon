@@ -6,7 +6,12 @@ export { toOutputHost } from "../utility/urlUtils.js";
 
 const MAX_DIRECTORY_SEGMENT_LENGTH = 120;
 const MAX_FILENAME_LENGTH = 180;
-const ASSET_EXTENSION = /(\.mjs\.map|\.js\.map|\.mjs|\.json|\.js|\.vue)$/i;
+// .jsx/.tsx/.ts exist for react-dev (js-recon-internal-docs#191): Vite's dev server serves
+// unbundled ESM-over-HTTP where component modules keep their real source extension instead of
+// being compiled down to a bare .js filename the way a production build's output is — without
+// these, a genuinely discovered .jsx URL (already past downloadQueue's own extension pre-filter)
+// silently fails to get a filename here and is dropped as "ignored".
+const ASSET_EXTENSION = /(\.mjs\.map|\.js\.map|\.mjs|\.json|\.jsx|\.tsx|\.ts|\.js|\.vue)$/i;
 const ENCODED_SEGMENT_PREFIX = "__jsr_";
 
 const decodePathSegment = (segment: string): string => {

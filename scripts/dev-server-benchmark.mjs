@@ -142,6 +142,12 @@ function runJsRecon(target) {
         researchOutput,
         "-o",
         outputDir,
+        // Isolate the response cache per run — without this, successive benchmark runs
+        // against the same host:port (e.g. piloting Vite then webpack, both on
+        // localhost:3000) share the CWD-default .resp_cache.db and the second run silently
+        // serves the first run's cached HTML/responses instead of the new server's.
+        "--cache-file",
+        join(outputDir, ".resp_cache.db"),
     ];
     if (opts.insecure) jsReconArgs.push("-k");
     const result = spawnSync("node", jsReconArgs, { encoding: "utf8", maxBuffer: 50 * 1024 * 1024 });

@@ -125,4 +125,13 @@ describe("resolveAssetOutputDirectory", () => {
             getSanitizedAssetFilename("https://example.test/asset.js")
         );
     });
+
+    it("recognizes .jsx/.tsx/.ts extensions (react-dev, js-recon-internal-docs#191)", () => {
+        // Vite's dev server serves component modules under their real source extension
+        // instead of a compiled bare .js filename — without these, a genuinely
+        // discovered .jsx/.tsx/.ts URL silently gets no filename here and is dropped.
+        expect(getSanitizedAssetFilename("https://example.test/src/App.jsx")).toBe("App.jsx");
+        expect(getSanitizedAssetFilename("https://example.test/src/App.tsx")).toBe("App.tsx");
+        expect(getSanitizedAssetFilename("https://example.test/src/utils.ts")).toBe("utils.ts");
+    });
 });

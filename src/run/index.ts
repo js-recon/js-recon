@@ -183,7 +183,11 @@ const processUrl = async (
         process.exit(10);
     }
 
-    if (!["next", "next-dev", "vue", "vue-dev", "nuxt", "react", "svelte", "angular"].includes(globalsUtil.getTech())) {
+    if (
+        !["next", "next-dev", "vue", "vue-dev", "nuxt", "react", "react-dev", "svelte", "angular"].includes(
+            globalsUtil.getTech()
+        )
+    ) {
         printMsg(
             MSG.Warn,
             `[!] The tool supports Next.JS, Vue.JS, Nuxt.JS, React, Svelte/Astro, and Angular in the run module. For ${globalsUtil.getTech()}, only downloading JS files is supported`
@@ -203,9 +207,15 @@ const processUrl = async (
     // next-dev's / vue-dev's discovery coverage isn't silently conflated with the
     // already-benchmarked prod pipelines.
     const mapAnalyzeTech =
-        detectedTech === "next-dev" ? "next" : detectedTech === "vue-dev" ? "vue" : detectedTech;
+        detectedTech === "next-dev"
+            ? "next"
+            : detectedTech === "vue-dev"
+              ? "vue"
+              : detectedTech === "react-dev"
+                ? "react"
+                : detectedTech;
 
-    if (detectedTech === "react") {
+    if (detectedTech === "react" || detectedTech === "react-dev") {
         const mappedFileReact = isBatch ? `${workingDir}/mapped` : "mapped";
         const mappedJsonFileReact = isBatch ? `${workingDir}/mapped.json` : "mapped.json";
         const openapiFile = isBatch ? `${workingDir}/mapped-openapi.json` : "mapped-openapi.json";
@@ -225,7 +235,7 @@ const processUrl = async (
         }
         resetSkipStep();
         await Promise.race([
-            map(outputDir, mappedFileReact, ["json"], "react", false, false, cmd.command || []),
+            map(outputDir, mappedFileReact, ["json"], mapAnalyzeTech, false, false, cmd.command || []),
             getSkipStepPromise(),
         ]);
         printMsg(MSG.Run, "[+] Map complete.");
@@ -237,7 +247,7 @@ const processUrl = async (
             analyze(
                 cmd.rules || "",
                 mappedJsonFileReact,
-                "react",
+                mapAnalyzeTech as "next" | "vue" | "react" | "svelte" | "angular",
                 false,
                 openapiFile,
                 false,
@@ -278,7 +288,7 @@ const processUrl = async (
             printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
             const detectedBundlerTechReact = await detectBundler(
                 mappedJsonFileReact,
-                "react",
+                mapAnalyzeTech,
                 Number(cmd.csMastTechDetectThreshold ?? 50)
             );
             if (detectedBundlerTechReact) {

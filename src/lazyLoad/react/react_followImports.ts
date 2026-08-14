@@ -8,19 +8,30 @@ import { progressWarn } from "../../utility/progressLog.js";
  *  - Static ESM imports:  import ... from "./chunk.js"  /  import "./chunk.js"
  *  - Dynamic imports:     import("./chunk.js")
  *  - Vite __vite_mapDeps: the flat asset array in the initialiser
+ *
+ * The extension alternation and optional trailing `?...` query string exist for `react-dev`
+ * (js-recon-internal-docs#191): a production build's import specifiers are always bare `.js`/
+ * `.mjs` with no query string, but Vite's dev server serves unbundled ESM-over-HTTP where
+ * component imports keep their real `.jsx`/`.tsx`/`.ts` source extension (`import App from
+ * "/src/App.jsx"`) and vendor deps carry a cache-busting `?v=<hash>` suffix (`"/node_modules/
+ * .vite/deps/react.js?v=0f5f446c"`) — both silently unmatched by the original `\.m?js["'`]`
+ * pattern, which requires the extension to be immediately followed by the closing quote.
  */
 const extractImports = (content: string, fileUrl: string, baseUrl: string): string[] => {
     const found: string[] = [];
+    const EXT_WITH_OPTIONAL_QUERY = /\.(?:mjs|jsx?|tsx?)(?:\?[^"'`]*)?/.source;
 
     // Static imports: from "..." / from '...' / from `...`
-    for (const m of content.matchAll(/\bfrom\s*["'`]([^"'`]+\.m?js)["'`]/g)) {
+    for (const m of content.matchAll(new RegExp(`\\bfrom\\s*["'\`]([^"'\`]+${EXT_WITH_OPTIONAL_QUERY})["'\`]`, "g"))) {
         try {
             found.push(new URL(m[1], fileUrl).href);
         } catch {
             /* skip */
         }
     }
-    for (const m of content.matchAll(/\bimport\s*["'`]([^"'`]+\.m?js)["'`]/g)) {
+    for (const m of content.matchAll(
+        new RegExp(`\\bimport\\s*["'\`]([^"'\`]+${EXT_WITH_OPTIONAL_QUERY})["'\`]`, "g")
+    )) {
         try {
             found.push(new URL(m[1], fileUrl).href);
         } catch {
@@ -29,7 +40,9 @@ const extractImports = (content: string, fileUrl: string, baseUrl: string): stri
     }
 
     // Dynamic imports: import("...") / import('...') / import(`...`)
-    for (const m of content.matchAll(/\bimport\s*\(\s*["'`]([^"'`]+\.m?js)["'`]\s*\)/g)) {
+    for (const m of content.matchAll(
+        new RegExp(`\\bimport\\s*\\(\\s*["'\`]([^"'\`]+${EXT_WITH_OPTIONAL_QUERY})["'\`]\\s*\\)`, "g")
+    )) {
         try {
             found.push(new URL(m[1], fileUrl).href);
         } catch {

@@ -13,6 +13,7 @@ import { checkVueJS } from "./checkVueJS.js";
 import { isVueDevServer } from "./checkVueDevServer.js";
 import { checkAngularJS } from "./checkAngularJS.js";
 import { checkReact } from "./checkReact.js";
+import { isReactDevServer } from "./checkReactDevServer.js";
 import { isValidInterceptedJsEvidence } from "./checkInterceptedEvidence.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
@@ -266,7 +267,10 @@ const frameworkDetect = async (
     } else if (result_checkReact.detected === true || result_checkReact_res.detected === true) {
         const evidence =
             result_checkReact.evidence !== "" ? result_checkReact.evidence : result_checkReact_res.evidence;
-        return { name: "react", evidence };
+        const isDevServer =
+            (await isReactDevServer($, url, interceptedUrls)) ||
+            ($res ? await isReactDevServer($res, url, interceptedUrls) : false);
+        return { name: isDevServer ? "react-dev" : "react", evidence };
     }
 
     // Fallback: check URLs intercepted by Puppeteer during page load.
@@ -286,7 +290,7 @@ const frameworkDetect = async (
             candidateName = "svelte";
         } else if (interceptedUrl.includes("/@react-refresh")) {
             // Vite React plugin dev-mode HMR runtime — requested by every Vite/React dev server.
-            candidateName = "react";
+            candidateName = "react-dev";
         }
         // No /@vite/client fallback arm here: unlike /_next/ or /@react-refresh, the Vite dev
         // client is framework-agnostic (React, Svelte, Solid, and vanilla Vite apps request it

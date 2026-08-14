@@ -698,8 +698,8 @@ const lazyLoad = async (
 
                     // extract the source maps
                     await extractSourceMaps(output, join(output, sourcemapDir));
-                } else if (tech.name === "react") {
-                    printMsg(MSG.Run, "[✓] React detected");
+                } else if (tech.name === "react" || tech.name === "react-dev") {
+                    printMsg(MSG.Run, tech.name === "react-dev" ? "[✓] React dev server detected" : "[✓] React detected");
                     printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
 
                     const queue = new DownloadQueue(output, threads, {
