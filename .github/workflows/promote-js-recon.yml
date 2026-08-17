@@ -45,7 +45,7 @@ jobs:
           VERSION: ${{ inputs.version }}
 
       - name: Check out homebrew-tap
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: js-recon/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_GH_PAT }}
@@ -85,9 +85,9 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Checkout js-recon-rules
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: js-recon/js-recon-rules
           path: js-recon-rules
@@ -142,7 +142,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout js-recon-labs
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: js-recon/js-recon-labs
           path: js-recon-labs
@@ -195,7 +195,7 @@ jobs:
       packages: read
     steps:
       - name: Checkout js-recon-labs
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: js-recon/js-recon-labs
           path: js-recon-labs
@@ -260,10 +260,10 @@ jobs:
       packages: read
     steps:
       - name: Checkout js-recon
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Checkout js-recon-labs
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: js-recon/js-recon-labs
           path: js-recon-labs
@@ -329,14 +329,14 @@ jobs:
         formula: [js-recon, js-recon-alpha, js-recon-beta]
     steps:
       - name: Checkout js-recon-labs
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: js-recon/js-recon-labs
           path: js-recon-labs
           persist-credentials: false
 
       - name: Checkout js-recon-rules
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: js-recon/js-recon-rules
           path: js-recon-rules
