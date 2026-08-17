@@ -423,7 +423,16 @@ export let targetUrl = "";
  * @param value - Target URL
  */
 export const setTargetUrl = (value: string): void => {
-    targetUrl = value;
+    try {
+        const parsed = new URL(value);
+        parsed.username = "";
+        parsed.password = "";
+        parsed.search = "";
+        parsed.hash = "";
+        targetUrl = parsed.toString();
+    } catch {
+        targetUrl = value;
+    }
 };
 
 /**

@@ -291,8 +291,8 @@ export const transformModule = (mod: ModuleEntry): t.Statement[] => {
                 if (bindArgs.length !== 2) return;
                 if (!t.isIdentifier(bindArgs[0], { name: requireParam })) return;
                 if (!t.isNumericLiteral(bindArgs[1]) || (bindArgs[1] as t.NumericLiteral).value !== numId) return;
-                // Replace with import('./N.js') — a dynamic import expression
-                callPath.replaceWith(t.callExpression(t.import(), [t.stringLiteral(`./${numId}.js`)]));
+                // Replace with import('./N.js') — an ImportExpression node (Babel 8 shape)
+                callPath.replaceWith(t.importExpression(t.stringLiteral(`./${numId}.js`)));
                 callPath.skip();
             },
         });

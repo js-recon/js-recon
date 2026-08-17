@@ -27,8 +27,6 @@
  */
 import type { CheerioAPI } from "cheerio";
 
-const UNHASHED_NUXT2_ENTRY_NAMES = new Set(["app.js"]);
-
 const pathnameOf = (raw: string, baseUrl: string): string | undefined => {
     try {
         return new URL(raw, baseUrl).pathname;
@@ -42,14 +40,13 @@ const isNuxtViteClientPath = (raw: string, baseUrl: string): boolean =>
 
 const isWebpackHmrPath = (raw: string, baseUrl: string): boolean => {
     const pathname = pathnameOf(raw, baseUrl);
-    return pathname !== undefined && pathname.includes("/__webpack_hmr");
+    return pathname !== undefined && /(?:^|\/)__webpack_hmr(?:\/|$)/.test(pathname);
 };
 
 const isUnhashedNuxt2EntryPath = (raw: string, baseUrl: string): boolean => {
     const pathname = pathnameOf(raw, baseUrl);
     if (pathname === undefined) return false;
-    const basename = pathname.split("/").pop() ?? "";
-    return UNHASHED_NUXT2_ENTRY_NAMES.has(basename);
+    return pathname.endsWith("/_nuxt/app.js");
 };
 
 export const isNuxtDevServer = ($: CheerioAPI, baseUrl: string, interceptedUrls: string[] = []): boolean => {

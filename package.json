@@ -26,6 +26,7 @@
     "dependencies": {
         "@anthropic-ai/sdk": "^0.117.1",
         "@aws-sdk/client-api-gateway": "^3.958.0",
+        "@babel/generator": "^8.0.0",
         "@babel/parser": "^8.0.4",
         "@babel/traverse": "^8.0.4",
         "@babel/types": "^8.0.4",

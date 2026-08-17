@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { addOpenapiOutput, getOpenapiOutput, clearOpenapiOutput } from "../../utility/globals.js";
+import {
+    addOpenapiOutput,
+    getOpenapiOutput,
+    clearOpenapiOutput,
+    setTargetUrl,
+    getTargetUrl,
+} from "../../utility/globals.js";
 import type { OpenapiOutputItem } from "../../utility/globals.js";
 
 const makeItem = (overrides: Partial<OpenapiOutputItem>): OpenapiOutputItem => ({
@@ -36,5 +42,22 @@ describe("openapiOutput accumulator", () => {
         const result = getOpenapiOutput();
         expect(result).toHaveLength(1);
         expect(result[0].path).toBe("/target-two");
+    });
+});
+
+describe("setTargetUrl / getTargetUrl", () => {
+    it("strips credentials, query, and fragment from the stored target URL", () => {
+        setTargetUrl("https://user:pass@example.com/api?token=secret#frag");
+        expect(getTargetUrl()).toBe("https://example.com/api");
+    });
+
+    it("keeps a plain URL unchanged", () => {
+        setTargetUrl("https://example.com/api");
+        expect(getTargetUrl()).toBe("https://example.com/api");
+    });
+
+    it("falls back to the raw value when it isn't a parseable URL", () => {
+        setTargetUrl("not-a-url");
+        expect(getTargetUrl()).toBe("not-a-url");
     });
 });

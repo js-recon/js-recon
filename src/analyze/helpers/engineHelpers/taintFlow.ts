@@ -1,5 +1,5 @@
 import { Node } from "@babel/types";
-import traverse, { NodePath, Binding } from "@babel/traverse";
+import traverse, { NodePath } from "@babel/traverse";
 
 export type TaintInfo = {
     bindings: Set<NodePath>;

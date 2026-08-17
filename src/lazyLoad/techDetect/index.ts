@@ -142,7 +142,7 @@ const frameworkDetect = async (
                 // client) never completes its body — reading it via .text() would hang
                 // Promise.allSettled(responseBodyPromises) below forever. Skip the body read;
                 // status/content-type alone are enough for every dev-server marker check.
-                if (contentType?.includes("text/event-stream")) {
+                if (contentType?.toLowerCase().includes("text/event-stream")) {
                     responseEvidence.set(responseUrl, { status, contentType, body: "" });
                     return;
                 }
