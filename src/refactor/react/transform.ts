@@ -1,6 +1,6 @@
 import { NodePath } from "@babel/traverse";
-import _traverse from "@babel/traverse";
-import _generator from "@babel/generator";
+import traverse from "@babel/traverse";
+import generate from "@babel/generator";
 import * as t from "@babel/types";
 import {
     tryExtractModuleExportsAssignment,
@@ -18,9 +18,6 @@ import {
     REACT_ROUTER_DOM_CANONICAL,
     librarySource,
 } from "./library-classify.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-const generate = _generator.default;
 
 export type ModuleEntry = {
     id: string;
@@ -951,7 +948,7 @@ function tryConvertToJSX(call: t.CallExpression): t.JSXElement | t.JSXFragment |
     const openingElement = t.jsxOpeningElement(jsxName, jsxAttrs, selfClosing);
     const closingElement = selfClosing ? null : t.jsxClosingElement(jsxName);
 
-    return t.jsxElement(openingElement, closingElement, children, selfClosing);
+    return t.jsxElement(openingElement, closingElement, children);
 }
 
 /** Traverse statements and replace jsx()/jsxs() calls with JSXElement nodes. */
@@ -1518,18 +1515,16 @@ export const renameRouteComponents = (statements: t.Statement[]): t.Statement[] 
             const arg = callExpr.arguments[0];
             if (!t.isArrowFunctionExpression(arg) && !t.isFunctionExpression(arg)) continue;
             const body = (arg as t.ArrowFunctionExpression | t.FunctionExpression).body;
-            // body is `import('./N.js')` — a CallExpression with an Import callee
+            // body is `import('./N.js')` — an ImportExpression node
             const importCall = t.isBlockStatement(body)
                 ? (body as t.BlockStatement).body.length === 1 &&
                   t.isReturnStatement((body as t.BlockStatement).body[0])
                     ? ((body as t.BlockStatement).body[0] as t.ReturnStatement).argument
                     : null
                 : (body as t.Expression);
-            if (!importCall || !t.isCallExpression(importCall)) continue;
-            if (!t.isImport((importCall as t.CallExpression).callee)) continue;
-            const importArgs = (importCall as t.CallExpression).arguments;
-            if (importArgs.length !== 1 || !t.isStringLiteral(importArgs[0])) continue;
-            lazyVars.set((decl.id as t.Identifier).name, (importArgs[0] as t.StringLiteral).value);
+            if (!importCall || !t.isImportExpression(importCall)) continue;
+            if (!t.isStringLiteral(importCall.source)) continue;
+            lazyVars.set((decl.id as t.Identifier).name, importCall.source.value);
         }
     }
 
@@ -1615,7 +1610,7 @@ export const renameRouteComponents = (statements: t.Statement[]): t.Statement[] 
     traverse(syntheticFile, {
         JSXElement(p) {
             if (!t.isJSXIdentifier(p.node.openingElement.name, { name: "Routes" })) return;
-            let ancestor = p.parentPath;
+            let ancestor: NodePath | null = p.parentPath;
             while (ancestor) {
                 if (
                     ancestor.isFunctionDeclaration() ||

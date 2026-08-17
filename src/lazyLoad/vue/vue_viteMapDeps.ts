@@ -1,12 +1,10 @@
 import makeRequest from "../../utility/makeReq.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import chalk from "chalk";
-import t from "@babel/types";
+import * as t from "@babel/types";
 import { runWithConcurrency } from "../../utility/concurrency.js";
 import { progressLog } from "../../utility/progressLog.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Pure parser: given the text content of a JS file and the URL it was fetched

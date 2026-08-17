@@ -1,10 +1,9 @@
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import execFunc from "../../utility/runSandboxed.js";
 import makeRequest from "../../utility/makeReq.js";
 import inquirer from "inquirer";
-import t from "@babel/types";
+import * as t from "@babel/types";
 import resolvePath from "../../utility/resolvePath.js";
 import * as globals from "../../utility/globals.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";

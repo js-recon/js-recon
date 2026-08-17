@@ -1,9 +1,7 @@
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import fs from "fs";
 import { resolveNodeValue, memberChainToString } from "../next_js/utils.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 export interface EnclosingFn {
     bindingName: string | null;

@@ -1,9 +1,9 @@
 // ECMAScript export reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/export
 // ECMAScript import reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
 
-import parser from "@babel/parser";
-import _traverse, { NodePath } from "@babel/traverse";
-import _generator from "@babel/generator";
+import * as parser from "@babel/parser";
+import traverse, { NodePath } from "@babel/traverse";
+import generate from "@babel/generator";
 import * as t from "@babel/types";
 import { cs_mast_init, ScatCategory } from "@shriyanss/cs-mast";
 import { Chunk } from "../../utility/interfaces.js";
@@ -19,9 +19,6 @@ import {
 } from "./transform.js";
 import { LibraryModuleInfo, classifyLibraryModule, resolveReexportChains } from "./library-classify.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-const generate = (_generator as unknown as { default: typeof _generator }).default ?? _generator;
 
 // scat config used when computing experiment-baseline signatures (matches
 // refactor_observations/feature-signatures/<feature>/lit-decl-loop-cond/collisions.json).

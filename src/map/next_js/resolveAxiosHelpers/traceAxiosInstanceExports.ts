@@ -1,14 +1,12 @@
 import { Chunks } from "../../../utility/interfaces.js";
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import * as fs from "fs";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
 import * as globals from "../../../utility/globals.js";
 import { getThirdArg } from "../resolveAxios.js";
 import { resolveNodeValue } from "../utils.js";
 import { printMsg, MSG } from "../../../utility/printMsg.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 interface AxiosInstanceInfo {
     varName: string;

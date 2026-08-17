@@ -1,6 +1,6 @@
 import { printMsg, MSG } from "../../utility/printMsg.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import fs from "fs";
 import path from "path";
 import { resolveNodeValue, substituteVariablesInString } from "../next_js/utils.js";
@@ -29,8 +29,6 @@ const stripAstNodes = (fn: EnclosingFn | null): EnclosingFn | null => {
     }
     return root;
 };
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 const HTTP_VERBS = new Set(["get", "post", "put", "delete", "patch", "head", "options"]);
 

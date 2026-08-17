@@ -1,6 +1,5 @@
 import { Node } from "@babel/types";
-import _traverse, { NodePath, Binding } from "@babel/traverse";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
+import traverse, { NodePath, Binding } from "@babel/traverse";
 
 export type TaintInfo = {
     bindings: Set<NodePath>;
@@ -237,7 +236,7 @@ export const sinkConsumesTaint = (ast: Node, sinkNode: Node, taint: TaintInfo): 
 
     let consumed = false;
     traverse(ast, {
-        enter(path) {
+        enter(path: NodePath<Node>) {
             if (consumed) {
                 path.stop();
                 return;

@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import * as t from "@babel/types";
-import _generator from "@babel/generator";
+import generate from "@babel/generator";
 import { NodePath } from "@babel/traverse";
 import {
     isInModuleMap,
@@ -12,9 +12,6 @@ import {
     buildModuleExportStatement,
     makeNamedExportStatement,
 } from "../../refactor/react/helpers.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-const generate = (_generator.default ?? _generator) as typeof _generator.default;
 
 function captureAllObjectPropertyPaths(code: string): NodePath[] {
     const ast = parser.parse(code, { sourceType: "unambiguous" });

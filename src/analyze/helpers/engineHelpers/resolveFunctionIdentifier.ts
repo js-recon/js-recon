@@ -1,7 +1,5 @@
 import { Node } from "@babel/types";
-import _traverse from "@babel/traverse";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
+import traverse from "@babel/traverse";
 /**
  * Resolves a function identifier to its declaration node in the given AST.
  *

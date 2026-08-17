@@ -1,6 +1,6 @@
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
-import _generator from "@babel/generator";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
+import generate from "@babel/generator";
 import { NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import { cs_mast_init, ScatCategory } from "@shriyanss/cs-mast";
@@ -8,8 +8,6 @@ import { Chunk } from "../../utility/interfaces.js";
 import { TurboModuleEntry, WebpackModuleEntry, transformModule, transformWebpackModule } from "./transform.js";
 import { validateAndFix } from "./validator.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
-
-const generate = (_generator as unknown as { default: typeof _generator }).default ?? _generator;
 
 // scat categories used when classifying modules as library vs application code.
 const LIB_SIG_SCAT: ScatCategory[] = ["lit", "decl", "loop", "cond"];
@@ -170,8 +168,6 @@ export const refactorNextWebpack = async (
 
     return { [chunk.id]: code };
 };
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Refactors a single Next.js (Turbopack) chunk into an ECMAScript module file.

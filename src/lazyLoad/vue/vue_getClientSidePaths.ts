@@ -1,9 +1,9 @@
 import makeRequest from "../../utility/makeReq.js";
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import chalk from "chalk";
 import cliProgress from "cli-progress";
-import parser from "@babel/parser";
-import t from "@babel/types";
+import * as parser from "@babel/parser";
+import * as t from "@babel/types";
 import {
     activateBarLogger,
     computeBarSize,
@@ -12,8 +12,6 @@ import {
     withProgressResources,
 } from "../../utility/progressLog.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 const vue_getClientSidePaths = async (
     url: string,

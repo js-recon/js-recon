@@ -1,12 +1,10 @@
 import chalk from "chalk";
 import makeRequest from "../../utility/makeReq.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import resolvePath from "../../utility/resolvePath.js";
 import { addCrawledUrl } from "../globals.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
 /**
  * Pure parser: scans `jsContent` for `Promise.all([...].map(...))` patterns and
  * returns the resolved chunk URLs using `jsDirBase` as the prefix.

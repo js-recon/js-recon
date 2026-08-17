@@ -1,11 +1,9 @@
 import makeRequest from "../../utility/makeReq.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 import next_getJSScript from "./next_GetJSScript.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Recursively resolves a string-producing AST node to a string value.

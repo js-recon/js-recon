@@ -1,8 +1,6 @@
-import _traverse from "@babel/traverse";
-import parser from "@babel/parser";
+import traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
 import execFunc from "../../utility/runSandboxed.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Pure parser: extracts `[chunkId, chunkName]` entries from webpack's

@@ -1,11 +1,9 @@
 import makeRequest from "../../utility/makeReq.js";
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import * as parser from "@babel/parser";
 import chalk from "chalk";
 import resolvePath from "../../utility/resolvePath.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Parses JS source and extracts every chunk import path it references, both
@@ -30,12 +28,9 @@ export const extractImportPaths = (code: string): string[] => {
     const importPaths: string[] = [];
 
     traverse(ast, {
-        CallExpression(path) {
-            if (path.node.callee.type === "Import") {
-                const importArg = path.node.arguments[0];
-                if (importArg && importArg.type === "StringLiteral") {
-                    importPaths.push(importArg.value);
-                }
+        ImportExpression(path) {
+            if (path.node.source.type === "StringLiteral") {
+                importPaths.push(path.node.source.value);
             }
         },
         ImportDeclaration(path) {

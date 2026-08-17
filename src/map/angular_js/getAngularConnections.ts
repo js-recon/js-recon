@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 
 import { Chunks } from "../../utility/interfaces.js";
 import { File } from "@babel/types";

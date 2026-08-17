@@ -1,7 +1,5 @@
 import { Node } from "@babel/types";
-import _traverse from "@babel/traverse";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
+import traverse from "@babel/traverse";
 /**
  * Finds an assignment expression where the left side is a member expression with a property that matches the given name.
  * Traverses the given node and its children to find a match.

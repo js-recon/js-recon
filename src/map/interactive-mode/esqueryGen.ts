@@ -1,9 +1,7 @@
 import chalk from "chalk";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
-const traverse = (_traverse as any).default ?? _traverse;
-import _generator from "@babel/generator";
-const generator: any = (_generator as any).default ?? _generator;
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
+import generator from "@babel/generator";
 import { Node } from "@babel/types";
 import { Chunks } from "../../utility/interfaces.js";
 

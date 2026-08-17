@@ -2,7 +2,7 @@ import chalk from "chalk";
 import cliProgress from "cli-progress";
 import makeRequest from "../../utility/makeReq.js";
 import { activateBarLogger, computeBarSize, watchBarResize, withProgressResources } from "../../utility/progressLog.js";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 import { extractStrings } from "../../strings/index.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 import { extractStrings } from "../../strings/index.js";
 
 const parse = (code: string) =>

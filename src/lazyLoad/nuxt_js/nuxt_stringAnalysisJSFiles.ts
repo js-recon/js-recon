@@ -7,10 +7,8 @@ import { runWithConcurrency } from "../../utility/concurrency.js";
 import { decodeInlineSourceMapDataUri, writeInlineSourceMap } from "../sourcemap.js";
 
 // for parsing
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 const analyzedFiles = [];
 let filesFound = [];
 let mapFilesFound = [];

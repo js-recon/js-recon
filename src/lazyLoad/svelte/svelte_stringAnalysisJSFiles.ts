@@ -4,13 +4,11 @@ import { getJsUrls, pushToJsUrls } from "../globals.js";
 import resolvePath from "../../utility/resolvePath.js";
 
 // for parsing
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import { FoundJsFiles } from "../../utility/interfaces.js";
 import { runWithConcurrency } from "../../utility/concurrency.js";
 import { decodeInlineSourceMapDataUri, writeInlineSourceMap } from "../sourcemap.js";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
 const analyzedFiles = [];
 let filesFound = [];
 let mapFilesFound = [];
