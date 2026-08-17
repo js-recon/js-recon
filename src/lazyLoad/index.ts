@@ -522,9 +522,7 @@ const lazyLoad = async (
                             jsFilesFromStringAnalysisDev
                         );
 
-                    const firstBatchDev = [
-                        ...new Set([...jsFilesFromPageSourceDev, ...jsFilesFromStringAnalysisDev]),
-                    ];
+                    const firstBatchDev = [...new Set([...jsFilesFromPageSourceDev, ...jsFilesFromStringAnalysisDev])];
 
                     const jsFilesFromASTDev = [];
                     if (shouldRunMethod("nuxt_astParse", includeMethods, excludeMethods)) {

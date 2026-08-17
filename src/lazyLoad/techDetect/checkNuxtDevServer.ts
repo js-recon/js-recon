@@ -59,7 +59,11 @@ export const isNuxtDevServer = ($: CheerioAPI, baseUrl: string, interceptedUrls:
         if (found) return;
         const src = $(el).attr("src") ?? $(el).attr("href");
         if (!src) return;
-        if (isNuxtViteClientPath(src, baseUrl) || isWebpackHmrPath(src, baseUrl) || isUnhashedNuxt2EntryPath(src, baseUrl)) {
+        if (
+            isNuxtViteClientPath(src, baseUrl) ||
+            isWebpackHmrPath(src, baseUrl) ||
+            isUnhashedNuxt2EntryPath(src, baseUrl)
+        ) {
             found = true;
         }
     });
