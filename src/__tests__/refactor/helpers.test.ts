@@ -13,7 +13,6 @@ import {
     makeNamedExportStatement,
 } from "../../refactor/react/helpers.js";
 
-
 function captureAllObjectPropertyPaths(code: string): NodePath[] {
     const ast = parser.parse(code, { sourceType: "unambiguous" });
     const paths: NodePath[] = [];

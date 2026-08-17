@@ -3,7 +3,6 @@ import generate from "@babel/generator";
 import * as t from "@babel/types";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 
-
 export const MAX_FIX_ITERATIONS = 10;
 
 export const tryStrictParse = (code: string): parser.ParseError[] => {
