@@ -90,6 +90,7 @@ const processUrl = async (
     excludeMethods: string[] = []
 ): Promise<void> => {
     const targetHost = new URL(url).host;
+    globalsUtil.setTargetUrl(url);
 
     printMsg(MSG.Run, `[+] Starting analysis for ${url}...`);
 
