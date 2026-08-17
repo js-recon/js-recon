@@ -1,4 +1,4 @@
-FROM ghcr.io/puppeteer/puppeteer:24.43.1
+FROM ghcr.io/puppeteer/puppeteer:25.8.0
 
 WORKDIR /home/pptruser
 # Pin HOME so path resolution (Puppeteer's Chrome cache, ~/.js-recon rules cache, etc.)
