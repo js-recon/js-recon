@@ -1,7 +1,5 @@
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import { Node } from "@babel/types";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Finds direct assignment expressions or variable declarations for a given identifier node.

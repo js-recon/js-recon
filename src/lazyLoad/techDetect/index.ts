@@ -9,6 +9,7 @@ import { checkNextJS } from "./checkNextJS.js";
 import { isNextDevServer } from "./checkNextDevServer.js";
 import { isAngularDevServer } from "./checkAngularDevServer.js";
 import { checkNuxtJS } from "./checkNuxtJS.js";
+import { isNuxtDevServer } from "./checkNuxtDevServer.js";
 import { checkSvelte } from "./checkSvelte.js";
 import { isSvelteDevServer } from "./checkSvelteDevServer.js";
 import { checkVueJS } from "./checkVueJS.js";
@@ -137,6 +138,14 @@ const frameworkDetect = async (
                 const responseUrl = httpRes.url();
                 const status = httpRes.status();
                 const contentType = httpRes.headers()["content-type"] ?? null;
+                // A long-lived event-stream connection (webpack-hot-middleware's or Vite's HMR
+                // client) never completes its body — reading it via .text() would hang
+                // Promise.allSettled(responseBodyPromises) below forever. Skip the body read;
+                // status/content-type alone are enough for every dev-server marker check.
+                if (contentType?.toLowerCase().includes("text/event-stream")) {
+                    responseEvidence.set(responseUrl, { status, contentType, body: "" });
+                    return;
+                }
                 responseBodyPromises.push(
                     httpRes
                         .text()
@@ -251,7 +260,10 @@ const frameworkDetect = async (
         if (result_checkNuxtJS.detected === true || result_checkNuxtJS_res.detected === true) {
             const evidence =
                 result_checkNuxtJS.evidence !== "" ? result_checkNuxtJS.evidence : result_checkNuxtJS_res.evidence;
-            return { name: "nuxt", evidence };
+            const isNuxtDev =
+                isNuxtDevServer($, url, interceptedUrls) ||
+                ($res ? isNuxtDevServer($res, url, interceptedUrls) : false);
+            return { name: isNuxtDev ? "nuxt-dev" : "nuxt", evidence };
         }
         const evidence =
             result_checkVueJS.evidence !== "" ? result_checkVueJS.evidence : result_checkVueJS_res.evidence;
@@ -291,7 +303,7 @@ const frameworkDetect = async (
     for (const interceptedUrl of interceptedUrls) {
         let candidateName: string | null = null;
         if (interceptedUrl.includes("/_nuxt/")) {
-            candidateName = "nuxt";
+            candidateName = isNuxtDevServer($, url, [interceptedUrl]) ? "nuxt-dev" : "nuxt";
         } else if (interceptedUrl.includes("/_next/")) {
             candidateName = isNextDevServer($, url, [interceptedUrl]) ? "next-dev" : "next";
         } else if (interceptedUrl.includes("/_app/immutable/")) {

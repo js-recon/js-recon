@@ -140,7 +140,7 @@ export const generateOpenapiV3Spec = (items: OpenapiOutputItem[], _chunks: Chunk
         },
         servers: [
             {
-                url: "{{baseUrl}}",
+                url: globalsUtil.getTargetUrl() || "{{baseUrl}}",
                 description: "Base URL for the API",
             },
         ],

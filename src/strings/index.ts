@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 import prettier from "prettier";
 import secrets from "./secrets.js";
 import permutate from "./permutate.js";

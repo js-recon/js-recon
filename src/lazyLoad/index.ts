@@ -1,8 +1,7 @@
 import chalk from "chalk";
 import fs from "fs";
 import frameworkDetect, { getLastInterceptedUrls } from "./techDetect/index.js";
-import _traverse from "@babel/traverse";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
+import traverse from "@babel/traverse";
 import { URL } from "url";
 import * as cheerio from "cheerio";
 
@@ -466,6 +465,92 @@ const lazyLoad = async (
 
                     if (research) {
                         fs.writeFileSync(researchOutput, JSON.stringify(nuxtResearchMap, null, 4));
+                        printMsg(
+                            MSG.Run,
+                            "[✓] Research mode enabled. Technique efficiency written to " + researchOutput
+                        );
+                    }
+
+                    // extract the source maps
+                    await extractSourceMaps(output, join(output, sourcemapDir));
+                } else if (tech.name === "nuxt-dev") {
+                    printMsg(MSG.Run, "[✓] Nuxt.js dev server detected");
+                    printMsg(MSG.Warn, `Evidence: ${tech.evidence}`);
+
+                    // Confirmed via crawler validation spike (js-recon-internal-docs#194) that
+                    // the existing nuxt_js/* crawler already covers dev-mode module shapes:
+                    // nuxt_getFromPageSource and nuxt_stringAnalysisJSFiles have no prod-build
+                    // assumptions baked in, while nuxt_getBuildsManifest (incremental-deployment
+                    // manifest) and nuxt_astParse (minified webpack chunk-URL-builder pattern)
+                    // simply return [] against a dev server rather than erroring. No dev-specific
+                    // crawler was needed. Kept as its own branch (rather than folded into the
+                    // "nuxt" branch above) so nuxt-dev's discovery coverage stays a separately
+                    // trackable/benchmarkable identifier, mirroring the vue-dev branch's precedent.
+                    const queue = new DownloadQueue(output, threads, { alreadyBatchTargetRoot: isBatch });
+                    activeQueue = queue;
+
+                    const nuxtDevResearchMap: Record<string, string[]> = {};
+
+                    const jsFilesFromPageSourceDev = shouldRunMethod(
+                        "nuxt_getFromPageSource",
+                        includeMethods,
+                        excludeMethods
+                    )
+                        ? await nuxt_getFromPageSource(url)
+                        : [];
+                    enqueue(queue, jsFilesFromPageSourceDev);
+                    if (research)
+                        accumulateTechnique(nuxtDevResearchMap, "nuxt_getFromPageSource", jsFilesFromPageSourceDev);
+
+                    const nuxtDevStringAnalysisResult = shouldRunMethod(
+                        "nuxt_stringAnalysisJSFiles",
+                        includeMethods,
+                        excludeMethods
+                    )
+                        ? await nuxt_stringAnalysisJSFiles(url, threads, output)
+                        : { jsFiles: [], mapFiles: [] };
+                    const jsFilesFromStringAnalysisDev = nuxtDevStringAnalysisResult.jsFiles;
+                    enqueue(queue, jsFilesFromStringAnalysisDev);
+                    if (nuxtDevStringAnalysisResult.mapFiles.length > 0) {
+                        enqueue(queue, nuxtDevStringAnalysisResult.mapFiles);
+                    }
+                    if (research)
+                        accumulateTechnique(
+                            nuxtDevResearchMap,
+                            "nuxt_stringAnalysisJSFiles",
+                            jsFilesFromStringAnalysisDev
+                        );
+
+                    const firstBatchDev = [...new Set([...jsFilesFromPageSourceDev, ...jsFilesFromStringAnalysisDev])];
+
+                    const jsFilesFromASTDev = [];
+                    if (shouldRunMethod("nuxt_astParse", includeMethods, excludeMethods)) {
+                        printMsg(MSG.Header, "[i] Analyzing functions in the files found");
+                        for (const jsFile of firstBatchDev) {
+                            jsFilesFromASTDev.push(...(await nuxt_astParse(jsFile)));
+                        }
+                    }
+                    enqueue(queue, jsFilesFromASTDev);
+                    if (research) accumulateTechnique(nuxtDevResearchMap, "nuxt_astParse", jsFilesFromASTDev);
+                    enqueue(queue, lazyLoadGlobals.getJsUrls());
+
+                    const buildsManifestFilesDev = shouldRunMethod(
+                        "nuxt_getBuildsManifest",
+                        includeMethods,
+                        excludeMethods
+                    )
+                        ? await nuxt_getBuildsManifest(url)
+                        : [];
+                    enqueue(queue, buildsManifestFilesDev);
+                    if (research)
+                        accumulateTechnique(nuxtDevResearchMap, "nuxt_getBuildsManifest", buildsManifestFilesDev);
+
+                    await queue.drain();
+                    if (hardTimeoutReached) return;
+                    queue.printSummary();
+
+                    if (research) {
+                        fs.writeFileSync(researchOutput, JSON.stringify(nuxtDevResearchMap, null, 4));
                         printMsg(
                             MSG.Run,
                             "[✓] Research mode enabled. Technique efficiency written to " + researchOutput

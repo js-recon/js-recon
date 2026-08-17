@@ -1,6 +1,6 @@
 import { printMsg, MSG } from "../../utility/printMsg.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import fs from "fs";
 import path from "path";
 import { resolveNodeValue, substituteVariablesInString } from "../next_js/utils.js";
@@ -13,8 +13,6 @@ import {
     makeGetCallers,
 } from "./taint_utils.js";
 import { deepSubstituteBodyValue } from "./bodyResolver.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Checks whether invoking the given function body would directly execute a

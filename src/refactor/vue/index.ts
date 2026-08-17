@@ -1,13 +1,11 @@
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import { NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import { Chunk } from "../../utility/interfaces.js";
 import { WebpackModuleEntry, transformWebpackModule } from "../next/transform.js";
 import { validateAndFix } from "../next/validator.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Extracts the numeric module map from a webpack chunk container.

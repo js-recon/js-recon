@@ -1,6 +1,6 @@
 import { NodePath } from "@babel/traverse";
 import { MemberExpression } from "@babel/types";
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import * as fs from "fs";
 import * as fsPath from "path";
 import { Chunks } from "../../../utility/interfaces.js";
@@ -10,8 +10,6 @@ import { resolveNodeValue } from "../utils.js";
 import { traceAxiosInstanceExports } from "./traceAxiosInstanceExports.js";
 import { getThirdArg } from "../resolveAxios.js";
 import { printMsg, MSG } from "../../../utility/printMsg.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Finds the line number of a target line content in a given file content.

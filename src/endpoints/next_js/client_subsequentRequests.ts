@@ -1,11 +1,9 @@
 import fs from "fs";
 import path from "path";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import makeRequest from "../../utility/makeReq.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
 const toReturn = [];
 
 /**

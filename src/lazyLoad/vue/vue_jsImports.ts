@@ -1,11 +1,9 @@
 import makeRequest from "../../utility/makeReq.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import chalk from "chalk";
 import { runWithConcurrency } from "../../utility/concurrency.js";
 import { progressError } from "../../utility/progressLog.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 const parseJsFile = async (url: string, maxJsSizeMb: number) => {
     const MAX_JS_SIZE_BYTES = maxJsSizeMb * 1024 * 1024;
@@ -25,7 +23,7 @@ const parseJsFile = async (url: string, maxJsSizeMb: number) => {
     try {
         ast = parser.parse(reqText, {
             sourceType: "module",
-            plugins: ["importAssertions", "typescript"],
+            plugins: ["typescript"],
         });
     } catch {
         return foundUrls;
@@ -48,10 +46,8 @@ const parseJsFile = async (url: string, maxJsSizeMb: number) => {
         ImportDeclaration(path) {
             addImportSource(path.node.source.value);
         },
-        CallExpression(path) {
-            if (path.node.callee.type !== "Import") return;
-            const arg = path.node.arguments[0];
-            if (arg?.type === "StringLiteral") addImportSource(arg.value);
+        ImportExpression(path) {
+            if (path.node.source.type === "StringLiteral") addImportSource(path.node.source.value);
         },
     });
 

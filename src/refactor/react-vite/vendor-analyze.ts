@@ -2,19 +2,16 @@
 // Used to rewrite minified direct vendor imports (like r = Link from react-router-dom).
 
 import { parse } from "@babel/parser";
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import * as t from "@babel/types";
-import _generator from "@babel/generator";
+import generate from "@babel/generator";
 
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import {
     REACT_CANONICAL,
     JSX_RUNTIME_CANONICAL,
     REACT_DOM_CLIENT_CANONICAL,
     REACT_ROUTER_DOM_CANONICAL,
 } from "../react/library-classify.js";
-
-const generate = (_generator as unknown as { default: typeof _generator }).default ?? _generator;
 
 export type VendorExportInfo = {
     canonicalName: string;

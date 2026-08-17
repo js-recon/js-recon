@@ -1,6 +1,6 @@
 import { Chunks } from "../../utility/interfaces.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse, { NodePath } from "@babel/traverse";
 import { findAxiosClients } from "./resolveAxiosHelpers/findAxiosClients.js";
 import { findAxiosInstance } from "./resolveAxiosHelpers/findAxiosInstance.js";
 import { processAxiosCall } from "./resolveAxiosHelpers/processAxiosCall.js";
@@ -16,8 +16,6 @@ import { printMsg, MSG } from "../../utility/printMsg.js";
 let globalInterceptorHeaders: { [key: string]: string } = {};
 export const getGlobalInterceptorHeaders = (): { [key: string]: string } => globalInterceptorHeaders;
 
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
 /**
  * Gets the third argument of a function declaration or arrow function expression.
  * @param {Node} ast - The abstract syntax tree of the function.
@@ -26,7 +24,7 @@ const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 export const getThirdArg = (ast: Node): string => {
     let thirdArg = "";
     traverse(ast, {
-        enter(path) {
+        enter(path: NodePath<Node>) {
             let funcNode: FunctionDeclaration | ArrowFunctionExpression | null = null;
             if (path.isFunctionDeclaration()) {
                 funcNode = path.node;

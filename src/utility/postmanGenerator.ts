@@ -1,4 +1,5 @@
 import { OpenapiOutputItem } from "./globals.js";
+import * as globalsUtil from "./globals.js";
 import replacePlaceholders from "./replaceUrlPlaceholders.js";
 
 /**
@@ -90,7 +91,7 @@ export const generatePostmanCollection = (items: OpenapiOutputItem[]): PMCollect
         },
         item: [],
         variable: [
-            { key: "baseUrl", value: "https://example.com" },
+            { key: "baseUrl", value: globalsUtil.getTargetUrl() || "https://example.com" },
             { key: "graphqlEndpoint", value: "graphql" },
         ],
     };

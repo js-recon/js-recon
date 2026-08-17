@@ -14,13 +14,11 @@
 //   5. Cleans up rolldown boilerplate
 
 import { parse } from "@babel/parser";
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import * as t from "@babel/types";
-import _generator from "@babel/generator";
+import generate from "@babel/generator";
 import prettier from "prettier";
 import path from "path";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 import { cs_mast_init, ScatCategory } from "@shriyanss/cs-mast";
 import { Chunks } from "../../utility/interfaces.js";
@@ -35,8 +33,6 @@ import {
 } from "../react/library-classify.js";
 import { analyzeVendorChunk, type VendorExportInfo } from "./vendor-analyze.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
-
-const generate = (_generator as unknown as { default: typeof _generator }).default ?? _generator;
 
 // ---------------------------------------------------------------------------
 // Vite chunk classification helpers
@@ -327,8 +323,7 @@ function simplifyViteMapDepsImports(statements: t.Statement[]): void {
             const firstInnerArg = innerArgs[0];
             if (!t.isArrowFunctionExpression(firstInnerArg)) return;
             const innerBody = firstInnerArg.body;
-            if (!t.isCallExpression(innerBody)) return;
-            if (!t.isImport(innerBody.callee)) return;
+            if (!t.isImportExpression(innerBody)) return;
             // We found: lazy(() => wrapper(() => import('./X.js'), __vite__mapDeps(...)))
             // Simplify to: lazy(() => import('./X.js'))
             p.node.arguments = [t.arrowFunctionExpression([], innerBody)];

@@ -3,40 +3,28 @@ import { Ollama } from "ollama";
 import Anthropic from "@anthropic-ai/sdk";
 import * as globals from "./globals.js";
 
-/**
- * OpenAI client instance.
- *
- * @remarks
- * This client is used to communicate with the OpenAI API.
- * The base URL and API key are configurable via the
- * `setAiEndpoint` and `setAiApiKey` functions.
- */
-const openai_client = new OpenAI({
-    baseURL: globals.getAiEndpoint() || "https://api.openai.com/v1",
-    apiKey: globals.getAiApiKey(),
-});
+// Clients are constructed lazily on first use, not at module load — openai's
+// and anthropic's SDKs throw immediately if no API key/credentials are
+// configured, which would crash every js-recon invocation, not just AI usage.
+let openai_client: OpenAI | undefined;
+let ollama_client: Ollama | undefined;
+let anthropic_client: Anthropic | undefined;
 
-/**
- * Ollama client instance.
- *
- * @remarks
- * This client is used to communicate with the Ollama API.
- * The host is configurable via the `setAiEndpoint` function.
- */
-const ollama_client = new Ollama({
-    host: globals.getAiEndpoint() || "http://127.0.0.1:11434",
-});
+const getOpenaiClient = (): OpenAI =>
+    (openai_client ??= new OpenAI({
+        baseURL: globals.getAiEndpoint() || "https://api.openai.com/v1",
+        apiKey: globals.getAiApiKey(),
+    }));
 
-/**
- * Anthropic client instance.
- *
- * @remarks
- * This client is used to communicate with the Anthropic Messages API.
- * The API key is configurable via the `setAiApiKey` function.
- */
-const anthropic_client = new Anthropic({
-    apiKey: globals.getAiApiKey(),
-});
+const getOllamaClient = (): Ollama =>
+    (ollama_client ??= new Ollama({
+        host: globals.getAiEndpoint() || "http://127.0.0.1:11434",
+    }));
+
+const getAnthropicClient = (): Anthropic =>
+    (anthropic_client ??= new Anthropic({
+        apiKey: globals.getAiApiKey(),
+    }));
 
 /**
  * Returns an AI client instance based on the configured provider.
@@ -48,15 +36,15 @@ const ai = async (): Promise<{ client: OpenAI | Ollama | Anthropic; model: strin
     const provider = globals.getAiServiceProvider();
 
     if (provider === "openai") {
-        return { client: openai_client, model };
+        return { client: getOpenaiClient(), model };
     }
 
     if (provider === "ollama") {
-        return { client: ollama_client, model };
+        return { client: getOllamaClient(), model };
     }
 
     if (provider === "anthropic") {
-        return { client: anthropic_client, model };
+        return { client: getAnthropicClient(), model };
     }
 
     throw new Error(`AI service provider "${provider}" is not supported or configured.`);
@@ -124,4 +112,4 @@ async function getCompletion(prompt, systemPrompt = "You are a helpful assistant
     }
 }
 
-export { ai, openai_client, ollama_client, anthropic_client, getCompletion };
+export { ai, getCompletion };

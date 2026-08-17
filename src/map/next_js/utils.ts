@@ -1,10 +1,8 @@
 import { Node } from "@babel/types";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 import { Scope } from "@babel/traverse";
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import { Chunks } from "../../utility/interfaces.js";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
 /**
  * Builds a dotted identifier path from a chain of MemberExpression nodes
  * rooted at an Identifier. Returns null when the chain contains computed

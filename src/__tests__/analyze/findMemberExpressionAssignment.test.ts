@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import { findMemberExpressionAssignment } from "../../analyze/helpers/engineHelpers/findMemberExpressionAssignment.js";
-
-const traverse = (_traverse as any).default ?? _traverse;
 
 function parseHandlerFunction(code: string) {
     const src = `const _x = ${code};`;

@@ -414,6 +414,35 @@ export const getTech = (): string => {
     return tech;
 };
 
+// Target URL Configuration
+/** Target URL currently being processed by `run` (the `-u` value) */
+export let targetUrl = "";
+
+/**
+ * Sets the target URL currently being processed.
+ * @param value - Target URL
+ */
+export const setTargetUrl = (value: string): void => {
+    try {
+        const parsed = new URL(value);
+        parsed.username = "";
+        parsed.password = "";
+        parsed.search = "";
+        parsed.hash = "";
+        targetUrl = parsed.toString();
+    } catch {
+        targetUrl = value;
+    }
+};
+
+/**
+ * Gets the target URL currently being processed.
+ * @returns Target URL
+ */
+export const getTargetUrl = (): string => {
+    return targetUrl;
+};
+
 // OpenAPI Configuration
 /** Whether to generate OpenAPI specifications */
 export let openapi = false;
