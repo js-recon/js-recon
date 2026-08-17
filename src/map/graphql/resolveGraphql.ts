@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 import {
     parse as gqlParse,
@@ -14,8 +14,6 @@ import {
     type VariableDefinitionNode,
 } from "graphql";
 import * as globals from "../../utility/globals.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 const OPERATION_TOKEN_RE = /\b(query|mutation|subscription|fragment)\b/;
 const MIN_CANDIDATE_LEN = 20;

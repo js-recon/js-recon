@@ -26,8 +26,8 @@
     "dependencies": {
         "@anthropic-ai/sdk": "^0.117.1",
         "@aws-sdk/client-api-gateway": "^3.958.0",
-        "@babel/parser": "^7.28.5",
-        "@babel/traverse": "^7.28.5",
+        "@babel/parser": "^8.0.4",
+        "@babel/traverse": "^8.0.4",
         "@babel/types": "^8.0.4",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@shriyanss/cli-print-img": "^1.1.1",
@@ -81,7 +81,6 @@
     },
     "homepage": "https://github.com/js-recon/js-recon#readme",
     "devDependencies": {
-        "@types/babel__traverse": "^7.28.0",
         "@types/better-sqlite3": "^7.6.13",
         "@types/blessed": "^0.1.25",
         "@types/express": "^5.0.6",

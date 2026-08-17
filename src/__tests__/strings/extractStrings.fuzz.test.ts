@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 import { extractStrings } from "../../strings/index.js";
 
 /**

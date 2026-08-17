@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import { renderObjectExpression, renderValueNode } from "../../map/vue_js/taint_utils.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Parse a JS snippet, traverse it, and capture the first ObjectExpression node

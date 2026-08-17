@@ -1,6 +1,6 @@
 import { NodePath } from "@babel/traverse";
-import _traverse from "@babel/traverse";
-import _generator from "@babel/generator";
+import traverse from "@babel/traverse";
+import generate from "@babel/generator";
 import * as t from "@babel/types";
 import {
     tryExtractTurbopackRequire,
@@ -17,9 +17,6 @@ import {
     extractExportsFromMap,
     makeExportStatement,
 } from "./helpers.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-const generate = _generator.default;
 
 // Turbopack module format: func_NNN = (runtime, module, exports) => { ... }
 // - runtime (params[0]): turbopack runtime — runtime.r(N) / runtime.i(N) for imports
@@ -235,7 +232,7 @@ function tryConvertToJSX(call: t.CallExpression): t.JSXElement | t.JSXFragment |
     const openingElement = t.jsxOpeningElement(jsxName, jsxAttrs, selfClosing);
     const closingElement = selfClosing ? null : t.jsxClosingElement(jsxName);
 
-    return t.jsxElement(openingElement, closingElement, children, selfClosing);
+    return t.jsxElement(openingElement, closingElement, children);
 }
 
 function recoverJSX(statements: t.Statement[]): void {

@@ -1,8 +1,6 @@
 import { Node } from "@babel/types";
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import { printMsg, MSG } from "../../../utility/printMsg.js";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
 /**
  * Finds the variable name of the axios instance used in a chunk.
  * @param {Node} ast - The abstract syntax tree of the chunk.

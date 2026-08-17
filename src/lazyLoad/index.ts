@@ -1,8 +1,7 @@
 import chalk from "chalk";
 import fs from "fs";
 import frameworkDetect, { getLastInterceptedUrls } from "./techDetect/index.js";
-import _traverse from "@babel/traverse";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
+import traverse from "@babel/traverse";
 import { URL } from "url";
 import * as cheerio from "cheerio";
 

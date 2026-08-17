@@ -1,11 +1,9 @@
 import { Chunks } from "../../utility/interfaces.js";
 import { Rule } from "../types/index.js";
 
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
-import _generator from "@babel/generator";
-const _traverseDefault = _traverse.default;
-const generator = _generator.default;
+import * as parser from "@babel/parser";
+import _traverseDefault from "@babel/traverse";
+import generator from "@babel/generator";
 import esquery from "esquery";
 import { Node } from "@babel/types";
 import { highlight } from "cli-highlight";

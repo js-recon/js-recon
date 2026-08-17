@@ -1,12 +1,11 @@
 import { resolveNodeValue, substituteVariablesInString } from "./utils.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import fs from "fs";
 import path from "path";
 import { Chunks } from "../../utility/interfaces.js";
 import { getThirdArg } from "./resolveAxios.js";
 import { Node } from "@babel/types";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 import * as globals from "../../utility/globals.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 

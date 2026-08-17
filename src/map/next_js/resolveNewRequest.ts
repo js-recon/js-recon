@@ -1,15 +1,13 @@
 import fs from "fs";
 import path from "path";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import { Chunks } from "../../utility/interfaces.js";
 import { resolveNodeValue, substituteVariablesInString } from "./utils.js";
 import { astNodeToJsonString } from "./resolveAxiosHelpers/astNodeToJsonString.js";
 import { getThirdArg } from "./resolveAxios.js";
 import * as globals from "../../utility/globals.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 

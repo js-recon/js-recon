@@ -1,14 +1,12 @@
 import { Chunks } from "../../../utility/interfaces.js";
-import _traverse from "@babel/traverse";
+import traverse from "@babel/traverse";
 import { getHttpMethodWithForm } from "./handleZDotCreate.js";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
 import * as fs from "fs";
 import * as globals from "../../../utility/globals.js";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 import { findCrossChunkParameters } from "./findCrossChunkParams.js";
 import { printMsg, MSG } from "../../../utility/printMsg.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Process exported functions that wrap axios HTTP methods.

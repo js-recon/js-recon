@@ -1,10 +1,8 @@
 import { printMsg, MSG } from "../../utility/printMsg.js";
 import * as globals from "../globals.js";
 import makeRequest from "../../utility/makeReq.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 /**
  * Pure parser: given the text content of a `_buildManifest.js` file and the URL
  * it was fetched from, returns absolute URLs for every `static/chunks/` entry.

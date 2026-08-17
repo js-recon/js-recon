@@ -1,8 +1,7 @@
 import { Chunks } from "../../utility/interfaces.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
-import { ArrowFunctionExpression, FunctionDeclaration } from "@babel/types";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
+import * as parser from "@babel/parser";
+import traverse, { NodePath } from "@babel/traverse";
+import { ArrowFunctionExpression, FunctionDeclaration, Node } from "@babel/types";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
@@ -38,7 +37,7 @@ const getExports = async (chunks: Chunks): Promise<Chunks> => {
 
         // get the second and the third argument of the function
         traverse(ast, {
-            enter(path) {
+            enter(path: NodePath<Node>) {
                 let funcNode: FunctionDeclaration | ArrowFunctionExpression | null = null;
                 if (path.isFunctionDeclaration()) {
                     funcNode = path.node;

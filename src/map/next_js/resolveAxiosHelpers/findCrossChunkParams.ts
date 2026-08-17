@@ -1,12 +1,11 @@
 import { Chunks } from "../../../utility/interfaces.js";
-import _traverse from "@babel/traverse";
+import traverse, { NodePath } from "@babel/traverse";
 import * as fs from "fs";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
+import { Node } from "@babel/types";
 import { astNodeToJsonString } from "./astNodeToJsonString.js";
 import pathModule from "path";
 import { printMsg, MSG } from "../../../utility/printMsg.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 /**
  * Find parameters passed to exported endpoint functions from other chunks
@@ -52,7 +51,7 @@ export const findCrossChunkParameters = (
         // Step 1: Find the third parameter in function declarations
         let thirdArg = "";
         traverse(ast, {
-            enter(path) {
+            enter(path: NodePath<Node>) {
                 if (path.isFunctionDeclaration() && path.node.params.length >= 3) {
                     const thirdParam = path.node.params[2];
                     if (thirdParam.type === "Identifier") {

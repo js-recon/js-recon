@@ -15,8 +15,8 @@
  *   5. Inlines _export_sfc as a local helper when used
  */
 
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import { NodePath } from "@babel/traverse";
 import _generate from "@babel/generator";
 import * as t from "@babel/types";
@@ -27,7 +27,6 @@ import { analyzeVueIndexChunk, VueExportMap, VUE_PUBLIC_API } from "./vendor-ana
 import { applyModuleCleanupPasses } from "../react/transform.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 
-const traverse = (_traverse as any).default ?? _traverse;
 const generate = (_generate as any).default ?? _generate;
 
 // _export_sfc helper — inlined when the page chunk uses it but it is not

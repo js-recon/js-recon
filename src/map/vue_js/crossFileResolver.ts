@@ -16,10 +16,8 @@
  */
 import fs from "fs";
 import path from "path";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 
 interface WebpackModule {
     moduleId: string;

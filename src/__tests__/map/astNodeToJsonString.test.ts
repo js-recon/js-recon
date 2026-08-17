@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 import { astNodeToJsonString } from "../../map/next_js/resolveAxiosHelpers/astNodeToJsonString.js";
 
 /** Parse a JS expression and return the initializer node (wraps in `const _x = ...`). */

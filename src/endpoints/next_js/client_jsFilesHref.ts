@@ -1,10 +1,8 @@
 import fs from "fs";
 import path from "path";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import { printMsg, MSG } from "../../utility/printMsg.js";
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
-
 /**
  * Searches for href attributes in JavaScript files to discover client-side paths.
  *

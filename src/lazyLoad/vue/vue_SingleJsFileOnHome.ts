@@ -1,11 +1,9 @@
 import makeRequest from "../../utility/makeReq.js";
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import * as cheerio from "cheerio";
 import chalk from "chalk";
 import { progressError, progressLog, progressWarn } from "../../utility/progressLog.js";
-
-const traverse = (_traverse.default ?? _traverse) as typeof _traverse.default;
 
 const vue_singleJsFileOnHome = async (url: string) => {
     const jsFilesFound: string[] = [];

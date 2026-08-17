@@ -22,12 +22,11 @@
  * remains recognisable.
  */
 
-import parser from "@babel/parser";
-import _traverse from "@babel/traverse";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import _generate from "@babel/generator";
 import * as t from "@babel/types";
 
-const traverse = (_traverse as any).default ?? _traverse;
 const generate = (_generate as any).default ?? _generate;
 
 /** Maps an export alias (e.g. `_`, `a`, `c`) to a canonical Vue name. */
