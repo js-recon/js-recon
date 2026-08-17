@@ -15,13 +15,26 @@ const analyzedFiles = [];
 let filesFound = [];
 let mapFilesFound = [];
 
+// Vite's dev server serves the unbundled module graph directly — imports reference not only
+// ".js" but ".mjs", raw ".ts"/".vue" source (transpiled on the fly), each with a cache-busting
+// query string appended (e.g. "./composables/state.js?v=7f19ff7d").
+const JS_LIKE_EXTENSION_RE = /\.(m?js|tsx?|vue)$/i;
+
+// A real file path is never this long. Webpack's `eval`/`eval-source-map` devtool (the default
+// under Nuxt 2's webpack dev server) embeds a module's entire transpiled source as one giant
+// StringLiteral argument to eval(), terminated by a `//# sourceURL=.../foo.js`-style comment —
+// so the whole multi-KB blob ends up matching JS_LIKE_EXTENSION_RE and getting treated as a
+// candidate path. Bounding length here keeps it out of foundJsFiles before it can reach
+// resolvePath (which throws on it) or a log line.
+const MAX_PLAUSIBLE_PATH_LENGTH = 500;
+
 /**
  * Parses the content of a JavaScript file and returns an object containing
- * all the strings that end with ".js".
+ * all the strings that reference a JS-like file (".js", ".mjs", ".ts(x)", ".vue").
  *
  * @param {string} content - The content of the JavaScript file to parse.
  * @returns {Promise<FoundJsFiles>} - A promise that resolves to an object containing
- * all the strings that end with ".js".
+ * all the strings that reference a JS-like file.
  */
 export const parseJSFileContent = async (content) => {
     try {
@@ -36,11 +49,10 @@ export const parseJSFileContent = async (content) => {
         traverse(ast, {
             StringLiteral(path) {
                 const value = path.node.value;
-                if (value.startsWith("./") && value.endsWith(".js")) {
-                    foundJsFiles[value] = value;
-                } else if (value.startsWith("../") && value.endsWith(".js")) {
-                    foundJsFiles[value] = value;
-                } else if (value.endsWith(".js")) {
+                if (value.length > MAX_PLAUSIBLE_PATH_LENGTH) return;
+                // Strip any query string/fragment before testing the extension, or a
+                // cache-busted import specifier is silently missed.
+                if (JS_LIKE_EXTENSION_RE.test(value.split(/[?#]/)[0])) {
                     foundJsFiles[value] = value;
                 }
             },
@@ -109,9 +121,17 @@ const nuxt_stringAnalysisJSFiles = async (url, threads: number = 1, output: stri
                 }
             }
 
-            // iterate through the foundJsFiles and resolve the paths
+            // Iterate through the foundJsFiles and resolve the paths. A single malformed
+            // candidate must not abort the loop — analyzedFiles.push(js_url) below has to run
+            // regardless, or this same file is treated as "not yet analyzed" forever and the
+            // outer while(true) fixpoint loop re-fetches and re-parses it indefinitely.
             for (const [key, value] of Object.entries(foundJsFiles)) {
-                const resolvedPath = await resolvePath(js_url, value);
+                let resolvedPath: string;
+                try {
+                    resolvedPath = resolvePath(js_url, value);
+                } catch {
+                    continue;
+                }
                 if (analyzedFiles.includes(resolvedPath)) {
                     continue;
                 }

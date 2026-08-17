@@ -190,6 +190,7 @@ const processUrl = async (
             "vue",
             "vue-dev",
             "nuxt",
+            "nuxt-dev",
             "react",
             "react-dev",
             "svelte",
@@ -452,7 +453,7 @@ const processUrl = async (
         return;
     }
 
-    if (detectedTech === "nuxt") {
+    if (detectedTech === "nuxt" || detectedTech === "nuxt-dev") {
         // Nuxt is built on Vue.js — the same map/analyze/report pipeline applies.
         const mappedFileNuxt = isBatch ? `${workingDir}/mapped` : "mapped";
         const mappedJsonFileNuxt = isBatch ? `${workingDir}/mapped.json` : "mapped.json";
