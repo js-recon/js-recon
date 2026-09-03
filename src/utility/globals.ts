@@ -1,3 +1,5 @@
+import { originAllowed } from "./headerFile.js";
+
 // Proxy Configuration
 /** Path to the proxy configuration file */
 export let proxyConfigFile = ".proxy_config.json";
@@ -260,6 +262,47 @@ export const setCustomHeaders = (value: { name: string; value: string }[]): void
  */
 export const getCustomHeaders = (): { name: string; value: string }[] => {
     return customHeaders;
+};
+
+// Private Header Configuration (--header-file, run command only)
+/** Header/value pairs sourced from --header-file. Kept as a separate array from `customHeaders` —
+ * these are only ever attached to requests whose destination origin is in `privateHeaderOrigins`,
+ * never merged into CONFIG, YAML config, or any other serializable global. See `utility/headerFile.ts`. */
+let privateHeaders: { name: string; value: string }[] = [];
+/** Normalized (scheme://host:port) origins of the explicitly-supplied scan targets — the only
+ * origins private headers may ever be attached to. */
+let privateHeaderOrigins: ReadonlySet<string> = new Set();
+
+/**
+ * Sets the private headers and the origin allowlist they're scoped to. Called once, before any
+ * network activity, by the `run` command's action handler in `cliProgram.ts`.
+ * @param headers - Array of name/value header pairs read from --header-file
+ * @param allowedOrigins - Normalized origins of the explicitly-supplied scan targets
+ */
+export const setPrivateHeaders = (
+    headers: { name: string; value: string }[],
+    allowedOrigins: ReadonlySet<string>
+): void => {
+    privateHeaders = headers;
+    privateHeaderOrigins = allowedOrigins;
+};
+
+/** True when --header-file supplied at least one private header for this run. */
+export const hasPrivateHeaders = (): boolean => privateHeaders.length > 0;
+
+/**
+ * Returns the private headers to attach to a request to `url`, or `{}` when no private headers are
+ * configured or `url`'s origin isn't in the explicitly-supplied target allowlist. Callers must check
+ * this per request (and per redirect hop) rather than caching the result — see `makeReq.ts`.
+ * @param url - The destination URL a request is about to be sent to
+ */
+export const getPrivateHeadersForUrl = (url: string): Record<string, string> => {
+    if (privateHeaders.length === 0 || !originAllowed(url, privateHeaderOrigins)) return {};
+    const record: Record<string, string> = {};
+    for (const { name, value } of privateHeaders) {
+        record[name] = value;
+    }
+    return record;
 };
 
 // AI Configuration

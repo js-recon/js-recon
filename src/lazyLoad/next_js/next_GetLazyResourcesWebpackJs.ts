@@ -98,7 +98,14 @@ const next_GetLazyResourcesWebpackJs = async (url: string, threads: number = 1):
         }
 
         if (/^https?:\/\//i.test(req_url)) {
-            await request.continue();
+            // Never attach private headers to a proxied request (proxyArgs.arg set) — see
+            // cliProgram.ts's --header-file validation and utility/CLAUDE.md.
+            const extraHeaders = proxyArgs.arg ? {} : globals.getPrivateHeadersForUrl(req_url);
+            if (Object.keys(extraHeaders).length === 0) {
+                await request.continue();
+            } else {
+                await request.continue({ headers: { ...request.headers(), ...extraHeaders } });
+            }
         } else {
             await request.abort();
         }

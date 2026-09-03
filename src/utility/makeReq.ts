@@ -157,6 +157,43 @@ const UAs = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
 ];
 
+const MAX_PRIVATE_HEADER_REDIRECTS = 20;
+
+/**
+ * Issues one fetch, attaching private (`--header-file`) headers only when `url`'s origin is in the
+ * explicitly-supplied target allowlist, and only when no proxy dispatcher is in play (a proxied
+ * request — including the automatic Oxylabs WAF-block fallback — must never see a private header;
+ * see `cliProgram.ts`'s `--header-file` validation, which rejects the combination with the fallback
+ * flags outright rather than relying solely on this runtime check).
+ *
+ * When private headers are configured, redirects are followed manually so the origin check re-runs
+ * on every hop and a private header is dropped the moment a redirect leaves the allowlist — the
+ * platform `fetch`'s automatic redirect-follow has no such per-hop hook. When no private headers are
+ * configured (the common case), this is a single plain `fetch` call with unchanged behavior.
+ */
+const fetchWithPrivateHeaderScope = async (url: string, options: FetchOptsWithDispatcher): Promise<Response> => {
+    if (!globals.hasPrivateHeaders() || options.dispatcher) {
+        return fetch(url, options);
+    }
+    let currentUrl = url;
+    for (let hop = 0; hop <= MAX_PRIVATE_HEADER_REDIRECTS; hop++) {
+        const hopHeaders = new Headers(options.headers);
+        for (const [name, value] of Object.entries(globals.getPrivateHeadersForUrl(currentUrl))) {
+            hopHeaders.set(name, value);
+        }
+        const response = await fetch(currentUrl, { ...options, headers: hopHeaders, redirect: "manual" });
+        const isRedirect = response.status >= 300 && response.status < 400;
+        const location = isRedirect ? response.headers.get("location") : null;
+        if (!location) return response;
+        try {
+            currentUrl = new URL(location, currentUrl).href;
+        } catch {
+            return response;
+        }
+    }
+    throw new Error(`Exceeded redirect limit while resolving ${url}`);
+};
+
 export const getCacheIdentityDigest = (url: string, headers: HeadersInit): string => {
     const normalizedHeaders = [...new Headers(headers as HeadersInit).entries()].sort(([left], [right]) =>
         left.localeCompare(right)
@@ -304,7 +341,7 @@ const singleFetch = async (
 
             try {
                 EventEmitter.defaultMaxListeners = 20;
-                const response = await fetch(url, currentRequestOptions); // lgtm[js/insecure-download]: this is a recon tool's generic HTTP client — it fetches whatever URL/scheme the target itself serves, by design.
+                const response = await fetchWithPrivateHeaderScope(url, currentRequestOptions); // lgtm[js/insecure-download]: this is a recon tool's generic HTTP client — it fetches whatever URL/scheme the target itself serves, by design.
                 const arrayBuffer = await response.arrayBuffer();
                 if (controller.signal.aborted) {
                     shouldDestroyOwnedDispatcher = true;
@@ -406,6 +443,20 @@ const handleFirewall = async (
         if (proxyArgs.authenticate) await page.authenticate(proxyArgs.authenticate);
         const customHeaders = customHeadersToRecord(globals.getCustomHeaders());
         if (Object.keys(customHeaders).length > 0) await page.setExtraHTTPHeaders(customHeaders);
+        // Private headers are never set via setExtraHTTPHeaders (that would send them to every
+        // subresource this page loads, including off-origin ones). Interception lets each request
+        // be origin-checked individually; skipped entirely when a proxy is in play (proxyArgs.arg).
+        if (globals.hasPrivateHeaders() && !proxyArgs.arg) {
+            await page.setRequestInterception(true);
+            page.on("request", (req) => {
+                const extraHeaders = globals.getPrivateHeadersForUrl(req.url());
+                if (Object.keys(extraHeaders).length === 0) {
+                    req.continue().catch(() => undefined);
+                } else {
+                    req.continue({ headers: { ...req.headers(), ...extraHeaders } }).catch(() => undefined);
+                }
+            });
+        }
         await page.goto(url);
         if (signal?.aborted) return null;
         await new Promise<void>((resolve) => {

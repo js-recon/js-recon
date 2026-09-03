@@ -29,8 +29,9 @@ import {
     OxylabsFallbackConfigurationError,
     resolveOxylabsFallback,
 } from "./proxy/oxylabsFallback.js";
-import { collectTargetInput } from "./utility/targetInputs.js";
+import { collectTargetInput, resolveTargetInputs, TargetInputError } from "./utility/targetInputs.js";
 import { parseHeaderFlagValue, type CustomHeaderPair } from "./utility/customHeaders.js";
+import { readHeaderFile, buildOriginAllowlist, HeaderFileError } from "./utility/headerFile.js";
 
 /** Valid AI options for analysis modules */
 const validAiOptions = ["description"];
@@ -789,6 +790,10 @@ export function buildProgram(): Command {
             (val: string, prev: string[]) => [...prev, val],
             [] as string[]
         )
+        .option(
+            "--header-file <path>",
+            "Owner-only, non-symlink file of newline-separated 'Name: value' private headers (1-16 entries). Sent only to the exact origin(s) explicitly supplied via -u, never to third-party subresources, redirects off-origin, or any proxy/AI/MCP call. No environment-variable alternative."
+        )
         .option("--secrets", "Scan for secrets", false)
         .option("--trufflehog", "Run TruffleHog secret scanner on the output directory", false)
         .option("--trufflehog-bin <path>", "Path to the trufflehog binary (skips auto-download)", "trufflehog")
@@ -975,7 +980,46 @@ export function buildProgram(): Command {
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             globalsUtil.setCacheOnly(cmd.cacheOnly);
             globalsUtil.setVerbose(cmd.verbose);
-            globalsUtil.setCustomHeaders(resolveCustomHeaders(cmd.header));
+            const resolvedCustomHeaders = resolveCustomHeaders(cmd.header);
+            globalsUtil.setCustomHeaders(resolvedCustomHeaders);
+
+            if (cmd.headerFile) {
+                if (cmd.oxylabsWafFallback || cmd.proxyWafFallback) {
+                    console.error(
+                        chalk.red(
+                            "[!] --header-file cannot be combined with --oxylabs-waf-fallback or --proxy-waf-fallback (a private header must never be sent through a third-party fallback proxy)"
+                        )
+                    );
+                    process.exit(35);
+                }
+                let privateHeaders: ReturnType<typeof readHeaderFile>;
+                try {
+                    privateHeaders = readHeaderFile(cmd.headerFile);
+                } catch (error) {
+                    console.error(
+                        chalk.red(`[!] ${error instanceof HeaderFileError ? error.message : "Unable to read --header-file"}`)
+                    );
+                    process.exit(35);
+                }
+                const customHeaderNames = new Set(resolvedCustomHeaders.map((h) => h.name.toLowerCase()));
+                const collision = privateHeaders.find((h) => customHeaderNames.has(h.name.toLowerCase()));
+                if (collision) {
+                    console.error(
+                        chalk.red("[!] --header-file has a header name that collides with a -H/--header value")
+                    );
+                    process.exit(35);
+                }
+                let resolvedTargets: readonly string[];
+                try {
+                    resolvedTargets = resolveTargetInputs(cmd.url).targets;
+                } catch (error) {
+                    console.error(
+                        chalk.red(`[!] ${error instanceof TargetInputError ? error.message : "Unable to resolve -u/--url"}`)
+                    );
+                    process.exit(1);
+                }
+                globalsUtil.setPrivateHeaders(privateHeaders, buildOriginAllowlist(resolvedTargets));
+            }
 
             configureSandbox(cmd);
 
