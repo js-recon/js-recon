@@ -5,6 +5,8 @@ import {
     clearOpenapiOutput,
     setTargetUrl,
     getTargetUrl,
+    setPrivateHeaders,
+    getPrivateHeadersForUrl,
 } from "../../utility/globals.js";
 import type { OpenapiOutputItem } from "../../utility/globals.js";
 
@@ -59,5 +61,31 @@ describe("setTargetUrl / getTargetUrl", () => {
     it("falls back to the raw value when it isn't a parseable URL", () => {
         setTargetUrl("not-a-url");
         expect(getTargetUrl()).toBe("not-a-url");
+    });
+});
+
+describe("getPrivateHeadersForUrl", () => {
+    afterEach(() => {
+        setPrivateHeaders([], new Set());
+    });
+
+    it("attaches the header for an allowlisted HTTPS origin", () => {
+        setPrivateHeaders([{ name: "X-Secret", value: "s3cr3t" }], new Set(["https://example.com:443"]));
+        expect(getPrivateHeadersForUrl("https://example.com/api")).toEqual({ "X-Secret": "s3cr3t" });
+    });
+
+    it("withholds the header for an allowlisted HTTP origin (credential must never travel in cleartext)", () => {
+        setPrivateHeaders([{ name: "X-Secret", value: "s3cr3t" }], new Set(["http://example.com:80"]));
+        expect(getPrivateHeadersForUrl("http://example.com/api")).toEqual({});
+    });
+
+    it("withholds the header for a non-allowlisted origin", () => {
+        setPrivateHeaders([{ name: "X-Secret", value: "s3cr3t" }], new Set(["https://example.com:443"]));
+        expect(getPrivateHeadersForUrl("https://evil.example/api")).toEqual({});
+    });
+
+    it("withholds the header when none are configured", () => {
+        setPrivateHeaders([], new Set(["https://example.com:443"]));
+        expect(getPrivateHeadersForUrl("https://example.com/api")).toEqual({});
     });
 });

@@ -292,12 +292,20 @@ export const hasPrivateHeaders = (): boolean => privateHeaders.length > 0;
 
 /**
  * Returns the private headers to attach to a request to `url`, or `{}` when no private headers are
- * configured or `url`'s origin isn't in the explicitly-supplied target allowlist. Callers must check
- * this per request (and per redirect hop) rather than caching the result — see `makeReq.ts`.
+ * configured, `url`'s origin isn't in the explicitly-supplied target allowlist, or `url` isn't HTTPS.
+ * The HTTPS requirement holds even for an origin the user explicitly targeted — these headers are
+ * unconditionally credential-bearing (see `headerFile.ts`), so sending one over plaintext HTTP would
+ * expose it to any network observer regardless of destination intent. Callers must check this per
+ * request (and per redirect hop) rather than caching the result — see `makeReq.ts`.
  * @param url - The destination URL a request is about to be sent to
  */
 export const getPrivateHeadersForUrl = (url: string): Record<string, string> => {
     if (privateHeaders.length === 0 || !originAllowed(url, privateHeaderOrigins)) return {};
+    try {
+        if (new URL(url).protocol !== "https:") return {};
+    } catch {
+        return {};
+    }
     const record: Record<string, string> = {};
     for (const { name, value } of privateHeaders) {
         record[name] = value;
