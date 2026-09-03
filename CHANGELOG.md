@@ -1,6 +1,6 @@
 # Change Log
 
-## 2.0.1-beta.2 (unreleased)
+## 2.0.1-beta.2 - 2026-09-03
 
 ### Added
 
