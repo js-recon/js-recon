@@ -4,8 +4,12 @@
 
 ### Changed
 
-- Bumped dependencies via Dependabot: `puppeteer`/`puppeteer-core` (Docker images, #179), the `actions/*` GitHub Actions group (#181), the npm minor/patch group covering 10 packages (#182), `inquirer` to 14.0.2 (#176), and `datatables.net-dt` to 3.0.1 (#175).
+- Bumped dependencies via Dependabot: `puppeteer`/`puppeteer-core` (Docker images, #179), the `actions/*` GitHub Actions group (#181), the npm minor/patch group covering 10 packages (#182), and `inquirer` to 14.0.2 (#176).
 - Removed the `@types/chalk` dev dependency — it's a deprecated stub package superseded by `chalk`'s own bundled type definitions (unused since the `chalk` v6 bump); nothing in `src/` referenced it (#177, closed instead of merged).
+
+### Fixed
+
+- Reverted `datatables.net-dt` back to `^2.3.8` after #175 bumped it to `3.0.1` — DataTables' styling package must match the core `datatables.net` library's major version, and `datatables.net` itself stayed on `^2.3.6`. `report`'s local asset path (`genHtml.ts`) resolves both from `node_modules`, so the mismatch would have shipped 2.x DataTables JS paired with 3.x CSS in generated HTML reports.
 
 ### Security
 
