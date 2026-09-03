@@ -124,7 +124,14 @@ const frameworkDetect = async (
                 interceptedUrls.push(req.url());
                 // Abort non-http/s schemes (mailto:, data:, etc.) — continue() throws for them.
                 if (/^https?:\/\//i.test(req.url())) {
-                    req.continue().catch(() => {});
+                    // Never attach private headers to a proxied request (proxyArgs.arg set) — see
+                    // cliProgram.ts's --header-file validation and utility/CLAUDE.md.
+                    const extraHeaders = proxyArgs.arg ? {} : globalsUtil.getPrivateHeadersForUrl(req.url());
+                    if (Object.keys(extraHeaders).length === 0) {
+                        req.continue().catch(() => {});
+                    } else {
+                        req.continue({ headers: { ...req.headers(), ...extraHeaders } }).catch(() => {});
+                    }
                 } else {
                     req.abort().catch(() => {});
                 }

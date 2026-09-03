@@ -1,5 +1,15 @@
 # Change Log
 
+## 2.0.1-beta.2 - 2026-09-03
+
+### Added
+
+- New `--header-file <path>` option on `run`: a private-header alternative to `-H/--header` for credential-bearing headers. Unlike `-H`, which is sent with every request, a header from `--header-file` is only ever attached to a request whose destination origin exactly matches one of the URLs explicitly supplied via `-u` — never a cross-origin subresource, a redirect off that origin, or any AI/MCP/proxy call. The file must be owner-only (`chmod 600`), not a symlink, and contain 1-16 `Name: value` lines; any violation, or a collision with `-H`/`--header`, or combination with `--oxylabs-waf-fallback`/`--proxy-waf-fallback`, fails before any network activity (exit code `35`). (`run`)
+
+### Security
+
+- `--header-file` private headers are now withheld from plain-HTTP destinations, even when the origin exactly matches an explicitly-supplied `-u` target. `getPrivateHeadersForUrl` (`src/utility/globals.ts`) — the single choke point every private-header call site routes through — now requires `https:` in addition to the existing origin-allowlist check, so a credential-bearing header can never be sent in cleartext. (`run`, `utility`)
+
 ## 2.0.1-beta.1 - 2026-08-17
 
 ### Added

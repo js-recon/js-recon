@@ -26,7 +26,10 @@ export const resolveRedirectChain = async (
         try {
             res = await fetchImpl(currentUrl, {
                 redirect: "manual",
-                headers: customHeadersToRecord(globals.getCustomHeaders()),
+                headers: {
+                    ...customHeadersToRecord(globals.getCustomHeaders()),
+                    ...globals.getPrivateHeadersForUrl(currentUrl),
+                },
             });
         } catch {
             return currentUrl;
