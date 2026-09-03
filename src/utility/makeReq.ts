@@ -161,10 +161,11 @@ const MAX_PRIVATE_HEADER_REDIRECTS = 20;
 
 /**
  * Issues one fetch, attaching private (`--header-file`) headers only when `url`'s origin is in the
- * explicitly-supplied target allowlist, and only when no proxy dispatcher is in play (a proxied
- * request — including the automatic Oxylabs WAF-block fallback — must never see a private header;
- * see `cliProgram.ts`'s `--header-file` validation, which rejects the combination with the fallback
- * flags outright rather than relying solely on this runtime check).
+ * explicitly-supplied target allowlist, `url` is HTTPS (never sent in cleartext, even to an
+ * allowlisted HTTP origin), and no proxy dispatcher is in play (a proxied request — including the
+ * automatic Oxylabs WAF-block fallback — must never see a private header; see `cliProgram.ts`'s
+ * `--header-file` validation, which rejects the combination with the fallback flags outright rather
+ * than relying solely on this runtime check).
  *
  * When private headers are configured, redirects are followed manually so the origin check re-runs
  * on every hop and a private header is dropped the moment a redirect leaves the allowlist — the
@@ -178,7 +179,11 @@ const fetchWithPrivateHeaderScope = async (url: string, options: FetchOptsWithDi
     let currentUrl = url;
     for (let hop = 0; hop <= MAX_PRIVATE_HEADER_REDIRECTS; hop++) {
         const hopHeaders = new Headers(options.headers);
-        for (const [name, value] of Object.entries(globals.getPrivateHeadersForUrl(currentUrl))) {
+        // Scheme check duplicated here (also enforced inside getPrivateHeadersForUrl) so the
+        // guard sits directly beside the fetch sink instead of only inside a helper two calls away.
+        const isHttps = currentUrl.startsWith("https://");
+        const privateHeadersForHop = isHttps ? globals.getPrivateHeadersForUrl(currentUrl) : {};
+        for (const [name, value] of Object.entries(privateHeadersForHop)) {
             hopHeaders.set(name, value);
         }
         const response = await fetch(currentUrl, { ...options, headers: hopHeaders, redirect: "manual" });
