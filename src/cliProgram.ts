@@ -997,7 +997,9 @@ export function buildProgram(): Command {
                     privateHeaders = readHeaderFile(cmd.headerFile);
                 } catch (error) {
                     console.error(
-                        chalk.red(`[!] ${error instanceof HeaderFileError ? error.message : "Unable to read --header-file"}`)
+                        chalk.red(
+                            `[!] ${error instanceof HeaderFileError ? error.message : "Unable to read --header-file"}`
+                        )
                     );
                     process.exit(35);
                 }
@@ -1014,7 +1016,9 @@ export function buildProgram(): Command {
                     resolvedTargets = resolveTargetInputs(cmd.url).targets;
                 } catch (error) {
                     console.error(
-                        chalk.red(`[!] ${error instanceof TargetInputError ? error.message : "Unable to resolve -u/--url"}`)
+                        chalk.red(
+                            `[!] ${error instanceof TargetInputError ? error.message : "Unable to resolve -u/--url"}`
+                        )
                     );
                     process.exit(1);
                 }

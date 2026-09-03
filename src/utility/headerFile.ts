@@ -85,7 +85,9 @@ export const parseHeaderFileContent = (content: string): PrivateHeaderPair[] => 
 
         const normalizedName = name.toLowerCase();
         if (seenNames.has(normalizedName)) {
-            throw new HeaderFileError(`Header file line ${lineNumber} duplicates a header name already defined earlier`);
+            throw new HeaderFileError(
+                `Header file line ${lineNumber} duplicates a header name already defined earlier`
+            );
         }
         seenNames.add(normalizedName);
         pairs.push({ name, value });
@@ -145,7 +147,9 @@ export const readHeaderFile = (filePath: string): PrivateHeaderPair[] => {
             throw new HeaderFileError(`Header file at ${filePath} must be a regular file`);
         }
         if (fileStats.size > MAX_HEADER_FILE_BYTES) {
-            throw new HeaderFileError(`Header file at ${filePath} exceeds the ${MAX_HEADER_FILE_BYTES}-byte size limit`);
+            throw new HeaderFileError(
+                `Header file at ${filePath} exceeds the ${MAX_HEADER_FILE_BYTES}-byte size limit`
+            );
         }
         if (process.platform !== "win32") {
             if ((fileStats.mode & 0o077) !== 0) {
