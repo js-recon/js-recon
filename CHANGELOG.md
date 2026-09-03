@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.0.1-beta.3 - (unreleased)
+
+### Security
+
+- Removed `safePath()` from `src/lazyLoad/sourcemap.ts`, an unused path-sanitization function whose single-pass `../` regex strip could leave a traversal sequence behind (CodeQL `js/incomplete-multi-character-sanitization`). The function had no callers anywhere in the codebase; the actual source-map output write path is already bounded correctly by `resolveSourceMapOutputPath()` in `src/sourcemaps/index.ts`. (`lazyload`)
+
 ## 2.0.1-beta.2 - 2026-09-03
 
 ### Added
