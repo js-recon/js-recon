@@ -228,31 +228,6 @@ function normalizePath(path: string): string {
 }
 
 /**
- * Sanitize a path to ensure it cannot escape the output directory.
- * This is a safety check that should be used before writing files.
- *
- * @param basePath - The base output directory (absolute path)
- * @param filePath - The file path to sanitize
- * @returns Safe path that is guaranteed to be under basePath
- */
-export function safePath(basePath: string, filePath: string): string {
-    // Clean and normalize the file path
-    let cleaned = cleanPath(filePath);
-    cleaned = normalizePath(cleaned);
-
-    // Remove any remaining ../ sequences (belt and suspenders)
-    cleaned = cleaned.replace(/\.\.\//g, "").replace(/^\.\.$/, "");
-
-    // Remove leading slashes to prevent absolute path injection
-    cleaned = cleaned.replace(/^\/+/, "");
-
-    // Join with base path
-    const joined = basePath.endsWith("/") ? basePath + cleaned : basePath + "/" + cleaned;
-
-    return joined;
-}
-
-/**
  * Join two path segments
  */
 function joinPaths(base: string, path: string): string {
