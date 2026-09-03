@@ -2,6 +2,11 @@
 
 ## 2.0.1-beta.3 - (unreleased)
 
+### Changed
+
+- Bumped dependencies via Dependabot: `puppeteer`/`puppeteer-core` (Docker images, #179), the `actions/*` GitHub Actions group (#181), the npm minor/patch group covering 10 packages (#182), `inquirer` to 14.0.2 (#176), and `datatables.net-dt` to 3.0.1 (#175).
+- Removed the `@types/chalk` dev dependency — it's a deprecated stub package superseded by `chalk`'s own bundled type definitions (unused since the `chalk` v6 bump); nothing in `src/` referenced it (#177, closed instead of merged).
+
 ### Security
 
 - Removed `safePath()` from `src/lazyLoad/sourcemap.ts`, an unused path-sanitization function whose single-pass `../` regex strip could leave a traversal sequence behind (CodeQL `js/incomplete-multi-character-sanitization`). The function had no callers anywhere in the codebase; the actual source-map output write path is already bounded correctly by `resolveSourceMapOutputPath()` in `src/sourcemaps/index.ts`. (`lazyload`)

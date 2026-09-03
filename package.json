@@ -33,7 +33,6 @@
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@shriyanss/cli-print-img": "^1.1.1",
         "@shriyanss/cs-mast": "0.1.8",
-        "@types/chalk": "^0.4.31",
         "@types/cli-progress": "^3.11.6",
         "better-sqlite3": "^12.5.0",
         "blessed": "^0.1.81",
