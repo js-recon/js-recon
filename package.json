@@ -43,7 +43,7 @@
         "cli-progress": "^3.12.0",
         "commander": "^14.0.0",
         "datatables.net": "^2.3.6",
-        "datatables.net-dt": "^2.3.6",
+        "datatables.net-dt": "^3.0.1",
         "esquery": "^1.6.0",
         "express": "^5.2.1",
         "graphql": "^17.0.2",
