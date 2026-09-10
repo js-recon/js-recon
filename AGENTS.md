@@ -492,17 +492,15 @@ Monitor: `gh run list --repo js-recon/homebrew-tap --workflow ci.yml`
 
 10. **Fix doc gaps** — cross-check `docs/docs/modules/*.md` against `src/index.ts` and the new CHANGELOG entries. Add or update any missing flags, options, or command descriptions.
 
-11. **Snapshot** — run inside `js-recon-docs/`:
+11. **Snapshot (stable releases only)** — alpha/beta releases skip this step entirely: do not run `docusaurus docs:version`, and do not touch `versions.json`, `versioned_docs/`, or `versioned_sidebars/`. For a stable release, run inside `js-recon-docs/`:
 
     ```bash
     npx docusaurus docs:version <version>
     ```
 
-    This creates `versioned_docs/version-<version>/`, updates `versions.json`, and creates `versioned_sidebars/version-<version>-sidebars.json`.
+    This creates `versioned_docs/version-<version>/`, updates `versions.json`, creates `versioned_sidebars/version-<version>-sidebars.json`, and update `lastVersion` in `docusaurus.config.ts` to this new version.
 
-12. **Keep `lastVersion` stable** — `lastVersion` in `docusaurus.config.ts` stays pointing to the last stable release. Do **not** update it for alpha or beta versions.
-
-13. **Push** `js-recon-docs` stage branch and open PR:
+12. **Push** `js-recon-docs` stage branch and open PR:
 
     ```bash
     git -C ../js-recon-docs add .
@@ -514,7 +512,7 @@ Monitor: `gh run list --repo js-recon/homebrew-tap --workflow ci.yml`
       --body "<brief summary of doc changes>"
     ```
 
-14. **Monitor docs CI** — `version_check` should pass now that the npm package is live. CodeRabbit rate-limit comments are non-blocking.
+13. **Monitor docs CI** — `version_check` should pass now that the npm package is live. CodeRabbit rate-limit comments are non-blocking.
 
 ### Post-release branching model
 
