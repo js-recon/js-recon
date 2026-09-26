@@ -10,6 +10,7 @@
 
 - Pinned every dependency to an exact version: all `^` ranges in `package.json` (`dependencies`, `devDependencies`, `overrides`) are replaced with the exact versions already resolved in the lockfile, and a new `.npmrc` sets `save-exact=true` so future installs stay pinned.
 - `package-lock.json` is replaced by `npm-shrinkwrap.json`. A `package-lock.json` is ignored when the package is installed from npm (`npm install -g @js-recon/js-recon`), so users' transitive dependencies could still float to newer, unreviewed versions. `npm-shrinkwrap.json` is published with the package and pins the whole dependency tree, with each tarball checked against its sha512 `integrity` hash. The `Dockerfile` and the release CI's `depx audit` step now use `npm-shrinkwrap.json`.
+- Bumped the transitive `hono` dependency (via `@modelcontextprotocol/sdk`) from `4.13.0` to `4.13.9`, clearing moderate advisories GHSA-gqvv-2mrq-wpjv, GHSA-g6gw-c38x-mqfc and GHSA-crvj-82cr-hjcx that failed CI's `npm audit` gate.
 
 ## 2.0.1-beta.3 - 2026-09-03
 
