@@ -61,6 +61,76 @@ export const extractChunkBuilderFunctions = (jsContent: string): ChunkBuilderFun
 };
 
 /**
+ * Replaces the builder's public-path member (e.g. `f.p`) with its string value
+ * assigned elsewhere in `ast`. Builders without one are returned unchanged.
+ */
+export const resolveBuilderSource = (source: string, ast: any): string => {
+    // get the value of the unknown vars
+    // first, get the name of the unknown function
+    const unknownVarAst = parser.parse(`(${source})`, {
+        sourceType: "script",
+        plugins: ["jsx", "typescript"],
+        errorRecovery: true,
+    });
+    const memberExpressions = [];
+    traverse(unknownVarAst, {
+        MemberExpression(path) {
+            // Only collect identifiers like f.p (not obj["x"])
+            if (
+                t.isIdentifier(path.node.object) &&
+                t.isIdentifier(path.node.property) &&
+                !path.node.computed // ignore obj["x"]
+            ) {
+                const objName = path.node.object.name;
+                const propName = path.node.property.name;
+                memberExpressions.push(`${objName}.${propName}`);
+            }
+        },
+    });
+
+    // Map-literal builders (`({...})[t] + ".js"`) have no public-path member
+    // to resolve; they're self-contained, so run them as-is.
+    if (memberExpressions.length === 0) {
+        printMsg(MSG.Warn, "[!] No public-path member expression in chunk builder; executing it as-is");
+        return source;
+    }
+
+    const unknownVar = memberExpressions[0].split(".");
+
+    // now, resolve the value of this unknown var
+    let unknownVarValue;
+
+    traverse(ast, {
+        AssignmentExpression(path) {
+            const { left, right } = path.node;
+
+            if (
+                t.isMemberExpression(left) &&
+                t.isIdentifier(left.object, { name: unknownVar[0] }) &&
+                t.isIdentifier(left.property, {
+                    name: unknownVar[1],
+                }) &&
+                !left.computed
+            ) {
+                if (t.isStringLiteral(right)) {
+                    unknownVarValue = right.value;
+                } else {
+                    // fallback to source snippet
+                    unknownVarValue = source.slice(right.start, right.end);
+                }
+            }
+        },
+    });
+
+    // replace the unknown var with the value
+    return source.replace(
+        // eslint-disable-next-line security/detect-non-literal-regexp -- unknownVar values are AST-derived identifier/property names, which cannot contain regex metacharacters
+        new RegExp(`${unknownVar[0]}.${unknownVar[1]}`),
+        `"${unknownVarValue}"`
+    );
+};
+
+/**
  * Finds all the lazy loaded JS files from a given URL using a Nuxt.js specific approach.
  */
 const nuxt_astParse = async (url: string) => {
@@ -117,62 +187,7 @@ const nuxt_astParse = async (url: string) => {
                 printMsg(MSG.Err, "[!] Not executing function.");
                 continue;
             }
-            // get the value of the unknown vars
-            // first, get the name of the unknown function
-            const unknownVarAst = parser.parse(`(${func.source})`, {
-                sourceType: "script",
-                plugins: ["jsx", "typescript"],
-                errorRecovery: true,
-            });
-            const memberExpressions = [];
-            traverse(unknownVarAst, {
-                MemberExpression(path) {
-                    // Only collect identifiers like f.p (not obj["x"])
-                    if (
-                        t.isIdentifier(path.node.object) &&
-                        t.isIdentifier(path.node.property) &&
-                        !path.node.computed // ignore obj["x"]
-                    ) {
-                        const objName = path.node.object.name;
-                        const propName = path.node.property.name;
-                        memberExpressions.push(`${objName}.${propName}`);
-                    }
-                },
-            });
-
-            const unknownVar = memberExpressions[0].split(".");
-
-            // now, resolve the value of this unknown var
-            let unknownVarValue;
-
-            traverse(ast, {
-                AssignmentExpression(path) {
-                    const { left, right } = path.node;
-
-                    if (
-                        t.isMemberExpression(left) &&
-                        t.isIdentifier(left.object, { name: unknownVar[0] }) &&
-                        t.isIdentifier(left.property, {
-                            name: unknownVar[1],
-                        }) &&
-                        !left.computed
-                    ) {
-                        if (t.isStringLiteral(right)) {
-                            unknownVarValue = right.value;
-                        } else {
-                            // fallback to source snippet
-                            unknownVarValue = func.source.slice(right.start, right.end);
-                        }
-                    }
-                },
-            });
-
-            // replace the unknown var with the value
-            const funcSource = func.source.replace(
-                // eslint-disable-next-line security/detect-non-literal-regexp -- unknownVar values are AST-derived identifier/property names, which cannot contain regex metacharacters
-                new RegExp(`${unknownVar[0]}.${unknownVar[1]}`),
-                `"${unknownVarValue}"`
-            );
+            const funcSource = resolveBuilderSource(func.source, ast);
 
             // continue to executing the function with all possible numbers
             const urlBuilderFunc = `(() => (${funcSource}))()`;

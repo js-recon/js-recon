@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { extractChunkBuilderFunctions } from "../../lazyLoad/nuxt_js/nuxt_astParse.js";
+import * as parser from "@babel/parser";
+import { extractChunkBuilderFunctions, resolveBuilderSource } from "../../lazyLoad/nuxt_js/nuxt_astParse.js";
+import execFunc from "../../utility/runSandboxed.js";
 
 describe("extractChunkBuilderFunctions", () => {
     it("finds a FunctionDeclaration ending with .js pattern", () => {
@@ -52,5 +54,24 @@ describe("extractChunkBuilderFunctions", () => {
         `;
         const result = extractChunkBuilderFunctions(code);
         expect(result.length).toBe(2);
+    });
+});
+
+describe("resolveBuilderSource", () => {
+    const parse = (code: string) => parser.parse(code, { sourceType: "module", errorRecovery: true });
+
+    it("substitutes the public-path member with its assigned value", () => {
+        const code = `f.p = "/_nuxt/"; var u = function(e) { return f.p + e + ".js" }`;
+        const [builder] = extractChunkBuilderFunctions(code);
+        const resolved = resolveBuilderSource(builder.source, parse(code));
+        expect(execFunc(`(() => (${resolved}))()`, 3)).toBe("/_nuxt/3.js");
+    });
+
+    it("returns map-literal builders unchanged instead of crashing", () => {
+        const code = `var u = function(t) { return ({1: "abc", 2: "def"})[t] + ".js" }`;
+        const [builder] = extractChunkBuilderFunctions(code);
+        const resolved = resolveBuilderSource(builder.source, parse(code));
+        expect(resolved).toBe(builder.source);
+        expect(execFunc(`(() => (${resolved}))()`, 2)).toBe("def.js");
     });
 });
