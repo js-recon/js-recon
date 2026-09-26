@@ -208,6 +208,11 @@ export const getCacheIdentityDigest = (url: string, headers: HeadersInit): strin
         .digest("hex");
 };
 
+// Fetch forbids a body (even an empty one) on these statuses, so rebuilt
+// Responses must pass `null` or the constructor throws.
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+const responseBody = <T>(status: number, body: T): T | null => (NULL_BODY_STATUSES.has(status) ? null : body);
+
 /**
  * Reads response data from the SQLite response cache for future requests.
  *
@@ -225,7 +230,7 @@ const readCache = async (url: string, headers: HeadersInit): Promise<Response | 
     try {
         const entry = readCacheEntry(identityDigest);
         if (entry) {
-            return new Response(Buffer.from(entry.bodyBase64, "base64"), {
+            return new Response(responseBody(entry.status, Buffer.from(entry.bodyBase64, "base64")), {
                 status: entry.status,
                 statusText: entry.statusText,
                 headers: entry.responseHeaders,
@@ -649,7 +654,7 @@ const makeRequest = async (
         }
 
         // craft a Response, and return that
-        const response = new Response(awsResponse.body, {
+        const response = new Response(responseBody(awsResponse.status ?? 200, awsResponse.body), {
             status: awsResponse.status ?? 200,
             headers: awsResponse.headers ?? {},
         });
@@ -675,7 +680,7 @@ const makeRequest = async (
             headers.delete("content-length");
             headers.delete("content-encoding");
             headers.delete("transfer-encoding");
-            return new Response(bodyCopy, { status: data.status, headers });
+            return new Response(responseBody(data.status, bodyCopy), { status: data.status, headers });
         };
 
         let oxylabsFallbackAttempted = false;
