@@ -8,6 +8,7 @@ import * as globals from "../../utility/globals.js";
 import {
     EnclosingFn,
     inferEnclosingFn,
+    detachEnclosingFn,
     substituteCallerPlaceholders,
     substituteCallerHeaders,
     makeGetCallers,
@@ -195,9 +196,8 @@ const vue_resolveXhr = async (directory: string, frameworkName = "Vue.JS"): Prom
                     const line = p.node.loc?.start.line ?? 0;
 
                     // Capture enclosing function (for taint analysis second pass) but
-                    // null out the AST node ref to avoid pinning the file AST in memory.
-                    const rawEnclosingFn = inferEnclosingFn(p, filePath);
-                    const enclosingFn = rawEnclosingFn ? { ...rawEnclosingFn, node: null } : null;
+                    // null out the AST node refs to avoid pinning the file AST in memory.
+                    const enclosingFn = detachEnclosingFn(inferEnclosingFn(p, filePath));
 
                     const accum = xhrAccum.get(obj.name)!;
                     xhrCallMap.get(obj.name)!.push({

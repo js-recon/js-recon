@@ -88,6 +88,15 @@ export const inferEnclosingFn = (callPath: any, file: string): EnclosingFn | nul
 };
 
 /**
+ * Copies an EnclosingFn chain with every `node` nulled. Resolvers that hold
+ * entries past the per-file loop must store this instead: an outer function
+ * node (often the whole module wrapper) would otherwise pin the entire file
+ * AST, plus Babel's path/scope caches for it, for the rest of the run.
+ */
+export const detachEnclosingFn = (fn: EnclosingFn | null | undefined): EnclosingFn | null =>
+    fn ? { ...fn, node: null, parent: detachEnclosingFn(fn.parent) } : null;
+
+/**
  * Walks an ObjectExpression and returns the property value node for the given
  * dotted property path (e.g. ["data"] → the value node of `data: ...`).
  */
