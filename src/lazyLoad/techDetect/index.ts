@@ -21,6 +21,7 @@ import { isValidInterceptedJsEvidence } from "./checkInterceptedEvidence.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 import { customHeadersToRecord } from "../../utility/customHeaders.js";
+import { closeForCancellation } from "../../utility/fatalHandlers.js";
 
 // Every request Puppeteer intercepted during the most recent frameworkDetect() call,
 // including anything a runtime-injected script requested (e.g. Cloudflare's own
@@ -134,8 +135,11 @@ const frameworkDetect = async (
             log(chalk.red(`[!] Puppeteer browser launch failed: ${message}`));
             throw new Error(`Puppeteer browser launch failed: ${message}`);
         }
+        // Cancellation closes the browser immediately so pending CDP calls fail fast; the
+        // finally below awaits that same close instead of racing a second one.
+        let cancellationClose: Promise<void> | undefined;
         const abortBrowser = () => {
-            void browser.close().catch(() => undefined);
+            cancellationClose = closeForCancellation(() => browser.close());
         };
         signal?.addEventListener("abort", abortBrowser, { once: true });
         try {
@@ -240,7 +244,7 @@ const frameworkDetect = async (
             throw err;
         } finally {
             signal?.removeEventListener("abort", abortBrowser);
-            await browser.close().catch(() => {});
+            await (cancellationClose ?? browser.close().catch(() => {}));
         }
     }
     lastInterceptedUrls = interceptedUrls;
