@@ -15,6 +15,10 @@ function downloadFile(url: string, dest: string): Promise<void> {
     return new Promise((resolve, reject) => {
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         const file = fs.createWriteStream(dest);
+        file.on("error", (err) => {
+            fs.unlink(dest, () => {});
+            reject(err);
+        });
         https
             .get(url, (res) => {
                 if (res.statusCode === 301 || res.statusCode === 302) {
@@ -49,7 +53,12 @@ export async function printBanner(): Promise<void> {
     }
 
     if (fs.existsSync(LOGO_CACHE)) {
-        await printImage(LOGO_CACHE, 45);
+        try {
+            await printImage(LOGO_CACHE, 45);
+        } catch {
+            // logo is cosmetic: drop a corrupt/stale cache so the next run re-downloads it
+            fs.rmSync(LOGO_CACHE, { force: true });
+        }
     }
 
     const name = chalk.bold.hex("#00d4ff")("JS Recon");
