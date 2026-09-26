@@ -34,9 +34,25 @@ interface ParsedChunkFile {
     modules: Map<string, WebpackModule>;
 }
 
+// Parsed chunks hold full Babel AST subtrees, so the cache is an LRU capped by
+// file count: at most MAX_CACHED_CHUNK_FILES ASTs are alive at once no matter
+// how many chunks were downloaded. The global index only maps moduleId ->
+// filePath, so it doesn't retain any AST.
+// ponytail: count-based cap, weigh entries by AST node count if a few huge chunks still blow the heap
+export const MAX_CACHED_CHUNK_FILES = 16;
 const chunkFileCache = new Map<string, ParsedChunkFile | null>();
-let globalModuleIndex: Map<string, WebpackModule> | null = null;
+let globalModuleIndex: Map<string, string> | null = null;
 let globalIndexBuiltFor: string | null = null;
+
+const cacheChunkFile = (filePath: string, parsed: ParsedChunkFile | null): void => {
+    chunkFileCache.delete(filePath);
+    chunkFileCache.set(filePath, parsed);
+    while (chunkFileCache.size > MAX_CACHED_CHUNK_FILES) {
+        chunkFileCache.delete(chunkFileCache.keys().next().value!);
+    }
+};
+
+export const getCrossFileCacheSize = (): number => chunkFileCache.size;
 
 const isRequireCall = (node: any, requireParam: string | null): { moduleId: string } | null => {
     if (!node || node.type !== "CallExpression") return null;
@@ -62,12 +78,16 @@ const literalNodeToString = (node: any): string | null => {
 };
 
 const parseChunkFile = (filePath: string): ParsedChunkFile | null => {
-    if (chunkFileCache.has(filePath)) return chunkFileCache.get(filePath) ?? null;
+    if (chunkFileCache.has(filePath)) {
+        const cached = chunkFileCache.get(filePath) ?? null;
+        cacheChunkFile(filePath, cached);
+        return cached;
+    }
     let content: string;
     try {
         content = fs.readFileSync(filePath, "utf-8");
     } catch {
-        chunkFileCache.set(filePath, null);
+        cacheChunkFile(filePath, null);
         return null;
     }
     let ast: any;
@@ -78,7 +98,7 @@ const parseChunkFile = (filePath: string): ParsedChunkFile | null => {
             errorRecovery: true,
         });
     } catch {
-        chunkFileCache.set(filePath, null);
+        cacheChunkFile(filePath, null);
         return null;
     }
 
@@ -197,13 +217,13 @@ const parseChunkFile = (filePath: string): ParsedChunkFile | null => {
     });
 
     const parsed: ParsedChunkFile = { modules };
-    chunkFileCache.set(filePath, parsed);
+    cacheChunkFile(filePath, parsed);
     return parsed;
 };
 
 const ensureGlobalIndex = (directory: string): void => {
     if (globalIndexBuiltFor === directory && globalModuleIndex) return;
-    globalModuleIndex = new Map<string, WebpackModule>();
+    globalModuleIndex = new Map<string, string>();
     let files: string[];
     try {
         files = fs.readdirSync(directory, { recursive: true, encoding: "utf8" }) as string[];
@@ -221,11 +241,17 @@ const ensureGlobalIndex = (directory: string): void => {
         }
         const parsed = parseChunkFile(abs);
         if (!parsed) continue;
-        for (const [modId, mod] of parsed.modules) {
-            if (!globalModuleIndex.has(modId)) globalModuleIndex.set(modId, mod);
+        for (const modId of parsed.modules.keys()) {
+            if (!globalModuleIndex.has(modId)) globalModuleIndex.set(modId, abs);
         }
     }
     globalIndexBuiltFor = directory;
+};
+
+const lookupModule = (moduleId: string): WebpackModule | null => {
+    const filePath = globalModuleIndex?.get(moduleId);
+    if (!filePath) return null;
+    return parseChunkFile(filePath)?.modules.get(moduleId) ?? null;
 };
 
 const findModuleContainingFile = (filePath: string): WebpackModule | null => {
@@ -294,7 +320,7 @@ export const crossFileResolveMember = (
 
     const targetModuleId = mod.imports.get(identName);
     if (!targetModuleId) return null;
-    const targetMod = globalModuleIndex.get(targetModuleId);
+    const targetMod = lookupModule(targetModuleId);
     if (!targetMod) return null;
 
     if (propPath.length === 0) return null;
@@ -372,7 +398,7 @@ export const crossFileResolveCallReturn = (
 
     const targetModuleId = mod.imports.get(root);
     if (!targetModuleId) return null;
-    const targetMod = globalModuleIndex.get(targetModuleId);
+    const targetMod = lookupModule(targetModuleId);
     if (!targetMod) return null;
 
     if (chain.length === 1) return null;
