@@ -173,7 +173,7 @@ export type RefactorReactResult = {
     libModuleMap: Map<string, LibraryModuleInfo>;
 };
 
-const refactorReact = async (
+const refactorReactChunk = async (
     chunk: Chunk,
     libSigs?: Set<string>,
     externalLibModuleMap?: Map<string, LibraryModuleInfo>,
@@ -363,6 +363,18 @@ const refactorReact = async (
     }
 
     return { files, libModuleMap };
+};
+
+// Contains failures at chunk scope: Babel's parser recovers from some errors (e.g. duplicate
+// lexical declarations) that traverse's scope builder later throws on, so one invalid chunk
+// is skipped instead of aborting the whole refactor.
+const refactorReact = async (...args: Parameters<typeof refactorReactChunk>): Promise<RefactorReactResult> => {
+    try {
+        return await refactorReactChunk(...args);
+    } catch (e) {
+        printMsg(MSG.Warn, `[!] Failed to refactor React chunk ${args[0].id} (${(e as Error).message}) — skipping`);
+        return { files: {}, libModuleMap: new Map() };
+    }
 };
 
 export default refactorReact;

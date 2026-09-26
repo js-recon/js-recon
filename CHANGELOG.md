@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- `run` no longer exits `1` after a completed analysis when the optional post-report refactor fails. A React webpack chunk with a duplicate lexical declaration (e.g. two `const` bindings of the same name in one scope) made Babel's traverse throw `TypeError: Duplicate declaration`, which aborted the whole refactor and the run. The `react-webpack` refactor now logs and skips only the offending chunk, and `run` treats any refactor failure as a warning for every framework branch, since lazyload, map, analyze and report have already finished. (`refactor`, `run`)
 - Upgraded `better-sqlite3` from `12.5.0` to `13.0.3`. 12.x only shipped per-ABI prebuilt binaries and had none for Node.js 26 (`NODE_MODULE_VERSION 147`), where building from source also failed, so the response cache database (`.resp_cache.db`) couldn't open and every module logged `Could not open response cache database`. 13.x is built on N-API and bundles its prebuilt binaries in the package, so one binary works across Node.js versions without a rebuild. This also drops the deprecated `prebuild-install` dependency tree. (`utility`, `report`)
 
 ### Security
