@@ -39,6 +39,14 @@ const execFunc = (code, param) => {
     const func = c.evaluate(wrappedCode);
     const output = func(param);
 
+    // Async chunk builders return a Promise that usually rejects because they rely
+    // on outer webpack runtime state. Contain the rejection so it can't surface as
+    // an unhandled rejection (exit 34), and return undefined — callers only use strings.
+    if (typeof output?.then === "function") {
+        Promise.resolve(output).catch(() => {});
+        return undefined;
+    }
+
     return output;
 };
 
