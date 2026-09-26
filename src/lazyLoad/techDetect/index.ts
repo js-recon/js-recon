@@ -34,6 +34,40 @@ let lastInterceptedUrls: string[] = [];
 
 export const getLastInterceptedUrls = (): string[] => lastInterceptedUrls;
 
+// How long to keep waiting for captured response bodies once the page has loaded, and
+// how long after cancellation. A body read can stay pending forever (a streaming response
+// that never ends, or a CDP call orphaned by browser.close() on abort); an unbounded wait
+// leaves nothing keeping the event loop alive, so `run` dies with Node's exit 13.
+const RESPONSE_BODY_SETTLE_MS = 10_000;
+const RESPONSE_BODY_CANCEL_GRACE_MS = 1_000;
+
+/**
+ * Waits for `bodies` to settle, but never longer than `settleMs`, or `cancelGraceMs`
+ * once `signal` is aborted. Bodies still pending past the deadline are abandoned.
+ */
+export const settleResponseBodies = (
+    bodies: Promise<unknown>[],
+    signal?: AbortSignal,
+    settleMs: number = RESPONSE_BODY_SETTLE_MS,
+    cancelGraceMs: number = RESPONSE_BODY_CANCEL_GRACE_MS
+): Promise<void> =>
+    new Promise<void>((resolve) => {
+        let graceTimer: ReturnType<typeof setTimeout> | undefined;
+        const finish = () => {
+            clearTimeout(settleTimer);
+            clearTimeout(graceTimer);
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+        };
+        const onAbort = () => {
+            graceTimer = setTimeout(finish, cancelGraceMs);
+        };
+        const settleTimer = setTimeout(finish, settleMs);
+        if (signal?.aborted) onAbort();
+        else signal?.addEventListener("abort", onAbort, { once: true });
+        void Promise.allSettled(bodies).then(finish);
+    });
+
 /**
  * Detects the front-end framework used in a webpage.
  * It does this by iterating through all HTML tags and checking if any attribute name starts with "data-v-".
@@ -146,8 +180,8 @@ const frameworkDetect = async (
                 const status = httpRes.status();
                 const contentType = httpRes.headers()["content-type"] ?? null;
                 // A long-lived event-stream connection (webpack-hot-middleware's or Vite's HMR
-                // client) never completes its body — reading it via .text() would hang
-                // Promise.allSettled(responseBodyPromises) below forever. Skip the body read;
+                // client) never completes its body — reading it via .text() would stall
+                // settleResponseBodies() below until its deadline. Skip the body read;
                 // status/content-type alone are enough for every dev-server marker check.
                 if (contentType?.toLowerCase().includes("text/event-stream")) {
                     responseEvidence.set(responseUrl, { status, contentType, body: "" });
@@ -199,7 +233,7 @@ const frameworkDetect = async (
                     );
                 }
             } finally {
-                await Promise.allSettled(responseBodyPromises);
+                await settleResponseBodies(responseBodyPromises, signal);
             }
         } catch (err) {
             if (signal?.aborted) return null;
