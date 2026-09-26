@@ -32,27 +32,32 @@ interface WebpackModule {
 
 interface ParsedChunkFile {
     modules: Map<string, WebpackModule>;
+    nodeCount: number;
 }
 
-// Parsed chunks hold full Babel AST subtrees, so the cache is an LRU capped by
-// file count: at most MAX_CACHED_CHUNK_FILES ASTs are alive at once no matter
-// how many chunks were downloaded. The global index only maps moduleId ->
-// filePath, so it doesn't retain any AST.
-// ponytail: count-based cap, weigh entries by AST node count if a few huge chunks still blow the heap
-export const MAX_CACHED_CHUNK_FILES = 16;
+// Parsed chunks hold full Babel AST subtrees, so the cache is an LRU weighted
+// by AST node count: evict until the retained nodes fit MAX_CACHED_AST_NODES
+// (the most recent entry is always kept so the chunk in use stays cached). The
+// global index only maps moduleId -> filePath, so it doesn't retain any AST.
+export const MAX_CACHED_AST_NODES = 1_000_000;
 const chunkFileCache = new Map<string, ParsedChunkFile | null>();
+let cachedNodeCount = 0;
 let globalModuleIndex: Map<string, string> | null = null;
 let globalIndexBuiltFor: string | null = null;
 
 const cacheChunkFile = (filePath: string, parsed: ParsedChunkFile | null): void => {
+    cachedNodeCount -= chunkFileCache.get(filePath)?.nodeCount ?? 0;
     chunkFileCache.delete(filePath);
     chunkFileCache.set(filePath, parsed);
-    while (chunkFileCache.size > MAX_CACHED_CHUNK_FILES) {
-        chunkFileCache.delete(chunkFileCache.keys().next().value!);
+    cachedNodeCount += parsed?.nodeCount ?? 0;
+    while (cachedNodeCount > MAX_CACHED_AST_NODES && chunkFileCache.size > 1) {
+        const oldest = chunkFileCache.keys().next().value!;
+        cachedNodeCount -= chunkFileCache.get(oldest)?.nodeCount ?? 0;
+        chunkFileCache.delete(oldest);
     }
 };
 
-export const getCrossFileCacheSize = (): number => chunkFileCache.size;
+export const getCrossFileCacheNodeCount = (): number => cachedNodeCount;
 
 const isRequireCall = (node: any, requireParam: string | null): { moduleId: string } | null => {
     if (!node || node.type !== "CallExpression") return null;
@@ -103,8 +108,12 @@ const parseChunkFile = (filePath: string): ParsedChunkFile | null => {
     }
 
     const modules = new Map<string, WebpackModule>();
+    let nodeCount = 0;
 
     traverse(ast, {
+        enter() {
+            nodeCount++;
+        },
         CallExpression(p: any) {
             const callee = p.node.callee;
             if (callee.type !== "MemberExpression") return;
@@ -216,7 +225,7 @@ const parseChunkFile = (filePath: string): ParsedChunkFile | null => {
         },
     });
 
-    const parsed: ParsedChunkFile = { modules };
+    const parsed: ParsedChunkFile = { modules, nodeCount };
     cacheChunkFile(filePath, parsed);
     return parsed;
 };

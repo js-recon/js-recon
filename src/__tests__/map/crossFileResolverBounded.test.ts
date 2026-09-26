@@ -3,14 +3,16 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import {
-    MAX_CACHED_CHUNK_FILES,
-    getCrossFileCacheSize,
+    MAX_CACHED_AST_NODES,
+    getCrossFileCacheNodeCount,
     substituteCrossFileMarkers,
 } from "../../map/vue_js/crossFileResolver.js";
 
-// Many webpack-style chunks: chunk 0 imports a config module that lives in the
-// last chunk, so it's evicted from the AST cache by the time it's resolved.
-const CHUNK_COUNT = MAX_CACHED_CHUNK_FILES * 4;
+// Many webpack-style chunks whose combined AST is ~1.5x the node budget: chunk 0
+// imports a config module from the last chunk, which may have been evicted by
+// the time it's resolved.
+const CHUNK_COUNT = 12;
+const FILLER_LEN = Math.ceil((MAX_CACHED_AST_NODES * 1.5) / CHUNK_COUNT);
 
 const chunkSource = (i: number): string => {
     if (i === 0) {
@@ -26,7 +28,7 @@ const chunkSource = (i: number): string => {
     ${i}(q, M, e) {
         e.r(M);
         e.d(M, { cfg: () => c });
-        const c = { baseUrl: "/api/v${i}", filler: [${Array.from({ length: 50 }, (_, j) => j).join(",")}] };
+        const c = { baseUrl: "/api/v${i}", filler: [${Array.from({ length: FILLER_LEN }, (_, j) => j).join(",")}] };
     }
 }]);`;
 };
@@ -48,6 +50,7 @@ describe("crossFileResolver memory bound", () => {
     it("keeps the AST cache bounded while still resolving across evicted chunks", () => {
         const out = substituteCrossFileMarkers("[member:k.cfg.baseUrl]/users", path.join(dir, "chunk-0.js"), dir);
         expect(out).toBe(`/api/v${CHUNK_COUNT - 1}/users`);
-        expect(getCrossFileCacheSize()).toBeLessThanOrEqual(MAX_CACHED_CHUNK_FILES);
-    });
+        expect(getCrossFileCacheNodeCount()).toBeGreaterThan(0);
+        expect(getCrossFileCacheNodeCount()).toBeLessThanOrEqual(MAX_CACHED_AST_NODES);
+    }, 30_000);
 });
