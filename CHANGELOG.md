@@ -1,5 +1,16 @@
 # Change Log
 
+## 2.0.1-beta.4 - (unreleased)
+
+### Fixed
+
+- Upgraded `better-sqlite3` from `12.5.0` to `13.0.3`. 12.x only shipped per-ABI prebuilt binaries and had none for Node.js 26 (`NODE_MODULE_VERSION 147`), where building from source also failed, so the response cache database (`.resp_cache.db`) couldn't open and every module logged `Could not open response cache database`. 13.x is built on N-API and bundles its prebuilt binaries in the package, so one binary works across Node.js versions without a rebuild. This also drops the deprecated `prebuild-install` dependency tree. (`utility`, `report`)
+
+### Security
+
+- Pinned every dependency to an exact version: all `^` ranges in `package.json` (`dependencies`, `devDependencies`, `overrides`) are replaced with the exact versions already resolved in the lockfile, and a new `.npmrc` sets `save-exact=true` so future installs stay pinned.
+- `package-lock.json` is replaced by `npm-shrinkwrap.json`. A `package-lock.json` is ignored when the package is installed from npm (`npm install -g @js-recon/js-recon`), so users' transitive dependencies could still float to newer, unreviewed versions. `npm-shrinkwrap.json` is published with the package and pins the whole dependency tree, with each tarball checked against its sha512 `integrity` hash. The `Dockerfile` and the release CI's `depx audit` step now use `npm-shrinkwrap.json`.
+
 ## 2.0.1-beta.3 - 2026-09-03
 
 ### Changed

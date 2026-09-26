@@ -82,8 +82,8 @@ jobs:
           unzip -q depx.zip -d depx-bin
           chmod +x depx-bin/depx
           echo "$PWD/depx-bin" >> "$GITHUB_PATH"
-      - name: Run depx audit against package-lock.json
-        run: depx audit package-lock.json --require-clean
+      - name: Run depx audit against npm-shrinkwrap.json
+        run: depx audit npm-shrinkwrap.json --require-clean
 
   publish-npm:
     needs:
