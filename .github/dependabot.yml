@@ -8,7 +8,7 @@
 version: 2
 
 updates:
-  # npm — root package.json / package-lock.json.
+  # npm — root package.json / npm-shrinkwrap.json (exact pins; see .npmrc save-exact).
   - package-ecosystem: "npm"
     directory: "/"
     target-branch: "dev"

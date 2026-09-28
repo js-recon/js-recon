@@ -8,6 +8,7 @@ import * as globals from "../../utility/globals.js";
 import {
     EnclosingFn,
     inferEnclosingFn,
+    detachEnclosingFn,
     substituteCallerPlaceholders,
     substituteCallerHeaders,
     makeGetCallers,
@@ -103,6 +104,190 @@ interface FetchEntry {
     enclosingFn: EnclosingFn | null;
 }
 
+// Each file's parse + traverse runs in one of these sync helpers rather than
+// inline in the async resolver's loop: an inline local stays reachable from
+// the async function's frame until the resolver returns, so every AST — ~200x
+// its source size once Babel has built its path/scope caches — would stay
+// pinned through the later passes and exhaust the heap on a single large
+// bundle.
+
+/**
+ * Pre-pass for one file: records object-literal keys whose value is a
+ * function that forwards its first argument to fetch().
+ */
+const collectWrapperKeys = (fileContent: string, wrapperKeyNames: Set<string>): void => {
+    let fileAst: any;
+    try {
+        fileAst = parser.parse(fileContent, {
+            sourceType: "unambiguous",
+            plugins: ["jsx", "typescript"],
+            errorRecovery: true,
+        });
+    } catch {
+        return;
+    }
+
+    traverse(fileAst, {
+        ObjectProperty(p) {
+            const key = p.node.key;
+            const value: any = p.node.value;
+            if (!isFunctionLike(value)) return;
+            if (!bodyCallsFetch(value)) return;
+            const keyName = key.type === "Identifier" ? key.name : key.type === "StringLiteral" ? key.value : null;
+            if (keyName) wrapperKeyNames.add(keyName);
+        },
+    });
+};
+
+/**
+ * Main pass for one file: resolves every fetch()/fetch-alias call and appends
+ * it to `entries`. Returns the number of fetch calls seen.
+ */
+const collectFetchEntries = (
+    file: string,
+    filePath: string,
+    fileContent: string,
+    wrapperKeyNames: Set<string>,
+    entries: FetchEntry[]
+): number => {
+    let fetchCalls = 0;
+    let fileAst: any;
+    try {
+        fileAst = parser.parse(fileContent, {
+            sourceType: "unambiguous",
+            plugins: ["jsx", "typescript"],
+            errorRecovery: true,
+        });
+    } catch {
+        return 0;
+    }
+
+    // Collect fetch aliases:
+    //   1. `const x = fetch` (direct identifier aliasing)
+    //   2. `const x = (i, l) => fetch(i, l)` (function-literal wrappers)
+    //   3. `const { wrapperKey: x } = factory({...})` (destructured wrapper keys)
+    const fetchAliases = new Set<any>();
+    traverse(fileAst, {
+        VariableDeclarator(p) {
+            const { id, init } = p.node;
+            if (!init) return;
+
+            if (id.type === "Identifier") {
+                if (init.type === "Identifier" && init.name === "fetch") {
+                    const binding = p.scope.getBinding(id.name);
+                    if (binding) fetchAliases.add(binding);
+                    return;
+                }
+                if (isFunctionLike(init) && bodyCallsFetch(init)) {
+                    const binding = p.scope.getBinding(id.name);
+                    if (binding) fetchAliases.add(binding);
+                    return;
+                }
+            }
+
+            if (id.type === "ObjectPattern") {
+                for (const prop of id.properties) {
+                    if (prop.type !== "ObjectProperty") continue;
+                    const keyName =
+                        prop.key.type === "Identifier"
+                            ? prop.key.name
+                            : prop.key.type === "StringLiteral"
+                              ? prop.key.value
+                              : null;
+                    if (!keyName || !wrapperKeyNames.has(keyName)) continue;
+                    const valueName = prop.value.type === "Identifier" ? prop.value.name : null;
+                    if (!valueName) continue;
+                    const binding = p.scope.getBinding(valueName);
+                    if (binding) fetchAliases.add(binding);
+                }
+            }
+        },
+    });
+
+    // Resolve each fetch call
+    traverse(fileAst, {
+        CallExpression(callPath) {
+            const callee = callPath.node.callee;
+            let isFetchCall = false;
+
+            if (callee.type === "Identifier" && callee.name === "fetch") {
+                isFetchCall = true;
+            } else if (callee.type === "Identifier") {
+                const binding = callPath.scope.getBinding(callee.name);
+                if (binding && fetchAliases.has(binding)) isFetchCall = true;
+            }
+
+            if (!isFetchCall) return;
+
+            const args = callPath.node.arguments;
+            if (args.length === 0) return;
+
+            const fileLine = callPath.node.loc?.start.line ?? 0;
+            fetchCalls++;
+
+            // Resolve URL (first argument)
+            const urlArgCode = fileContent.slice((args[0] as any).start, (args[0] as any).end).replace(/\n\s*/g, "");
+
+            let url: any = resolveNodeValue(args[0], callPath.scope, urlArgCode, "fetch", fileContent);
+
+            if (typeof url === "string" && (url.includes("[var ") || url.includes("[MemberExpression"))) {
+                const substituted = substituteVariablesInString(url, fileContent);
+                if (substituted !== url) {
+                    printMsg(MSG.Header, `    [i] Resolved variables in URL: ${url} -> ${substituted}`);
+                    url = substituted;
+                }
+            }
+
+            let method = "GET";
+            let headers: Record<string, string> = {};
+            let body = "";
+
+            if (args.length > 1) {
+                const options: any = resolveNodeValue(args[1], callPath.scope, "", "fetch", fileContent);
+
+                if (typeof options === "object" && options !== null) {
+                    method = options.method || "GET";
+
+                    if (options.headers && typeof options.headers === "object") {
+                        const resolvedHeaders: Record<string, string> = {};
+                        for (const [k, v] of Object.entries(options.headers)) {
+                            const rk = typeof k === "string" ? substituteVariablesInString(k, fileContent) : String(k);
+                            const rv = typeof v === "string" ? substituteVariablesInString(v, fileContent) : String(v);
+                            resolvedHeaders[rk] = rv;
+                        }
+                        headers = resolvedHeaders;
+                    }
+
+                    if (options.body) {
+                        body = typeof options.body === "object" ? JSON.stringify(options.body) : String(options.body);
+                    }
+                }
+            }
+
+            // Null out the AST node references (including the outer-function
+            // chain) — they are never read in the second pass, but keeping
+            // them alive would pin the entire file AST through `entries`.
+            const enclosingFn = detachEnclosingFn(inferEnclosingFn(callPath, filePath));
+
+            entries.push({
+                file,
+                filePath,
+                // fileContent is not used in the second pass; store an empty
+                // string so the full file content is not kept alive in memory
+                // through the entries array.
+                fileContent: "",
+                fileLine,
+                url: typeof url === "string" ? url : "",
+                method,
+                headers,
+                body,
+                enclosingFn,
+            });
+        },
+    });
+    return fetchCalls;
+};
+
 /**
  * Scans all JS files in the given directory for fetch() calls,
  * resolves their URL / method / headers / body, and registers each
@@ -155,28 +340,7 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
         }
         if (!fileContent.includes("fetch")) continue;
         fetchFilePaths.push(filePath);
-        let fileAst: any;
-        try {
-            fileAst = parser.parse(fileContent, {
-                sourceType: "unambiguous",
-                plugins: ["jsx", "typescript"],
-                errorRecovery: true,
-            });
-        } catch {
-            continue;
-        }
-
-        traverse(fileAst, {
-            ObjectProperty(p) {
-                const key = p.node.key;
-                const value: any = p.node.value;
-                if (!isFunctionLike(value)) return;
-                if (!bodyCallsFetch(value)) return;
-                const keyName = key.type === "Identifier" ? key.name : key.type === "StringLiteral" ? key.value : null;
-                if (keyName) wrapperKeyNames.add(keyName);
-            },
-        });
-        // fileAst and fileContent go out of scope here — GC can reclaim them.
+        collectWrapperKeys(fileContent, wrapperKeyNames);
     }
 
     const getCallers = makeGetCallers(fetchFilePaths);
@@ -199,155 +363,14 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
             );
             continue;
         }
-        // Parse each file fresh — no persistent cache. The AST goes out of scope
-        // at the end of this loop body so the GC can reclaim it.
         let fileContent: string;
-        let fileAst: any;
         try {
             fileContent = fs.readFileSync(filePath, "utf-8");
         } catch {
             continue;
         }
         if (!fileContent.includes("fetch")) continue;
-        try {
-            fileAst = parser.parse(fileContent, {
-                sourceType: "unambiguous",
-                plugins: ["jsx", "typescript"],
-                errorRecovery: true,
-            });
-        } catch {
-            continue;
-        }
-
-        // Collect fetch aliases:
-        //   1. `const x = fetch` (direct identifier aliasing)
-        //   2. `const x = (i, l) => fetch(i, l)` (function-literal wrappers)
-        //   3. `const { wrapperKey: x } = factory({...})` (destructured wrapper keys)
-        const fetchAliases = new Set<any>();
-        traverse(fileAst, {
-            VariableDeclarator(p) {
-                const { id, init } = p.node;
-                if (!init) return;
-
-                if (id.type === "Identifier") {
-                    if (init.type === "Identifier" && init.name === "fetch") {
-                        const binding = p.scope.getBinding(id.name);
-                        if (binding) fetchAliases.add(binding);
-                        return;
-                    }
-                    if (isFunctionLike(init) && bodyCallsFetch(init)) {
-                        const binding = p.scope.getBinding(id.name);
-                        if (binding) fetchAliases.add(binding);
-                        return;
-                    }
-                }
-
-                if (id.type === "ObjectPattern") {
-                    for (const prop of id.properties) {
-                        if (prop.type !== "ObjectProperty") continue;
-                        const keyName =
-                            prop.key.type === "Identifier"
-                                ? prop.key.name
-                                : prop.key.type === "StringLiteral"
-                                  ? prop.key.value
-                                  : null;
-                        if (!keyName || !wrapperKeyNames.has(keyName)) continue;
-                        const valueName = prop.value.type === "Identifier" ? prop.value.name : null;
-                        if (!valueName) continue;
-                        const binding = p.scope.getBinding(valueName);
-                        if (binding) fetchAliases.add(binding);
-                    }
-                }
-            },
-        });
-
-        // Resolve each fetch call
-        traverse(fileAst, {
-            CallExpression(callPath) {
-                const callee = callPath.node.callee;
-                let isFetchCall = false;
-
-                if (callee.type === "Identifier" && callee.name === "fetch") {
-                    isFetchCall = true;
-                } else if (callee.type === "Identifier") {
-                    const binding = callPath.scope.getBinding(callee.name);
-                    if (binding && fetchAliases.has(binding)) isFetchCall = true;
-                }
-
-                if (!isFetchCall) return;
-
-                const args = callPath.node.arguments;
-                if (args.length === 0) return;
-
-                const fileLine = callPath.node.loc?.start.line ?? 0;
-                totalFetchCalls++;
-
-                // Resolve URL (first argument)
-                const urlArgCode = fileContent
-                    .slice((args[0] as any).start, (args[0] as any).end)
-                    .replace(/\n\s*/g, "");
-
-                let url: any = resolveNodeValue(args[0], callPath.scope, urlArgCode, "fetch", fileContent);
-
-                if (typeof url === "string" && (url.includes("[var ") || url.includes("[MemberExpression"))) {
-                    const substituted = substituteVariablesInString(url, fileContent);
-                    if (substituted !== url) {
-                        printMsg(MSG.Header, `    [i] Resolved variables in URL: ${url} -> ${substituted}`);
-                        url = substituted;
-                    }
-                }
-
-                let method = "GET";
-                let headers: Record<string, string> = {};
-                let body = "";
-
-                if (args.length > 1) {
-                    const options: any = resolveNodeValue(args[1], callPath.scope, "", "fetch", fileContent);
-
-                    if (typeof options === "object" && options !== null) {
-                        method = options.method || "GET";
-
-                        if (options.headers && typeof options.headers === "object") {
-                            const resolvedHeaders: Record<string, string> = {};
-                            for (const [k, v] of Object.entries(options.headers)) {
-                                const rk =
-                                    typeof k === "string" ? substituteVariablesInString(k, fileContent) : String(k);
-                                const rv =
-                                    typeof v === "string" ? substituteVariablesInString(v, fileContent) : String(v);
-                                resolvedHeaders[rk] = rv;
-                            }
-                            headers = resolvedHeaders;
-                        }
-
-                        if (options.body) {
-                            body =
-                                typeof options.body === "object" ? JSON.stringify(options.body) : String(options.body);
-                        }
-                    }
-                }
-
-                const rawEnclosingFn = inferEnclosingFn(callPath, filePath);
-                // Null out the AST node reference — it is never read in the
-                // second pass, but keeping it alive would pin the entire file
-                // AST in memory through the entries array.
-                const enclosingFn = rawEnclosingFn ? { ...rawEnclosingFn, node: null } : null;
-
-                entries.push({
-                    file,
-                    filePath,
-                    // fileContent is not used in the second pass; store an empty
-                    // string so the full file content is not kept alive in memory
-                    // through the entries array.
-                    fileContent: "",
-                    fileLine,
-                    url: typeof url === "string" ? url : "",
-                    method,
-                    headers,
-                    body,
-                    enclosingFn,
-                });
-            },
-        });
+        totalFetchCalls += collectFetchEntries(file, filePath, fileContent, wrapperKeyNames, entries);
     }
 
     // Second pass: walk back to each fetch's enclosing function callers and

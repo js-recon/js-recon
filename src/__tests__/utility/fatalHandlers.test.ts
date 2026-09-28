@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { registerFatalHandlers } from "../../utility/fatalHandlers.js";
+import { TargetCloseError } from "puppeteer";
+import { closeForCancellation, registerFatalHandlers } from "../../utility/fatalHandlers.js";
 
 describe("registerFatalHandlers", () => {
     let exitSpy: ReturnType<typeof vi.spyOn>;
@@ -63,5 +64,46 @@ describe("registerFatalHandlers", () => {
         expect(exitSpy).not.toHaveBeenCalled();
 
         process.off("unhandledRejection", otherListener);
+    });
+
+    describe("cancellation-owned browser close", () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it("absorbs a TargetCloseError while a cancellation close is in flight or within its grace window", async () => {
+            vi.useFakeTimers();
+            let finishClose!: () => void;
+            const closing = closeForCancellation(() => new Promise<void>((r) => (finishClose = r)));
+
+            process.emit("unhandledRejection", new TargetCloseError("Target closed"), Promise.resolve());
+            finishClose();
+            await closing;
+            process.emit("unhandledRejection", new TargetCloseError("Target closed"), Promise.resolve());
+            expect(exitSpy).not.toHaveBeenCalled();
+
+            await vi.advanceTimersByTimeAsync(1_000);
+            process.emit("unhandledRejection", new TargetCloseError("Target closed"), Promise.resolve());
+            expect(exitSpy).toHaveBeenCalledWith(34);
+        });
+
+        it("still exits 34 on other rejections during a cancellation close", async () => {
+            vi.useFakeTimers();
+            await closeForCancellation(async () => undefined);
+            process.emit("unhandledRejection", new Error("real failure"), Promise.resolve());
+            expect(exitSpy).toHaveBeenCalledWith(34);
+            await vi.advanceTimersByTimeAsync(1_000);
+        });
+
+        it("exits 34 on a TargetCloseError with no cancellation close", () => {
+            process.emit("unhandledRejection", new TargetCloseError("Target closed"), Promise.resolve());
+            expect(exitSpy).toHaveBeenCalledWith(34);
+        });
+
+        it("never rejects when the close itself fails", async () => {
+            vi.useFakeTimers();
+            await expect(closeForCancellation(async () => Promise.reject(new Error("gone")))).resolves.toBeUndefined();
+            await vi.advanceTimersByTimeAsync(1_000);
+        });
     });
 });

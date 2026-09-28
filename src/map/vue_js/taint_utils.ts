@@ -88,6 +88,15 @@ export const inferEnclosingFn = (callPath: any, file: string): EnclosingFn | nul
 };
 
 /**
+ * Copies an EnclosingFn chain with every `node` nulled. Resolvers that hold
+ * entries past the per-file loop must store this instead: an outer function
+ * node (often the whole module wrapper) would otherwise pin the entire file
+ * AST, plus Babel's path/scope caches for it, for the rest of the run.
+ */
+export const detachEnclosingFn = (fn: EnclosingFn | null | undefined): EnclosingFn | null =>
+    fn ? { ...fn, node: null, parent: detachEnclosingFn(fn.parent) } : null;
+
+/**
  * Walks an ObjectExpression and returns the property value node for the given
  * dotted property path (e.g. ["data"] → the value node of `data: ...`).
  */
@@ -482,41 +491,65 @@ const buildAliasMap = (filePaths: string[]): Map<string, Map<string, Set<string>
 
 export type GetCallersFn = (bindingName: string, sourceFile?: string) => CallerInfo[];
 
-// Per-instance cache of (content, AST) tuples keyed by file path. Avoids
-// re-reading and re-parsing every JS file on every getCallers call — the
-// dominant cost at high recursion depth.
-interface FileCacheEntry {
-    content: string;
-    ast: any | null;
-}
-const loadFileCached = (filePath: string, cache: Map<string, FileCacheEntry | null>): FileCacheEntry | null => {
+// Per-instance caches keyed by file path. Avoids re-reading and re-parsing
+// every JS file on every getCallers call — the dominant cost at high recursion
+// depth. Contents are cached for every file (already bounded by the callers'
+// total-size caps), but a Babel AST is ~50-100x its source size, so ASTs are
+// parsed only for files that pass the text pre-filter and kept in an LRU
+// weighted by source bytes. The most recent entry is always kept.
+// ponytail: source bytes approximate AST size; weight by node count if this
+// still OOMs on unusual (e.g. whitespace-heavy) bundles.
+export const MAX_CACHED_CALLER_AST_BYTES = 4 * 1024 * 1024;
+const readFileCached = (filePath: string, cache: Map<string, string | null>): string | null => {
     if (cache.has(filePath)) return cache.get(filePath) ?? null;
-    let content: string;
+    let content: string | null;
     try {
         content = fs.readFileSync(filePath, "utf-8");
     } catch {
-        cache.set(filePath, null);
-        return null;
+        content = null;
     }
-    let ast: any = null;
-    try {
-        ast = parser.parse(content, {
-            sourceType: "unambiguous",
-            plugins: ["jsx", "typescript"],
-            errorRecovery: true,
-        });
-    } catch {
-        ast = null;
-    }
-    const entry: FileCacheEntry = { content, ast };
-    cache.set(filePath, entry);
-    return entry;
+    cache.set(filePath, content);
+    return content;
 };
 
-export const makeGetCallers = (filePaths: string[], maxCallers = 128): GetCallersFn => {
+export type GetCallersWithStats = GetCallersFn & { cachedAstBytes: () => number };
+
+export const makeGetCallers = (
+    filePaths: string[],
+    maxCallers = 128,
+    maxCachedAstBytes = MAX_CACHED_CALLER_AST_BYTES
+): GetCallersWithStats => {
     let aliasMap: Map<string, Map<string, Set<string>>> | null = null;
-    const fileCache = new Map<string, FileCacheEntry | null>();
-    return (bindingName: string, sourceFile?: string): CallerInfo[] => {
+    const contentCache = new Map<string, string | null>();
+    const astCache = new Map<string, { ast: any | null; bytes: number }>();
+    let cachedAstBytes = 0;
+    const loadAst = (filePath: string, content: string): any | null => {
+        let entry = astCache.get(filePath);
+        if (entry) {
+            astCache.delete(filePath);
+        } else {
+            let ast: any = null;
+            try {
+                ast = parser.parse(content, {
+                    sourceType: "unambiguous",
+                    plugins: ["jsx", "typescript"],
+                    errorRecovery: true,
+                });
+            } catch {
+                ast = null;
+            }
+            entry = { ast, bytes: ast ? content.length : 0 };
+            cachedAstBytes += entry.bytes;
+        }
+        astCache.set(filePath, entry);
+        while (cachedAstBytes > maxCachedAstBytes && astCache.size > 1) {
+            const oldest = astCache.keys().next().value!;
+            cachedAstBytes -= astCache.get(oldest)!.bytes;
+            astCache.delete(oldest);
+        }
+        return entry.ast;
+    };
+    const getCallers = (bindingName: string, sourceFile?: string): CallerInfo[] => {
         if (!bindingName) return [];
         if (aliasMap === null) aliasMap = buildAliasMap(filePaths);
         // Use only the aliases defined in the file where `bindingName` lives;
@@ -533,11 +566,10 @@ export const makeGetCallers = (filePaths: string[], maxCallers = 128): GetCaller
         let overflowed = false;
         for (const filePath of filePaths) {
             if (overflowed) break;
-            const cached = loadFileCached(filePath, fileCache);
-            if (!cached) continue;
-            const fileContent = cached.content;
+            const fileContent = readFileCached(filePath, contentCache);
+            if (fileContent === null) continue;
             if (!needles.some((n) => fileContent.includes(n))) continue;
-            const fileAst = cached.ast;
+            const fileAst = loadAst(filePath, fileContent);
             if (!fileAst) continue;
             traverse(fileAst, {
                 CallExpression(callPath: any) {
@@ -578,6 +610,7 @@ export const makeGetCallers = (filePaths: string[], maxCallers = 128): GetCaller
         // popular wrapper, and partial coverage beats none.
         return out;
     };
+    return Object.assign(getCallers, { cachedAstBytes: () => cachedAstBytes });
 };
 
 /**

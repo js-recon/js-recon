@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { enclosingFnChainHasBinding } from "../../map/vue_js/taint_utils.js";
+import { detachEnclosingFn, enclosingFnChainHasBinding } from "../../map/vue_js/taint_utils.js";
 import type { EnclosingFn } from "../../map/vue_js/taint_utils.js";
 
 function makeEnclosingFn(overrides: Partial<EnclosingFn> = {}): EnclosingFn {
@@ -50,5 +50,25 @@ describe("enclosingFnChainHasBinding", () => {
         const parent = makeEnclosingFn({ bindingName: null });
         const child = makeEnclosingFn({ bindingName: null, parent });
         expect(enclosingFnChainHasBinding(child)).toBe(false);
+    });
+});
+
+describe("detachEnclosingFn", () => {
+    it("returns null for null", () => {
+        expect(detachEnclosingFn(null)).toBeNull();
+    });
+
+    it("nulls the node on every link of the chain but keeps the metadata", () => {
+        const grandparent = makeEnclosingFn({ bindingName: "rootFn", paramNames: ["a"] });
+        const parent = makeEnclosingFn({ parent: grandparent });
+        const child = makeEnclosingFn({ bindingName: "leaf", parent });
+        const out = detachEnclosingFn(child)!;
+        expect(out.node).toBeNull();
+        expect(out.parent!.node).toBeNull();
+        expect(out.parent!.parent!.node).toBeNull();
+        expect(out.bindingName).toBe("leaf");
+        expect(out.parent!.parent!.bindingName).toBe("rootFn");
+        expect(out.parent!.parent!.paramNames).toEqual(["a"]);
+        expect(child.parent!.node).toEqual({});
     });
 });

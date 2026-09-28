@@ -62,6 +62,19 @@ const getCdnDir = async (host: string, outputDir: string, isBatch: boolean): Pro
     return cdnDir;
 };
 
+// Refactor is an optional post-report step: a failure there must not turn a completed analysis
+// into a failed run. Returns false when the user chose to skip the target via the SIGINT menu.
+const runOptionalRefactor = async (refactorPromise: Promise<unknown>): Promise<boolean> => {
+    try {
+        await Promise.race([refactorPromise, getSkipStepPromise()]);
+        if (shouldSkipTarget()) return false;
+        printMsg(MSG.Run, "[+] Refactor complete.");
+    } catch (e) {
+        printMsg(MSG.Warn, `[!] Refactor failed: ${(e as Error).message} — skipping (analysis results are unaffected)`);
+    }
+    return true;
+};
+
 /**
  * Processes a single URL through the entire js-recon analysis pipeline.
  *
@@ -323,20 +336,20 @@ const processUrl = async (
                     }
                 }
                 resetSkipStep();
-                await Promise.race([
-                    refactor(
-                        mappedJsonFileReact,
-                        refactorOutputDirReact,
-                        detectedBundlerTechReact,
-                        false,
-                        undefined,
-                        undefined,
-                        path.join(resolveHostOutputDirectory(outputDir, reactAssetsHostDir, isBatch), "assets")
-                    ),
-                    getSkipStepPromise(),
-                ]);
-                if (shouldSkipTarget()) return;
-                printMsg(MSG.Run, "[+] Refactor complete.");
+                if (
+                    !(await runOptionalRefactor(
+                        refactor(
+                            mappedJsonFileReact,
+                            refactorOutputDirReact,
+                            detectedBundlerTechReact,
+                            false,
+                            undefined,
+                            undefined,
+                            path.join(resolveHostOutputDirectory(outputDir, reactAssetsHostDir, isBatch), "assets")
+                        )
+                    ))
+                )
+                    return;
             } else {
                 printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
             }
@@ -437,12 +450,12 @@ const processUrl = async (
                 if (fs.existsSync(refactorOutputDirVue)) fs.rmSync(refactorOutputDirVue, { recursive: true });
                 printMsg(MSG.Header, `[*] Running refactor (${detectedBundlerTechVue})...`);
                 resetSkipStep();
-                await Promise.race([
-                    refactor(mappedJsonFileVue, refactorOutputDirVue, detectedBundlerTechVue, false),
-                    getSkipStepPromise(),
-                ]);
-                if (shouldSkipTarget()) return;
-                printMsg(MSG.Run, "[+] Refactor complete.");
+                if (
+                    !(await runOptionalRefactor(
+                        refactor(mappedJsonFileVue, refactorOutputDirVue, detectedBundlerTechVue, false)
+                    ))
+                )
+                    return;
             } else {
                 printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
             }
@@ -536,12 +549,12 @@ const processUrl = async (
                 if (fs.existsSync(refactorOutputDirNuxt)) fs.rmSync(refactorOutputDirNuxt, { recursive: true });
                 printMsg(MSG.Header, `[*] Running refactor (${detectedBundlerTechNuxt})...`);
                 resetSkipStep();
-                await Promise.race([
-                    refactor(mappedJsonFileNuxt, refactorOutputDirNuxt, detectedBundlerTechNuxt, false),
-                    getSkipStepPromise(),
-                ]);
-                if (shouldSkipTarget()) return;
-                printMsg(MSG.Run, "[+] Refactor complete.");
+                if (
+                    !(await runOptionalRefactor(
+                        refactor(mappedJsonFileNuxt, refactorOutputDirNuxt, detectedBundlerTechNuxt, false)
+                    ))
+                )
+                    return;
             } else {
                 printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
             }
@@ -939,12 +952,12 @@ const processUrl = async (
             if (fs.existsSync(refactorOutputDirNext)) fs.rmSync(refactorOutputDirNext, { recursive: true });
             printMsg(MSG.Header, `[*] Running refactor (${detectedBundlerTechNext})...`);
             resetSkipStep();
-            await Promise.race([
-                refactor(mappedJsonFile, refactorOutputDirNext, detectedBundlerTechNext, false),
-                getSkipStepPromise(),
-            ]);
-            if (shouldSkipTarget()) return;
-            printMsg(MSG.Run, "[+] Refactor complete.");
+            if (
+                !(await runOptionalRefactor(
+                    refactor(mappedJsonFile, refactorOutputDirNext, detectedBundlerTechNext, false)
+                ))
+            )
+                return;
         } else {
             printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
         }

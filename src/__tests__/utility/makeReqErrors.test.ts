@@ -58,7 +58,7 @@ beforeEach(() => {
     setOxylabsConfig(undefined);
     resetOxylabsFallback();
     requestHarness.awsGet.mockReset();
-    vi.mocked(cacheDbModule.readCacheEntry).mockClear();
+    vi.mocked(cacheDbModule.readCacheEntry).mockReset();
     vi.mocked(cacheDbModule.writeCacheEntryUnsafe).mockClear();
 });
 
@@ -560,5 +560,49 @@ describe("makeRequest error reporting ownership", () => {
 
         await expect(request).resolves.toBeNull();
         expect(awsSignal?.aborted).toBe(true);
+    });
+
+    it("rebuilds a fresh 204 response without a body", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+
+        const response = await makeRequest("https://no-content.example.test/chunk.js", { reportErrors: false });
+
+        expect(response?.status).toBe(204);
+        await expect(response?.text()).resolves.toBe("");
+    });
+
+    it("rebuilds a cached 204 response without a body", async () => {
+        setDisableCache(false);
+        setCacheOnly(true);
+        temporaryCacheDirectory = fs.mkdtempSync("/tmp/js-recon-no-content-cache-");
+        setRespCacheFile(`${temporaryCacheDirectory}/responses.db`);
+        const url = "https://no-content-cache.example.test/chunk.js";
+        writeCacheEntryUnsafe({
+            identityDigest: getCacheIdentityDigest(
+                url,
+                defaultHeadersWithReferer("https://no-content-cache.example.test")
+            ),
+            url,
+            status: 204,
+            statusText: "No Content",
+            bodyBase64: "",
+            responseHeaders: {},
+        });
+
+        const response = await makeRequest(url, { reportErrors: false });
+
+        expect(response?.status).toBe(204);
+        await expect(response?.text()).resolves.toBe("");
+    });
+
+    it("rebuilds a 204 response from the AWS proxy without a body", async () => {
+        setUseProxy(true);
+        setProxyMethod("aws");
+        requestHarness.awsGet.mockResolvedValue({ body: "", status: 204, headers: {} });
+
+        const response = await makeRequest("https://aws-no-content.example.test/chunk.js", { reportErrors: false });
+
+        expect(response?.status).toBe(204);
+        await expect(response?.text()).resolves.toBe("");
     });
 });

@@ -8,7 +8,7 @@ ENV HOME=/home/pptruser
 
 # selectively copy the source files
 COPY ./package.json .
-COPY ./package-lock.json .
+COPY ./npm-shrinkwrap.json .
 COPY ./tsconfig.json .
 COPY ./patches ./patches
 COPY ./src ./src

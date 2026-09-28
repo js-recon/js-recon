@@ -21,6 +21,7 @@ import { isValidInterceptedJsEvidence } from "./checkInterceptedEvidence.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 import { customHeadersToRecord } from "../../utility/customHeaders.js";
+import { closeForCancellation } from "../../utility/fatalHandlers.js";
 
 // Every request Puppeteer intercepted during the most recent frameworkDetect() call,
 // including anything a runtime-injected script requested (e.g. Cloudflare's own
@@ -33,6 +34,40 @@ import { customHeadersToRecord } from "../../utility/customHeaders.js";
 let lastInterceptedUrls: string[] = [];
 
 export const getLastInterceptedUrls = (): string[] => lastInterceptedUrls;
+
+// How long to keep waiting for captured response bodies once the page has loaded, and
+// how long after cancellation. A body read can stay pending forever (a streaming response
+// that never ends, or a CDP call orphaned by browser.close() on abort); an unbounded wait
+// leaves nothing keeping the event loop alive, so `run` dies with Node's exit 13.
+const RESPONSE_BODY_SETTLE_MS = 10_000;
+const RESPONSE_BODY_CANCEL_GRACE_MS = 1_000;
+
+/**
+ * Waits for `bodies` to settle, but never longer than `settleMs`, or `cancelGraceMs`
+ * once `signal` is aborted. Bodies still pending past the deadline are abandoned.
+ */
+export const settleResponseBodies = (
+    bodies: Promise<unknown>[],
+    signal?: AbortSignal,
+    settleMs: number = RESPONSE_BODY_SETTLE_MS,
+    cancelGraceMs: number = RESPONSE_BODY_CANCEL_GRACE_MS
+): Promise<void> =>
+    new Promise<void>((resolve) => {
+        let graceTimer: ReturnType<typeof setTimeout> | undefined;
+        const finish = () => {
+            clearTimeout(settleTimer);
+            clearTimeout(graceTimer);
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+        };
+        const onAbort = () => {
+            graceTimer = setTimeout(finish, cancelGraceMs);
+        };
+        const settleTimer = setTimeout(finish, settleMs);
+        if (signal?.aborted) onAbort();
+        else signal?.addEventListener("abort", onAbort, { once: true });
+        void Promise.allSettled(bodies).then(finish);
+    });
 
 /**
  * Detects the front-end framework used in a webpage.
@@ -100,8 +135,11 @@ const frameworkDetect = async (
             log(chalk.red(`[!] Puppeteer browser launch failed: ${message}`));
             throw new Error(`Puppeteer browser launch failed: ${message}`);
         }
+        // Cancellation closes the browser immediately so pending CDP calls fail fast; the
+        // finally below awaits that same close instead of racing a second one.
+        let cancellationClose: Promise<void> | undefined;
         const abortBrowser = () => {
-            void browser.close().catch(() => undefined);
+            cancellationClose = closeForCancellation(() => browser.close());
         };
         signal?.addEventListener("abort", abortBrowser, { once: true });
         try {
@@ -146,8 +184,8 @@ const frameworkDetect = async (
                 const status = httpRes.status();
                 const contentType = httpRes.headers()["content-type"] ?? null;
                 // A long-lived event-stream connection (webpack-hot-middleware's or Vite's HMR
-                // client) never completes its body — reading it via .text() would hang
-                // Promise.allSettled(responseBodyPromises) below forever. Skip the body read;
+                // client) never completes its body — reading it via .text() would stall
+                // settleResponseBodies() below until its deadline. Skip the body read;
                 // status/content-type alone are enough for every dev-server marker check.
                 if (contentType?.toLowerCase().includes("text/event-stream")) {
                     responseEvidence.set(responseUrl, { status, contentType, body: "" });
@@ -199,14 +237,14 @@ const frameworkDetect = async (
                     );
                 }
             } finally {
-                await Promise.allSettled(responseBodyPromises);
+                await settleResponseBodies(responseBodyPromises, signal);
             }
         } catch (err) {
             if (signal?.aborted) return null;
             throw err;
         } finally {
             signal?.removeEventListener("abort", abortBrowser);
-            await browser.close().catch(() => {});
+            await (cancellationClose ?? browser.close().catch(() => {}));
         }
     }
     lastInterceptedUrls = interceptedUrls;
