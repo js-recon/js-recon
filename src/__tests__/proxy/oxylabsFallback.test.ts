@@ -134,4 +134,77 @@ describe("Oxylabs WAF fallback configuration", () => {
             })
         ).toThrow(/JS_RECON_OXYLABS_PASSWORD cannot be empty/);
     });
+
+    it("routes through a configured entry endpoint, with the environment taking precedence", () => {
+        const input = {
+            enabled: true,
+            maxRequestsPerOrigin: "10",
+            loadedConfig: loadedConfig({
+                username: "user",
+                password: "pass",
+                country: null,
+                endpoint: "yaml.example.test:8001",
+            }),
+            env: { JS_RECON_OXYLABS_ENDPOINT: "env.example.test:8002" },
+        } as const;
+
+        expect(resolveOxylabsFallback({ ...input, ignoreEnvironment: false })).toMatchObject({
+            proxy: { username: "user", password: "pass", endpoint: "env.example.test:8002" },
+        });
+        expect(resolveOxylabsFallback({ ...input, ignoreEnvironment: true })).toMatchObject({
+            proxy: { username: "user", password: "pass", endpoint: "yaml.example.test:8001" },
+        });
+    });
+
+    it("refuses a YAML entry endpoint for a password from the environment unless the endpoint comes from there too", () => {
+        const input = {
+            enabled: true,
+            maxRequestsPerOrigin: "10",
+            loadedConfig: loadedConfig({
+                username: "user",
+                password: "pass",
+                country: null,
+                endpoint: "yaml.example.test:8001",
+            }),
+            ignoreEnvironment: false,
+        } as const;
+
+        expect(() => resolveOxylabsFallback({ ...input, env: { JS_RECON_OXYLABS_PASSWORD: "env-pass" } })).toThrow(
+            /endpoint.*JS_RECON_OXYLABS_PASSWORD/
+        );
+        expect(
+            resolveOxylabsFallback({
+                ...input,
+                env: { JS_RECON_OXYLABS_PASSWORD: "env-pass", JS_RECON_OXYLABS_ENDPOINT: "env.example.test:8002" },
+            })
+        ).toMatchObject({ proxy: { password: "env-pass", endpoint: "env.example.test:8002" } });
+    });
+
+    it.each([null, "", "  "])("keeps the default entry endpoint when YAML sets it to %j", (endpoint) => {
+        const configuration = resolveOxylabsFallback({
+            enabled: true,
+            maxRequestsPerOrigin: "10",
+            loadedConfig: loadedConfig({ username: "user", password: "pass", country: null, endpoint }),
+            env: {},
+            ignoreEnvironment: false,
+        });
+
+        expect(configuration).toMatchObject({ enabled: true, proxy: { username: "user", password: "pass" } });
+        expect(configuration.enabled && configuration.proxy).not.toHaveProperty("endpoint");
+    });
+
+    it.each([
+        ["YAML", { endpoint: "https://proxy.example.test:8001" }, {}],
+        ["the environment", { endpoint: null }, { JS_RECON_OXYLABS_ENDPOINT: "proxy.example.test" }],
+    ])("rejects an entry endpoint from %s that is not host:port", (_, yaml, env) => {
+        expect(() =>
+            resolveOxylabsFallback({
+                enabled: true,
+                maxRequestsPerOrigin: "10",
+                loadedConfig: loadedConfig({ username: "user", password: "pass", country: null, ...yaml }),
+                env,
+                ignoreEnvironment: false,
+            })
+        ).toThrow(OxylabsFallbackConfigurationError);
+    });
 });

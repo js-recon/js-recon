@@ -1,5 +1,5 @@
 import type { LoadedApplicationConfig } from "../config/applicationConfig.js";
-import type { OxylabsConfig } from "./oxylabsProxy.js";
+import { resolveOxylabsEndpoint, type OxylabsConfig } from "./oxylabsProxy.js";
 
 export interface DisabledOxylabsFallback {
     readonly enabled: false;
@@ -98,10 +98,29 @@ export const resolveOxylabsFallback = (input: ResolveOxylabsFallbackInput): Oxyl
     if (country && !/^[a-z]{2}$/i.test(country)) {
         throw new OxylabsFallbackConfigurationError("Oxylabs country must be a two-letter country code");
     }
+    const environmentPassword = readEnvironment("JS_RECON_OXYLABS_PASSWORD", true);
+    const environmentEndpoint = readEnvironment("JS_RECON_OXYLABS_ENDPOINT");
+    const endpoint = environmentEndpoint ?? nonEmpty(yamlProxy.endpoint);
+    if (endpoint) {
+        try {
+            resolveOxylabsEndpoint(endpoint);
+        } catch {
+            throw new OxylabsFallbackConfigurationError(
+                "Oxylabs endpoint must be host:port, for example dc.oxylabs.io:8000"
+            );
+        }
+    }
+    // The endpoint receives the password, so a YAML endpoint must not redirect an environment password.
+    if (endpoint && !environmentEndpoint && environmentPassword) {
+        throw new OxylabsFallbackConfigurationError(
+            "The YAML oxylabs.endpoint would receive JS_RECON_OXYLABS_PASSWORD; set JS_RECON_OXYLABS_ENDPOINT as well, or keep the password in the YAML config"
+        );
+    }
     const proxy: OxylabsConfig = Object.freeze({
         username: readEnvironment("JS_RECON_OXYLABS_USERNAME") ?? yamlUsername,
-        password: readEnvironment("JS_RECON_OXYLABS_PASSWORD", true) ?? yamlPassword,
+        password: environmentPassword ?? yamlPassword,
         ...(country ? { country: country.toLowerCase() } : {}),
+        ...(endpoint ? { endpoint } : {}),
     });
 
     return Object.freeze({

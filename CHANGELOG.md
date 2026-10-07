@@ -6,6 +6,10 @@
 
 - Puppeteer now routes the `oxylabs` proxy method through the same datacenter entry endpoint as every other request, `dc.oxylabs.io:8000`. When the method moved to the datacenter proxy scheme, only the request path changed. Browser launches still pointed `--proxy-server` at the residential entry endpoint `pr.oxylabs.io:7777` while authenticating with the datacenter username. (`proxy`, `lazyload`, `run`)
 
+### Added
+
+- The Oxylabs entry endpoint is configurable as `host:port`, and still defaults to the datacenter endpoint `dc.oxylabs.io:8000`. Set it with `oxylabs.endpoint` in the YAML config (used by `--oxylabs-waf-fallback`), with `endpoint` in the `oxylabs` block of a proxy config file, with `proxy -i --oxylabs-endpoint`, or with `JS_RECON_OXYLABS_ENDPOINT`, which overrides both files unless `--ignore-proxy-env` is set. Requests and Puppeteer launches both use it. A value with a scheme, credentials, a path or no port is rejected before any request is sent. Because the endpoint receives the Oxylabs password, it must come from the same place as the password or a higher-precedence one: an endpoint in a proxy config file or the YAML config never receives a password from the command line or the environment. (`proxy`, `lazyload`, `run`)
+
 ## 2.0.1-beta.4 - 2026-09-28
 
 ### Fixed

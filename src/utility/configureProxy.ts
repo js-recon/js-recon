@@ -1,9 +1,9 @@
 import fs from "fs";
 import chalk from "chalk";
 import * as globalsUtil from "./globals.js";
-import { resolveProxyConfig } from "../proxy/resolveProxyConfig.js";
+import { resolveProxyConfig, type ResolvedProxyConfig } from "../proxy/resolveProxyConfig.js";
 import { parseProxyUrl } from "../proxy/genericProxy.js";
-import { composeOxylabsUsername } from "../proxy/oxylabsProxy.js";
+import { composeOxylabsUsername, resolveOxylabsEndpoint } from "../proxy/oxylabsProxy.js";
 
 /**
  * Reads the proxy config file (if present) and resolves env (unless --ignore-proxy-env) > file
@@ -31,12 +31,18 @@ const configureProxy = (cmd): void => {
         }
     }
 
-    const resolved = resolveProxyConfig({
-        cli: {},
-        env: process.env,
-        ignoreEnv: cmd.ignoreProxyEnv === true,
-        configFileParsed,
-    });
+    let resolved: ResolvedProxyConfig;
+    try {
+        resolved = resolveProxyConfig({
+            cli: {},
+            env: process.env,
+            ignoreEnv: cmd.ignoreProxyEnv === true,
+            configFileParsed,
+        });
+    } catch (err) {
+        console.error(chalk.red(`[!] Invalid Oxylabs config: ${err.message}`));
+        process.exit(1);
+    }
 
     if ((resolved.method === "socks" || resolved.method === "http") && resolved.url) {
         try {
@@ -50,6 +56,7 @@ const configureProxy = (cmd): void => {
     if (resolved.method === "oxylabs" && resolved.oxylabs) {
         try {
             composeOxylabsUsername(resolved.oxylabs);
+            resolveOxylabsEndpoint(resolved.oxylabs.endpoint);
         } catch (err) {
             console.error(chalk.red(`[!] Invalid Oxylabs config: ${err.message}`));
             process.exit(1);

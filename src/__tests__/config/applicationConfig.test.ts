@@ -69,7 +69,7 @@ describe("application YAML configuration", () => {
         expect(document.errors).toEqual([]);
         expect(document.toJS()).toMatchObject({
             version: 1,
-            oxylabs: { username: null, password: null, country: null },
+            oxylabs: { username: null, password: null, country: null, endpoint: null },
             commands: {
                 scan: {
                     url: null,
@@ -204,6 +204,31 @@ describe("application YAML configuration", () => {
         expect(program.opts().config).toBe(envPath);
     });
 
+    it("loads an Oxylabs entry endpoint and rejects one that is not a string", () => {
+        const root = makeTemporaryDirectory();
+        const defaultConfigPath = path.join(root, "default.yaml");
+        const endpointPath = path.join(root, "endpoint.yaml");
+        fs.writeFileSync(endpointPath, "version: 1\noxylabs:\n  endpoint: proxy.example.test:8001\ncommands: {}\n");
+
+        prepareProgramConfiguration(makeProgram(), {
+            argv: ["node", "js-recon", "--config", endpointPath, "scan"],
+            env: {},
+            defaultConfigPath,
+        });
+
+        expect(getLoadedApplicationConfig()?.data.oxylabs.endpoint).toBe("proxy.example.test:8001");
+
+        const numericPath = path.join(root, "numeric-endpoint.yaml");
+        fs.writeFileSync(numericPath, "version: 1\noxylabs:\n  endpoint: 8000\ncommands: {}\n");
+        expect(() =>
+            prepareProgramConfiguration(makeProgram(), {
+                argv: ["node", "js-recon", "--config", numericPath, "scan"],
+                env: {},
+                defaultConfigPath,
+            })
+        ).toThrow(/oxylabs\.endpoint must be a string or null/);
+    });
+
     it("preserves established environment aliases with environment precedence", () => {
         const root = makeTemporaryDirectory();
         const configPath = path.join(root, "operator.yaml");
@@ -229,6 +254,24 @@ describe("application YAML configuration", () => {
         program.parse(argv);
 
         expect(captured?.outputOverwrite).toBe(false);
+    });
+
+    it("fills proxy --oxylabs-endpoint from JS_RECON_OXYLABS_ENDPOINT like the other Oxylabs values", () => {
+        const root = makeTemporaryDirectory();
+        const program = new Command().exitOverride().option("--config <file>");
+        const proxyCommand = program
+            .command("proxy")
+            .option("--oxylabs-username <username>")
+            .option("--oxylabs-endpoint <endpoint>");
+
+        prepareProgramConfiguration(program, {
+            argv: ["node", "js-recon", "proxy"],
+            env: { JS_RECON_OXYLABS_USERNAME: "operator", JS_RECON_OXYLABS_ENDPOINT: "env.example.test:8000" },
+            defaultConfigPath: path.join(root, "default.yaml"),
+        });
+
+        expect(proxyCommand.getOptionValue("oxylabsUsername")).toBe("operator");
+        expect(proxyCommand.getOptionValue("oxylabsEndpoint")).toBe("env.example.test:8000");
     });
 
     it("keeps proxy and MCP command-local --config flags distinct from application config", () => {

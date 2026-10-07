@@ -333,11 +333,14 @@ describe("makeRequest error reporting ownership", () => {
         });
     });
 
-    it("sends browser traffic to the same Oxylabs entry endpoint as requests", () => {
-        const oxylabs = { username: "operator", password: "secret" };
-        const requestEndpoint = new URL(buildOxylabsProxyUrl(oxylabs)).host;
+    it.each([
+        ["the default", undefined, "dc.oxylabs.io:8000"],
+        ["a configured", "proxy.example.test:8001", "proxy.example.test:8001"],
+    ])("sends browser traffic to %s Oxylabs entry endpoint, the same one requests use", (_, endpoint, expected) => {
+        const oxylabs = { username: "operator", password: "secret", endpoint };
 
-        expect(buildPuppeteerProxyArgs({ method: "oxylabs", oxylabs }).arg).toBe(`--proxy-server=${requestEndpoint}`);
+        expect(new URL(buildOxylabsProxyUrl(oxylabs)).host).toBe(expected);
+        expect(buildPuppeteerProxyArgs({ method: "oxylabs", oxylabs }).arg).toBe(`--proxy-server=${expected}`);
     });
 
     it("reports an invalid URL when it owns diagnostics", async () => {

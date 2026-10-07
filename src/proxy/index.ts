@@ -5,7 +5,12 @@ import checkFeasibility from "./checkFeasibility.js";
 import { readAwsGatewayMap, writeAwsGatewayMap } from "./awsConfig.js";
 import { readProxyConfigFile, setActiveProxyMethod, writeMethodConfig } from "./configFile.js";
 import { parseProxyUrl } from "./genericProxy.js";
-import { composeOxylabsUsername, type OxylabsConfig } from "./oxylabsProxy.js";
+import {
+    composeOxylabsUsername,
+    OXYLABS_ENTRY_ENDPOINT,
+    resolveOxylabsEndpoint,
+    type OxylabsConfig,
+} from "./oxylabsProxy.js";
 import { resolveProxyConfig } from "./resolveProxyConfig.js";
 import * as globals from "../utility/globals.js";
 
@@ -319,6 +324,20 @@ const promptOxylabsConfig = async (opts: ProxyCliOptions): Promise<OxylabsConfig
         },
         {
             type: "input",
+            name: "endpoint",
+            message: `Entry endpoint as host:port (optional, default ${OXYLABS_ENTRY_ENDPOINT})`,
+            when: opts.oxylabsEndpoint === undefined,
+            validate: (value: string) => {
+                try {
+                    resolveOxylabsEndpoint(value);
+                    return true;
+                } catch (err) {
+                    return err.message;
+                }
+            },
+        },
+        {
+            type: "input",
             name: "city",
             message: "City (optional, requires country)",
             when: (currentAnswers: { country?: string }) =>
@@ -336,10 +355,12 @@ const promptOxylabsConfig = async (opts: ProxyCliOptions): Promise<OxylabsConfig
         username: opts.oxylabsUsername || answers.username,
         password: opts.oxylabsPassword || answers.password,
         country: opts.oxylabsCountry || answers.country || undefined,
+        endpoint: opts.oxylabsEndpoint || answers.endpoint || undefined,
         city: opts.oxylabsCity || answers.city || undefined,
         sessionId: opts.oxylabsSessionId || answers.sessionId || undefined,
     };
     composeOxylabsUsername(cfg); // throws if city was given without country
+    resolveOxylabsEndpoint(cfg.endpoint); // throws if --oxylabs-endpoint is not host:port
     return cfg;
 };
 
@@ -394,6 +415,7 @@ export interface ProxyCliOptions {
     oxylabsUsername?: string;
     oxylabsPassword?: string;
     oxylabsCountry?: string;
+    oxylabsEndpoint?: string;
     oxylabsCity?: string;
     oxylabsSessionId?: string;
 }
@@ -426,6 +448,7 @@ const proxy = async (opts: ProxyCliOptions): Promise<void> => {
                 oxylabsUsername: opts.oxylabsUsername,
                 oxylabsPassword: opts.oxylabsPassword,
                 oxylabsCountry: opts.oxylabsCountry,
+                oxylabsEndpoint: opts.oxylabsEndpoint,
                 oxylabsCity: opts.oxylabsCity,
                 oxylabsSessionId: opts.oxylabsSessionId,
             },

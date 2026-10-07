@@ -4,6 +4,8 @@ export interface OxylabsConfig {
     country?: string;
     city?: string;
     sessionId?: string;
+    /** Entry endpoint as host:port; unset uses the datacenter default (see resolveOxylabsEndpoint). */
+    endpoint?: string;
 }
 
 /**
@@ -39,11 +41,43 @@ export const composeOxylabsUsername = (cfg: OxylabsConfig): string => {
     return username;
 };
 
-/** The datacenter entry endpoint; requests and Puppeteer launches both route through it. */
+/** The default datacenter entry endpoint, used when no `endpoint` is configured. */
 export const OXYLABS_ENTRY_ENDPOINT = "dc.oxylabs.io:8000";
+
+/** A DNS label: 1-63 letters, digits or hyphens, not starting or ending with a hyphen. */
+const isHostnameLabel = (label: string): boolean =>
+    label.length <= 63 && /^[a-z\d-]+$/i.test(label) && !label.startsWith("-") && !label.endsWith("-");
+
+const isHostPort = (value: string): boolean => {
+    const separator = value.lastIndexOf(":");
+    const host = value.slice(0, separator);
+    const port = value.slice(separator + 1);
+    return (
+        separator > 0 &&
+        host.length <= 253 &&
+        host.split(".").every(isHostnameLabel) &&
+        /^[1-9]\d{0,4}$/.test(port) &&
+        Number(port) <= 65535
+    );
+};
+
+/**
+ * Resolves the entry endpoint that requests and Puppeteer launches route through: the configured
+ * `endpoint`, or OXYLABS_ENTRY_ENDPOINT when it is unset or empty. A configured value must be a bare
+ * host:port (DNS name or IPv4 address). It is interpolated into both the proxy URL and Chromium's
+ * `--proxy-server` switch, so a scheme, credentials, path or proxy-rule separator is rejected.
+ */
+export const resolveOxylabsEndpoint = (endpoint: unknown): string => {
+    if (endpoint === undefined || endpoint === null || endpoint === "") return OXYLABS_ENTRY_ENDPOINT;
+    if (typeof endpoint !== "string" || !isHostPort(endpoint)) {
+        throw new Error("Oxylabs config: `endpoint` must be host:port, for example dc.oxylabs.io:8000.");
+    }
+    return endpoint;
+};
 
 /** Composes the full Oxylabs datacenter proxy URL. */
 export const buildOxylabsProxyUrl = (cfg: OxylabsConfig): string => {
     const username = composeOxylabsUsername(cfg);
-    return `http://${encodeURIComponent(username)}:${encodeURIComponent(cfg.password)}@${OXYLABS_ENTRY_ENDPOINT}`;
+    const endpoint = resolveOxylabsEndpoint(cfg.endpoint);
+    return `http://${encodeURIComponent(username)}:${encodeURIComponent(cfg.password)}@${endpoint}`;
 };

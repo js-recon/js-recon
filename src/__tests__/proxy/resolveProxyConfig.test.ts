@@ -79,6 +79,85 @@ describe("resolveProxyConfig", () => {
         });
     });
 
+    it("resolves the oxylabs entry endpoint with CLI > env > file precedence", () => {
+        const resolveEndpoint = (
+            cli: { oxylabsEndpoint?: string },
+            env: NodeJS.ProcessEnv,
+            ignoreEnv = false
+        ): string | undefined =>
+            resolveProxyConfig({
+                cli: { proxyMethod: "oxylabs", ...cli },
+                env,
+                ignoreEnv,
+                configFileParsed: {
+                    oxylabs: { username: "file-user", password: "file-pass", endpoint: "file.example.test:8000" },
+                },
+            }).oxylabs?.endpoint;
+        const env = { JS_RECON_OXYLABS_ENDPOINT: "env.example.test:8000" };
+
+        expect(resolveEndpoint({ oxylabsEndpoint: "cli.example.test:8000" }, env)).toBe("cli.example.test:8000");
+        expect(resolveEndpoint({}, env)).toBe("env.example.test:8000");
+        expect(resolveEndpoint({}, env, true)).toBe("file.example.test:8000");
+        expect(resolveEndpoint({}, {})).toBe("file.example.test:8000");
+    });
+
+    it.each([
+        [
+            "a proxy config file endpoint for an environment password",
+            {},
+            { JS_RECON_OXYLABS_USERNAME: "env-user", JS_RECON_OXYLABS_PASSWORD: "env-pass" },
+            { endpoint: "file.example.test:8000" },
+        ],
+        [
+            "a proxy config file endpoint for a command-line password",
+            { oxylabsUsername: "cli-user", oxylabsPassword: "cli-pass" },
+            {},
+            { endpoint: "file.example.test:8000" },
+        ],
+        [
+            "an environment endpoint for a command-line password",
+            { oxylabsUsername: "cli-user", oxylabsPassword: "cli-pass" },
+            { JS_RECON_OXYLABS_ENDPOINT: "env.example.test:8000" },
+            {},
+        ],
+    ])("refuses %s, so a lower-precedence source cannot redirect credentials", (_, cli, env, fileOxylabs) => {
+        expect(() =>
+            resolveProxyConfig({
+                cli: { proxyMethod: "oxylabs", ...cli },
+                env,
+                ignoreEnv: false,
+                configFileParsed: { oxylabs: fileOxylabs },
+            })
+        ).toThrow(/endpoint.*password/i);
+    });
+
+    it("accepts an endpoint from the password's own source", () => {
+        const fromEnv = resolveProxyConfig({
+            cli: { proxyMethod: "oxylabs" },
+            env: {
+                JS_RECON_OXYLABS_USERNAME: "env-user",
+                JS_RECON_OXYLABS_PASSWORD: "env-pass",
+                JS_RECON_OXYLABS_ENDPOINT: "env.example.test:8000",
+            },
+            ignoreEnv: false,
+            configFileParsed: {},
+        });
+        const fromCli = resolveProxyConfig({
+            cli: {
+                proxyMethod: "oxylabs",
+                oxylabsUsername: "cli-user",
+                oxylabsPassword: "cli-pass",
+                oxylabsEndpoint: "cli.example.test:8000",
+            },
+            env: {},
+            ignoreEnv: false,
+            configFileParsed: {},
+        });
+
+        expect(fromEnv.oxylabs?.endpoint).toBe("env.example.test:8000");
+        expect(fromCli.oxylabs?.endpoint).toBe("cli.example.test:8000");
+    });
+
     it("returns method: null for oxylabs when username or password is missing everywhere", () => {
         const result = resolveProxyConfig({
             cli: { proxyMethod: "oxylabs" },

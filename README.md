@@ -124,7 +124,9 @@ js-recon --config ./operator.yaml run \
   -u https://app.example.com
 ```
 
-`JS_RECON_OXYLABS_USERNAME`, `JS_RECON_OXYLABS_PASSWORD`, and `JS_RECON_OXYLABS_COUNTRY` override their YAML values unless `--ignore-proxy-env` is set.
+Oxylabs traffic goes through the datacenter entry endpoint `dc.oxylabs.io:8000` unless `oxylabs.endpoint` names another `host:port`. A `proxy` config file accepts the same `endpoint` in its `oxylabs` block (`proxy -i --oxylabs-endpoint <host:port>`). The endpoint receives the Oxylabs password, so set it in the same place as the password or in a higher-precedence one, for example `JS_RECON_OXYLABS_ENDPOINT` alongside `JS_RECON_OXYLABS_PASSWORD`. An endpoint from a lower-precedence source stops the command before any request is sent.
+
+`JS_RECON_OXYLABS_USERNAME`, `JS_RECON_OXYLABS_PASSWORD`, `JS_RECON_OXYLABS_COUNTRY`, and `JS_RECON_OXYLABS_ENDPOINT` override their YAML values unless `--ignore-proxy-env` is set.
 
 ## Commands
 

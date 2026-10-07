@@ -421,6 +421,10 @@ export function buildProgram(): Command {
         .option("--oxylabs-password <password>", "Oxylabs datacenter proxy password for -i/--init")
         .option("--oxylabs-country <country>", "Oxylabs datacenter proxy country code for -i/--init")
         .option(
+            "--oxylabs-endpoint <host:port>",
+            "Oxylabs datacenter proxy entry endpoint for -i/--init (default: dc.oxylabs.io:8000)"
+        )
+        .option(
             "--oxylabs-city <city>",
             "Oxylabs datacenter proxy city for -i/--init (currently unsupported — no documented username-level city targeting)"
         )
@@ -446,6 +450,7 @@ export function buildProgram(): Command {
                     oxylabsUsername: cmd.oxylabsUsername,
                     oxylabsPassword: cmd.oxylabsPassword,
                     oxylabsCountry: cmd.oxylabsCountry,
+                    oxylabsEndpoint: cmd.oxylabsEndpoint,
                     oxylabsCity: cmd.oxylabsCity,
                     oxylabsSessionId: cmd.oxylabsSessionId,
                 });

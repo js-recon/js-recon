@@ -26,6 +26,7 @@ export interface ResolveProxyConfigCliInput {
     oxylabsCountry?: string;
     oxylabsCity?: string;
     oxylabsSessionId?: string;
+    oxylabsEndpoint?: string;
 }
 
 export interface ResolveProxyConfigInput {
@@ -69,6 +70,7 @@ export const resolveProxyConfig = (input: ResolveProxyConfigInput): ResolvedProx
         const envCountry = ignoreEnv ? undefined : env.JS_RECON_OXYLABS_COUNTRY;
         const envCity = ignoreEnv ? undefined : env.JS_RECON_OXYLABS_CITY;
         const envSessionId = ignoreEnv ? undefined : env.JS_RECON_OXYLABS_SESSION_ID;
+        const envEndpoint = ignoreEnv ? undefined : env.JS_RECON_OXYLABS_ENDPOINT;
         const fileOxylabs = configFileParsed.oxylabs || {};
 
         const username = cli.oxylabsUsername || envUsername || fileOxylabs.username;
@@ -76,12 +78,22 @@ export const resolveProxyConfig = (input: ResolveProxyConfigInput): ResolvedProx
         const country = cli.oxylabsCountry || envCountry || fileOxylabs.country;
         const city = cli.oxylabsCity || envCity || fileOxylabs.city;
         const sessionId = cli.oxylabsSessionId || envSessionId || fileOxylabs.sessionId;
+        const endpoint = cli.oxylabsEndpoint || envEndpoint || fileOxylabs.endpoint;
 
         if (!username || !password) {
             return { method: null };
         }
 
-        return { method, oxylabs: { username, password, country, city, sessionId } };
+        // The endpoint receives the password, so it may only come from the password's own source or a
+        // higher-precedence one: a proxy config file must not redirect command-line or environment credentials.
+        const precedence = (cliValue: unknown, envValue: unknown): number => (cliValue ? 0 : envValue ? 1 : 2);
+        if (endpoint && precedence(cli.oxylabsEndpoint, envEndpoint) > precedence(cli.oxylabsPassword, envPassword)) {
+            throw new Error(
+                "Oxylabs config: `endpoint` comes from a lower-precedence source than the password and would receive it. Set the endpoint where the password is set (--oxylabs-endpoint, JS_RECON_OXYLABS_ENDPOINT or the proxy config file)."
+            );
+        }
+
+        return { method, oxylabs: { username, password, country, city, sessionId, endpoint } };
     }
 
     // method === "aws"
