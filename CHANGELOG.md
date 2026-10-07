@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.0.1-beta.5 - (unreleased)
+
+### Fixed
+
+- Puppeteer now routes the `oxylabs` proxy method through the same datacenter entry endpoint as every other request, `dc.oxylabs.io:8000`. When the method moved to the datacenter proxy scheme, only the request path changed. Browser launches still pointed `--proxy-server` at the residential entry endpoint `pr.oxylabs.io:7777` while authenticating with the datacenter username. (`proxy`, `lazyload`, `run`)
+
 ## 2.0.1-beta.4 - 2026-09-28
 
 ### Fixed

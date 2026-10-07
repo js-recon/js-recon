@@ -39,7 +39,8 @@ export const composeOxylabsUsername = (cfg: OxylabsConfig): string => {
     return username;
 };
 
-const OXYLABS_ENTRY_ENDPOINT = "dc.oxylabs.io:8000";
+/** The datacenter entry endpoint; requests and Puppeteer launches both route through it. */
+export const OXYLABS_ENTRY_ENDPOINT = "dc.oxylabs.io:8000";
 
 /** Composes the full Oxylabs datacenter proxy URL. */
 export const buildOxylabsProxyUrl = (cfg: OxylabsConfig): string => {

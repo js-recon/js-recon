@@ -6,7 +6,7 @@ import * as globals from "./globals.js";
 import { getWithMetadata } from "../proxy/genReq.js";
 import checkFireWallBlocking from "../proxy/checkFireWallBlocking.js";
 import { parseProxyUrl } from "../proxy/genericProxy.js";
-import { buildOxylabsProxyUrl, composeOxylabsUsername } from "../proxy/oxylabsProxy.js";
+import { buildOxylabsProxyUrl, composeOxylabsUsername, OXYLABS_ENTRY_ENDPOINT } from "../proxy/oxylabsProxy.js";
 import type { ResolvedProxyConfig } from "../proxy/resolveProxyConfig.js";
 import { EventEmitter } from "events";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -119,7 +119,7 @@ export const buildPuppeteerProxyArgs = (resolved: ResolvedProxyConfig): Puppetee
     if (resolved.method === "oxylabs") {
         if (!resolved.oxylabs) return { arg: null };
         return {
-            arg: "--proxy-server=pr.oxylabs.io:7777",
+            arg: `--proxy-server=${OXYLABS_ENTRY_ENDPOINT}`,
             authenticate: {
                 username: composeOxylabsUsername(resolved.oxylabs),
                 password: resolved.oxylabs.password,
