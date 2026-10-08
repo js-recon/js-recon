@@ -114,13 +114,7 @@ describe("resolveProxyConfig", () => {
             {},
             { endpoint: "file.example.test:8000" },
         ],
-        [
-            "an environment endpoint for a command-line password",
-            { oxylabsUsername: "cli-user", oxylabsPassword: "cli-pass" },
-            { JS_RECON_OXYLABS_ENDPOINT: "env.example.test:8000" },
-            {},
-        ],
-    ])("refuses %s, so a lower-precedence source cannot redirect credentials", (_, cli, env, fileOxylabs) => {
+    ])("refuses %s, so the file cannot redirect the operator's credentials", (_, cli, env, fileOxylabs) => {
         expect(() =>
             resolveProxyConfig({
                 cli: { proxyMethod: "oxylabs", ...cli },
@@ -156,6 +150,17 @@ describe("resolveProxyConfig", () => {
 
         expect(fromEnv.oxylabs?.endpoint).toBe("env.example.test:8000");
         expect(fromCli.oxylabs?.endpoint).toBe("cli.example.test:8000");
+    });
+
+    it("treats the command line and the environment as the same operator, since either may override the other", () => {
+        const result = resolveProxyConfig({
+            cli: { proxyMethod: "oxylabs", oxylabsUsername: "cli-user", oxylabsPassword: "cli-pass" },
+            env: { JS_RECON_OXYLABS_ENDPOINT: "env.example.test:8000" },
+            ignoreEnv: false,
+            configFileParsed: {},
+        });
+
+        expect(result.oxylabs?.endpoint).toBe("env.example.test:8000");
     });
 
     it("returns method: null for oxylabs when username or password is missing everywhere", () => {
@@ -205,16 +210,20 @@ describe("assertOxylabsEndpointSource", () => {
     it.each([
         ["config", "env"],
         ["config", "cli"],
-        ["env", "cli"],
+        ["config", "prompt"],
+        ["default", "env"],
+        ["unknown", "cli"],
+        ["config", "unknown"],
     ])("refuses a proxy command endpoint from %s for a password from %s", (endpointSource, passwordSource) => {
         expect(() => assertOxylabsEndpointSource(endpointSource, passwordSource)).toThrow(/endpoint.*password/i);
     });
 
     it.each([
+        ["env", "cli"],
         ["cli", "env"],
+        ["prompt", "cli"],
         ["cli", "config"],
         ["env", "config"],
-        ["env", "env"],
         ["config", "config"],
         ["config", undefined],
         [undefined, "env"],

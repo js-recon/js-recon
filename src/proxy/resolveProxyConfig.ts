@@ -44,24 +44,22 @@ export interface ResolveProxyConfigInput {
 }
 
 const ENDPOINT_SOURCE_ERROR =
-    "Oxylabs config: `endpoint` comes from a lower-precedence source than the password and would receive it. Set the endpoint where the password is set (--oxylabs-endpoint, JS_RECON_OXYLABS_ENDPOINT or the proxy config file).";
+    "Oxylabs config: `endpoint` comes from a config file but the password does not, so that file would receive the password. Set the endpoint with --oxylabs-endpoint or JS_RECON_OXYLABS_ENDPOINT, or keep the password in the same file.";
 
-/** Commander option value sources, highest precedence first: command line, environment, application YAML config. */
-const OPTION_SOURCE_PRECEDENCE = new Map([
-    ["cli", 0],
-    ["env", 1],
-    ["config", 2],
-]);
+/** Sources an operator controls directly; the wizard reports a typed value as "prompt". */
+const OPERATOR_SOURCES = new Set(["cli", "env", "prompt"]);
 
 /**
- * Applies the endpoint rule to the `proxy` command's own options. Their values merge the command line, the
- * environment and the application YAML config, which resolveProxyConfig sees as one CLI layer, so the caller
- * passes Command#getOptionValueSource() for each option that has a value (undefined otherwise).
+ * Applies the endpoint rule to the `proxy` command's own options, whose values merge the command line, the
+ * environment and the application YAML config: resolveProxyConfig sees all three as one command-line layer.
+ * Pass each option's Command#getOptionValueSource() ("prompt" for a value the wizard asks for), or undefined
+ * when it has no value. The command line and the environment are both the operator's, and either may
+ * override the other, so they rank equally. Any other source counts as a config file, which must not
+ * receive an operator's password. An unrecognized source fails closed on both sides.
  */
 export const assertOxylabsEndpointSource = (endpointSource?: string, passwordSource?: string): void => {
-    const endpointRank = OPTION_SOURCE_PRECEDENCE.get(endpointSource);
-    const passwordRank = OPTION_SOURCE_PRECEDENCE.get(passwordSource);
-    if (endpointRank !== undefined && passwordRank !== undefined && endpointRank > passwordRank) {
+    if (endpointSource === undefined || passwordSource === undefined) return;
+    if (!OPERATOR_SOURCES.has(endpointSource) && passwordSource !== "config") {
         throw new Error(ENDPOINT_SOURCE_ERROR);
     }
 };
@@ -107,10 +105,10 @@ export const resolveProxyConfig = (input: ResolveProxyConfigInput): ResolvedProx
             return { method: null };
         }
 
-        // The endpoint receives the password, so it may only come from the password's own source or a
-        // higher-precedence one: a proxy config file must not redirect command-line or environment credentials.
-        const precedence = (cliValue: unknown, envValue: unknown): number => (cliValue ? 0 : envValue ? 1 : 2);
-        if (endpoint && precedence(cli.oxylabsEndpoint, envEndpoint) > precedence(cli.oxylabsPassword, envPassword)) {
+        // The endpoint receives the password, so an endpoint from the proxy config file may only receive a
+        // password from that same file, never one from the command line or the environment.
+        const endpointFromFile = Boolean(endpoint) && !cli.oxylabsEndpoint && !envEndpoint;
+        if (endpointFromFile && (cli.oxylabsPassword || envPassword)) {
             throw new Error(ENDPOINT_SOURCE_ERROR);
         }
 

@@ -11,7 +11,7 @@ import {
     resolveOxylabsEndpoint,
     type OxylabsConfig,
 } from "./oxylabsProxy.js";
-import { resolveProxyConfig } from "./resolveProxyConfig.js";
+import { assertOxylabsEndpointSource, resolveProxyConfig } from "./resolveProxyConfig.js";
 import * as globals from "../utility/globals.js";
 
 type ProxyMethod = "aws" | "socks" | "http" | "oxylabs";
@@ -418,7 +418,14 @@ export interface ProxyCliOptions {
     oxylabsEndpoint?: string;
     oxylabsCity?: string;
     oxylabsSessionId?: string;
+    /** Commander value sources ("cli", "env", "config") of the endpoint and password options. */
+    oxylabsEndpointSource?: string;
+    oxylabsPasswordSource?: string;
 }
+
+/** The recorded source of an option that has a value; a value whose source was not recorded fails closed. */
+const sourceOf = (value: string | undefined, source: string | undefined): string | undefined =>
+    value ? (source ?? "unknown") : undefined;
 
 /**
  * Main entry point for the `proxy` module.
@@ -452,8 +459,10 @@ const proxy = async (opts: ProxyCliOptions): Promise<void> => {
                 oxylabsCity: opts.oxylabsCity,
                 oxylabsSessionId: opts.oxylabsSessionId,
             },
+            // Every proxy environment variable already reaches these options through its alias, with its
+            // source recorded, so reading the environment again here would hide where a value came from.
             env: process.env,
-            ignoreEnv: false,
+            ignoreEnv: true,
             configFileParsed: readProxyConfigFile(configFile),
         });
 
@@ -462,6 +471,14 @@ const proxy = async (opts: ProxyCliOptions): Promise<void> => {
                 chalk.red("[!] Please specify a proxy method via --proxy-method, or configure one with -i/--init first")
             );
             return;
+        }
+        if (resolved.method === "oxylabs") {
+            assertOxylabsEndpointSource(
+                sourceOf(opts.oxylabsEndpoint, opts.oxylabsEndpointSource),
+                sourceOf(opts.oxylabsPassword, opts.oxylabsPasswordSource)
+            );
+            composeOxylabsUsername(resolved.oxylabs);
+            resolveOxylabsEndpoint(resolved.oxylabs.endpoint);
         }
 
         globals.setProxyConfigFile(configFile);
@@ -494,7 +511,11 @@ const proxy = async (opts: ProxyCliOptions): Promise<void> => {
             return;
         }
 
-        // method === "oxylabs"
+        // method === "oxylabs": a password the wizard has to ask for is the operator's own.
+        assertOxylabsEndpointSource(
+            sourceOf(opts.oxylabsEndpoint, opts.oxylabsEndpointSource),
+            opts.oxylabsPassword ? sourceOf(opts.oxylabsPassword, opts.oxylabsPasswordSource) : "prompt"
+        );
         const oxylabsConfig = await promptOxylabsConfig(opts);
         writeMethodConfig(configFile, "oxylabs", oxylabsConfig);
         console.log(chalk.green(`[✓] Saved oxylabs proxy config to ${configFile}`));

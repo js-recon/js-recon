@@ -1,11 +1,27 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import configureProxy from "../../utility/configureProxy.js";
 import { getOxylabsConfig, setOxylabsConfig, setProxyMethod, setUseProxy } from "../../utility/globals.js";
 
+const PROXY_ENVIRONMENT = [
+    "JS_RECON_PROXY_METHOD",
+    "JS_RECON_PROXY_URL",
+    "JS_RECON_OXYLABS_USERNAME",
+    "JS_RECON_OXYLABS_PASSWORD",
+    "JS_RECON_OXYLABS_COUNTRY",
+    "JS_RECON_OXYLABS_ENDPOINT",
+    "JS_RECON_OXYLABS_CITY",
+    "JS_RECON_OXYLABS_SESSION_ID",
+];
 const temporaryDirectories: string[] = [];
+
+beforeEach(() => {
+    for (const name of PROXY_ENVIRONMENT) {
+        vi.stubEnv(name, undefined);
+    }
+});
 
 const writeProxyConfig = (config: unknown): string => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "js-recon-proxy-config-test-"));

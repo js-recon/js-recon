@@ -6,7 +6,6 @@ import endpoints from "./endpoints/index.js";
 import CONFIG from "./globalConfig.js";
 import strings from "./strings/index.js";
 import proxy from "./proxy/index.js";
-import { assertOxylabsEndpointSource } from "./proxy/resolveProxyConfig.js";
 import configureProxy from "./utility/configureProxy.js";
 import map from "./map/index.js";
 import * as globalsUtil from "./utility/globals.js";
@@ -435,10 +434,6 @@ export function buildProgram(): Command {
         )
         .action(async (cmd, command: Command) => {
             try {
-                assertOxylabsEndpointSource(
-                    cmd.oxylabsEndpoint ? command.getOptionValueSource("oxylabsEndpoint") : undefined,
-                    cmd.oxylabsPassword ? command.getOptionValueSource("oxylabsPassword") : undefined
-                );
                 await proxy({
                     init: cmd.init,
                     destroy: cmd.destroy,
@@ -458,6 +453,8 @@ export function buildProgram(): Command {
                     oxylabsEndpoint: cmd.oxylabsEndpoint,
                     oxylabsCity: cmd.oxylabsCity,
                     oxylabsSessionId: cmd.oxylabsSessionId,
+                    oxylabsEndpointSource: command.getOptionValueSource("oxylabsEndpoint"),
+                    oxylabsPasswordSource: command.getOptionValueSource("oxylabsPassword"),
                 });
             } catch (err) {
                 console.error(chalk.red(`[!] ${err.message}`));

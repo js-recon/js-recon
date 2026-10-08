@@ -48,6 +48,19 @@ export const OXYLABS_ENTRY_ENDPOINT = "dc.oxylabs.io:8000";
 const isHostnameLabel = (label: string): boolean =>
     label.length <= 63 && /^[a-z\d-]+$/i.test(label) && !label.startsWith("-") && !label.endsWith("-");
 
+/**
+ * True when the URL parser reads the host back unchanged. It rejects numeric hosts that are not a valid IPv4
+ * address (an octet over 255, five parts) and refuses the octal and hex forms it would silently rewrite
+ * (010.0.0.1 is 8.0.0.1), so the proxy receives the credentials at the host that was configured.
+ */
+const parsesAsWritten = (host: string, port: string): boolean => {
+    try {
+        return new URL(`http://${host}:${port}`).hostname === host.toLowerCase();
+    } catch {
+        return false;
+    }
+};
+
 const isHostPort = (value: string): boolean => {
     const separator = value.lastIndexOf(":");
     const host = value.slice(0, separator);
@@ -57,7 +70,8 @@ const isHostPort = (value: string): boolean => {
         host.length <= 253 &&
         host.split(".").every(isHostnameLabel) &&
         /^[1-9]\d{0,4}$/.test(port) &&
-        Number(port) <= 65535
+        Number(port) <= 65535 &&
+        parsesAsWritten(host, port)
     );
 };
 

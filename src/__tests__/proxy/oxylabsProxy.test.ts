@@ -55,6 +55,11 @@ describe("resolveOxylabsEndpoint", () => {
         `${"a".repeat(64)}.example.test:8000`,
         "proxy.example.test:8000;direct://",
         "[::1]:8000",
+        "10.0.0.256:8000",
+        "1.2.3.4.5:8000",
+        "proxy.example.123:8000",
+        "010.0.0.1:8000",
+        "0x7f.1:8000",
     ])("rejects %j", (endpoint) => {
         expect(() => resolveOxylabsEndpoint(endpoint)).toThrow(/host:port/);
     });
