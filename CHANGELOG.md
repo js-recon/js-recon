@@ -2,6 +2,10 @@
 
 ## 2.0.1-beta.5 - 2026-10-07
 
+### Security
+
+- Bumped `undici` to 7.30.0 (GHSA-3wwx-pv8p-q78v, GHSA-pmjh-fq2x-6v4x, GHSA-r53p-7pc4-xj5r, GHSA-rfgv-xxqx-mfg5, GHSA-3xpg-4rpp-hhhm, GHSA-2jfj-6hjv-fm6j, GHSA-2gqq-gqf2-x968, GHSA-w293-vg96-wgc3, GHSA-8436-99hf-9mmv, GHSA-rx4f-c7p8-82vq), `shell-quote` to 1.12.0 (GHSA-pqg4-j6r4-53mv) and `@modelcontextprotocol/sdk` to 1.32.1, and refreshed transitive dependencies (`proxy-addr`, `source-map-js`, `brace-expansion`, `fast-uri`, `ip-address`) to their patched versions.
+
 ### Fixed
 
 - Puppeteer now routes the `oxylabs` proxy method through the same datacenter entry endpoint as every other request, `dc.oxylabs.io:8000`. When the method moved to the datacenter proxy scheme, only the request path changed. Browser launches still pointed `--proxy-server` at the residential entry endpoint `pr.oxylabs.io:7777` while authenticating with the datacenter username. (`proxy`, `lazyload`, `run`)
