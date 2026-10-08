@@ -473,9 +473,11 @@ const proxy = async (opts: ProxyCliOptions): Promise<void> => {
             return;
         }
         if (resolved.method === "oxylabs") {
+            // A password missing from the options came from the proxy config file, a different file from the
+            // application config, so an application-config endpoint must not receive it either.
             assertOxylabsEndpointSource(
                 sourceOf(opts.oxylabsEndpoint, opts.oxylabsEndpointSource),
-                sourceOf(opts.oxylabsPassword, opts.oxylabsPasswordSource)
+                sourceOf(opts.oxylabsPassword, opts.oxylabsPasswordSource) ?? "proxy-config-file"
             );
             composeOxylabsUsername(resolved.oxylabs);
             resolveOxylabsEndpoint(resolved.oxylabs.endpoint);
