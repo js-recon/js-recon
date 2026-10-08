@@ -15,6 +15,7 @@ export interface OxylabsApplicationConfig {
     username: string | null;
     password: string | null;
     country: string | null;
+    endpoint?: string | null;
     city?: string | null;
     sessionId?: string | null;
 }
@@ -153,6 +154,7 @@ const legacyEnvironmentAliases: Readonly<Record<string, readonly string[]>> = Ob
     "proxy.oxylabsCountry": ["JS_RECON_OXYLABS_COUNTRY"],
     "proxy.oxylabsCity": ["JS_RECON_OXYLABS_CITY"],
     "proxy.oxylabsSessionId": ["JS_RECON_OXYLABS_SESSION_ID"],
+    "proxy.oxylabsEndpoint": ["JS_RECON_OXYLABS_ENDPOINT"],
 });
 
 export const getDefaultApplicationConfigPath = (homeDirectory: string = os.homedir()): string =>
@@ -177,6 +179,7 @@ export const buildDefaultApplicationConfig = (program: Command): ApplicationConf
             username: null,
             password: null,
             country: null,
+            endpoint: null,
         },
         commands,
     };
@@ -219,12 +222,12 @@ const createDefaultConfigIfMissing = (configPath: string, program: Command): voi
 
 const normalizeOxylabsConfig = (value: unknown): OxylabsApplicationConfig => {
     if (value === undefined || value === null) {
-        return { username: null, password: null, country: null };
+        return { username: null, password: null, country: null, endpoint: null };
     }
     if (!isRecord(value)) {
         throw new ApplicationConfigError("oxylabs must be a mapping");
     }
-    const allowed = new Set(["username", "password", "country", "city", "sessionId"]);
+    const allowed = new Set(["username", "password", "country", "endpoint", "city", "sessionId"]);
     assertKnownKeys(value, allowed, "oxylabs");
 
     const readNullableString = (key: string): string | null | undefined => {
@@ -241,6 +244,7 @@ const normalizeOxylabsConfig = (value: unknown): OxylabsApplicationConfig => {
         username: readNullableString("username") ?? null,
         password: readNullableString("password") ?? null,
         country: readNullableString("country") ?? null,
+        endpoint: readNullableString("endpoint") ?? null,
         ...(value.city !== undefined ? { city: readNullableString("city") ?? null } : {}),
         ...(value.sessionId !== undefined ? { sessionId: readNullableString("sessionId") ?? null } : {}),
     };

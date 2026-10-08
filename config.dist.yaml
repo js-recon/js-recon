@@ -12,10 +12,13 @@ version: 1
 
 oxylabs:
     # Required in an explicitly selected config when oxylabsWafFallback is true.
-    # JS_RECON_OXYLABS_USERNAME/PASSWORD/COUNTRY may override these values.
+    # JS_RECON_OXYLABS_USERNAME/PASSWORD/COUNTRY/ENDPOINT may override these values.
     username: null
     password: null
     country: null
+    # Entry endpoint as host:port; null uses the datacenter default, dc.oxylabs.io:8000.
+    # It never receives a JS_RECON_OXYLABS_PASSWORD password; set JS_RECON_OXYLABS_ENDPOINT with that.
+    endpoint: null
 
 commands:
     lazyload:
@@ -91,6 +94,7 @@ commands:
         oxylabsUsername: null
         oxylabsPassword: null
         oxylabsCountry: null
+        oxylabsEndpoint: null
         oxylabsCity: null
         oxylabsSessionId: null
 
