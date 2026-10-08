@@ -5,6 +5,7 @@
 ### Security
 
 - Bumped `undici` to 7.30.0 (GHSA-3wwx-pv8p-q78v, GHSA-pmjh-fq2x-6v4x, GHSA-r53p-7pc4-xj5r, GHSA-rfgv-xxqx-mfg5, GHSA-3xpg-4rpp-hhhm, GHSA-2jfj-6hjv-fm6j, GHSA-2gqq-gqf2-x968, GHSA-w293-vg96-wgc3, GHSA-8436-99hf-9mmv, GHSA-rx4f-c7p8-82vq), `shell-quote` to 1.12.0 (GHSA-pqg4-j6r4-53mv) and `@modelcontextprotocol/sdk` to 1.32.1, and refreshed transitive dependencies (`proxy-addr`, `source-map-js`, `brace-expansion`, `fast-uri`, `ip-address`) to their patched versions.
+- Replaced `patch-package` with a small postinstall script (`scripts/postinstall-patch.mjs`) that applies the same `puppeteer-extra-plugin-user-data-dir` fix for `rimraf@6`. This removes the `patch-package` → `find-yarn-workspace-root` → `micromatch` → `braces` chain, which has no patched `braces` release (GHSA-vfj7-8cjw-p6xm).
 
 ### Fixed
 

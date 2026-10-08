@@ -10,7 +10,6 @@ ENV HOME=/home/pptruser
 COPY ./package.json .
 COPY ./npm-shrinkwrap.json .
 COPY ./tsconfig.json .
-COPY ./patches ./patches
 COPY ./src ./src
 COPY ./scripts ./scripts
 
