@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveProxyConfig } from "../../proxy/resolveProxyConfig.js";
+import { assertOxylabsEndpointSource, resolveProxyConfig } from "../../proxy/resolveProxyConfig.js";
 
 describe("resolveProxyConfig", () => {
     it("returns method: null when nothing is configured anywhere", () => {
@@ -198,5 +198,27 @@ describe("resolveProxyConfig", () => {
             configFileParsed: {},
         });
         expect(result).toEqual({ method: null });
+    });
+});
+
+describe("assertOxylabsEndpointSource", () => {
+    it.each([
+        ["config", "env"],
+        ["config", "cli"],
+        ["env", "cli"],
+    ])("refuses a proxy command endpoint from %s for a password from %s", (endpointSource, passwordSource) => {
+        expect(() => assertOxylabsEndpointSource(endpointSource, passwordSource)).toThrow(/endpoint.*password/i);
+    });
+
+    it.each([
+        ["cli", "env"],
+        ["cli", "config"],
+        ["env", "config"],
+        ["env", "env"],
+        ["config", "config"],
+        ["config", undefined],
+        [undefined, "env"],
+    ])("accepts a proxy command endpoint from %s for a password from %s", (endpointSource, passwordSource) => {
+        expect(() => assertOxylabsEndpointSource(endpointSource, passwordSource)).not.toThrow();
     });
 });

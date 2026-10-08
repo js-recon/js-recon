@@ -43,6 +43,29 @@ export interface ResolveProxyConfigInput {
     };
 }
 
+const ENDPOINT_SOURCE_ERROR =
+    "Oxylabs config: `endpoint` comes from a lower-precedence source than the password and would receive it. Set the endpoint where the password is set (--oxylabs-endpoint, JS_RECON_OXYLABS_ENDPOINT or the proxy config file).";
+
+/** Commander option value sources, highest precedence first: command line, environment, application YAML config. */
+const OPTION_SOURCE_PRECEDENCE = new Map([
+    ["cli", 0],
+    ["env", 1],
+    ["config", 2],
+]);
+
+/**
+ * Applies the endpoint rule to the `proxy` command's own options. Their values merge the command line, the
+ * environment and the application YAML config, which resolveProxyConfig sees as one CLI layer, so the caller
+ * passes Command#getOptionValueSource() for each option that has a value (undefined otherwise).
+ */
+export const assertOxylabsEndpointSource = (endpointSource?: string, passwordSource?: string): void => {
+    const endpointRank = OPTION_SOURCE_PRECEDENCE.get(endpointSource);
+    const passwordRank = OPTION_SOURCE_PRECEDENCE.get(passwordSource);
+    if (endpointRank !== undefined && passwordRank !== undefined && endpointRank > passwordRank) {
+        throw new Error(ENDPOINT_SOURCE_ERROR);
+    }
+};
+
 const isValidMethod = (value: unknown): value is ProxyMethod => {
     return value === "aws" || value === "socks" || value === "http" || value === "oxylabs";
 };
@@ -88,9 +111,7 @@ export const resolveProxyConfig = (input: ResolveProxyConfigInput): ResolvedProx
         // higher-precedence one: a proxy config file must not redirect command-line or environment credentials.
         const precedence = (cliValue: unknown, envValue: unknown): number => (cliValue ? 0 : envValue ? 1 : 2);
         if (endpoint && precedence(cli.oxylabsEndpoint, envEndpoint) > precedence(cli.oxylabsPassword, envPassword)) {
-            throw new Error(
-                "Oxylabs config: `endpoint` comes from a lower-precedence source than the password and would receive it. Set the endpoint where the password is set (--oxylabs-endpoint, JS_RECON_OXYLABS_ENDPOINT or the proxy config file)."
-            );
+            throw new Error(ENDPOINT_SOURCE_ERROR);
         }
 
         return { method, oxylabs: { username, password, country, city, sessionId, endpoint } };

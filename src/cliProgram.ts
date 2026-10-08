@@ -6,6 +6,7 @@ import endpoints from "./endpoints/index.js";
 import CONFIG from "./globalConfig.js";
 import strings from "./strings/index.js";
 import proxy from "./proxy/index.js";
+import { assertOxylabsEndpointSource } from "./proxy/resolveProxyConfig.js";
 import configureProxy from "./utility/configureProxy.js";
 import map from "./map/index.js";
 import * as globalsUtil from "./utility/globals.js";
@@ -432,8 +433,12 @@ export function buildProgram(): Command {
             "--oxylabs-session-id <id>",
             "Oxylabs datacenter proxy sticky session id for -i/--init (currently unsupported via username — sessions are selected by port)"
         )
-        .action(async (cmd) => {
+        .action(async (cmd, command: Command) => {
             try {
+                assertOxylabsEndpointSource(
+                    cmd.oxylabsEndpoint ? command.getOptionValueSource("oxylabsEndpoint") : undefined,
+                    cmd.oxylabsPassword ? command.getOptionValueSource("oxylabsPassword") : undefined
+                );
                 await proxy({
                     init: cmd.init,
                     destroy: cmd.destroy,
