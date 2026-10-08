@@ -1,5 +1,20 @@
 # Change Log
 
+## 2.0.1-beta.5 - 2026-10-07
+
+### Security
+
+- Bumped `undici` to 7.30.0 (GHSA-3wwx-pv8p-q78v, GHSA-pmjh-fq2x-6v4x, GHSA-r53p-7pc4-xj5r, GHSA-rfgv-xxqx-mfg5, GHSA-3xpg-4rpp-hhhm, GHSA-2jfj-6hjv-fm6j, GHSA-2gqq-gqf2-x968, GHSA-w293-vg96-wgc3, GHSA-8436-99hf-9mmv, GHSA-rx4f-c7p8-82vq), `shell-quote` to 1.12.0 (GHSA-pqg4-j6r4-53mv) and `@modelcontextprotocol/sdk` to 1.32.1, and refreshed transitive dependencies (`proxy-addr`, `source-map-js`, `brace-expansion`, `fast-uri`, `ip-address`) to their patched versions.
+- Replaced `patch-package` with a small postinstall script (`scripts/postinstall-patch.mjs`) that applies the same `puppeteer-extra-plugin-user-data-dir` fix for `rimraf@6`. This removes the `patch-package` → `find-yarn-workspace-root` → `micromatch` → `braces` chain, which has no patched `braces` release (GHSA-vfj7-8cjw-p6xm).
+
+### Fixed
+
+- Puppeteer now routes the `oxylabs` proxy method through the same datacenter entry endpoint as every other request, `dc.oxylabs.io:8000`. When the method moved to the datacenter proxy scheme, only the request path changed. Browser launches still pointed `--proxy-server` at the residential entry endpoint `pr.oxylabs.io:7777` while authenticating with the datacenter username. (`proxy`, `lazyload`, `run`)
+
+### Added
+
+- The Oxylabs entry endpoint is configurable as `host:port`, and still defaults to the datacenter endpoint `dc.oxylabs.io:8000`. Set it with `oxylabs.endpoint` in the YAML config (used by `--oxylabs-waf-fallback`), with `endpoint` in the `oxylabs` block of a proxy config file, with `proxy -i --oxylabs-endpoint`, or with `JS_RECON_OXYLABS_ENDPOINT`, which overrides both files unless `--ignore-proxy-env` is set. Requests and Puppeteer launches both use it. A value with a scheme, credentials, a path or no port is rejected before any request is sent, as is a numeric host that is not a plain IPv4 address (an octet over 255, or an octal or hex form such as `010.0.0.1` that the URL parser would turn into another address). Because the endpoint receives the Oxylabs password, an endpoint in a proxy config file or the YAML config only receives a password from that same file, never one from the command line, the environment or the `proxy -i` prompt. (`proxy`, `lazyload`, `run`)
+
 ## 2.0.1-beta.4 - 2026-09-28
 
 ### Fixed

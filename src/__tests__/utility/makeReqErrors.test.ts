@@ -1,10 +1,12 @@
 import fs from "fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import makeRequest, {
+    buildPuppeteerProxyArgs,
     getActivePuppeteerProxyArgs,
     getCacheIdentityDigest,
     withRequestSignal,
 } from "../../utility/makeReq.js";
+import { buildOxylabsProxyUrl } from "../../proxy/oxylabsProxy.js";
 import {
     setCacheOnly,
     setDisableCache,
@@ -326,9 +328,19 @@ describe("makeRequest error reporting ownership", () => {
 
         setUseProxy(true);
         expect(getActivePuppeteerProxyArgs()).toMatchObject({
-            arg: "--proxy-server=pr.oxylabs.io:7777",
+            arg: "--proxy-server=dc.oxylabs.io:8000",
             authenticate: { username: "user-operator", password: "secret" },
         });
+    });
+
+    it.each([
+        ["the default", undefined, "dc.oxylabs.io:8000"],
+        ["a configured", "proxy.example.test:8001", "proxy.example.test:8001"],
+    ])("sends browser traffic to %s Oxylabs entry endpoint, the same one requests use", (_, endpoint, expected) => {
+        const oxylabs = { username: "operator", password: "secret", endpoint };
+
+        expect(new URL(buildOxylabsProxyUrl(oxylabs)).host).toBe(expected);
+        expect(buildPuppeteerProxyArgs({ method: "oxylabs", oxylabs }).arg).toBe(`--proxy-server=${expected}`);
     });
 
     it("reports an invalid URL when it owns diagnostics", async () => {
