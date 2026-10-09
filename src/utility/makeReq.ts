@@ -738,7 +738,7 @@ const makeRequest = async (
             });
             if (fallbackDetection.blocked || !fallbackData.ok) {
                 if (reportErrors) {
-                    progressError(chalk.yellow("[!] Oxylabs fallback still received a CDN/WAF block response"));
+                    progressError(chalk.yellow("[!] Oxylabs fallback did not return a usable response"));
                 }
                 return null;
             }
