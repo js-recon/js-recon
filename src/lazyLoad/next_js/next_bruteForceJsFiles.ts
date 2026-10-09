@@ -4,7 +4,7 @@ import { runWithConcurrency } from "../../utility/concurrency.js";
 
 const next_bruteForceJsFiles = async (urls: string[], threads: number = 1) => {
     // just append .map to all of them and bruteforce for 200
-    console.log(chalk.cyan("[i] Bruteforcing .map files"));
+    console.log(chalk.cyan("[i] Probing for .map files"));
     const mapFiles = urls.map((url) => url + ".map");
 
     const foundSourceMaps: string[] = [];
