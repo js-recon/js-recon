@@ -36,7 +36,7 @@ export const determineFeasibilityOutcome = (
     if (blockedWithProxy) {
         return {
             code: 28,
-            message: "[!] Firewall still detected while using the proxy. This proxy method could not bypass it.",
+            message: "[!] Firewall still detected while using the proxy. This proxy method does not avoid the block.",
         };
     }
     return {

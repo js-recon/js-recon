@@ -465,9 +465,7 @@ const next_routerStateForge = async (
                 if (result.success) {
                     const verb = leafMode === "page" ? "revealed content" : "revealed metadata";
                     const prefix =
-                        leafMode === "page"
-                            ? "Forged next-router-state-tree bypass"
-                            : "Forged metadata-only next-router-state-tree bypass";
+                        leafMode === "page" ? "Router-state request (content)" : "Router-state request (metadata-only)";
                     printMsg(
                         MSG.Run,
                         `[✓] ${prefix} ${verb}: ${candidateUrl} (claimed ancestor: /${ancestorsToPath(ancestors)}, ${result.keyMode} _rsc key)`
