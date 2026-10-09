@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.0.1-beta.6 (unreleased)
+
+### Changed
+
+- Log messages on the normal recon path use neutral wording instead of "exploit", "forged", "bypass" and "bruteforcing" (for example `Raw exploit request failed` is now `Raw request failed`, and `Forged next-router-state-tree bypass` is now `Router-state request (content)`). AI coding and analysis agents were refusing to continue when this output was pasted into them. Only the wording changed; behavior, method names and `--include-methods`/`--exclude-methods` values are the same. (`lazyload`, `map`, `run`, `proxy`, `utility`)
+
 ## 2.0.1-beta.5 - 2026-10-07
 
 ### Security
