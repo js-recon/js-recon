@@ -198,7 +198,7 @@ const getViteConnections = async (directory: string, output: string, formats: st
             } else if (node.type === "ExportNamedDeclaration" && !node.declaration) {
                 for (const spec of node.specifiers) {
                     if (spec.type !== "ExportSpecifier") continue;
-                    const localName = spec.local.name;
+                    const localName = spec.local.type === "Identifier" ? spec.local.name : spec.local.value;
                     const exportedAs = spec.exported.type === "Identifier" ? spec.exported.name : spec.exported.value;
                     const arr = exportMap.get(localName) ?? [];
                     arr.push(exportedAs);
