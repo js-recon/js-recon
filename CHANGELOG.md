@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.0.1-beta.7 - 2026-10-11
+
+### Changed
+
+- Updated runtime dependencies: `marked` 16.1.2 to 18.1.0, `puppeteer` 25.9.0 to 25.13.0, `openai` 7.8.0 to 7.30.1, `@anthropic-ai/sdk` 0.122.0 to 0.132.1, `@aws-sdk/client-api-gateway` 3.1121.0 to 3.1147.0, `@babel/*` to 8.0.6/8.0.7, and patch updates to `chalk`, `inquirer`, `ollama`, `prettier`, `ws` and `yaml`. The Docker image now builds on `puppeteer/puppeteer` 25.12.0.
+
 ## 2.0.1-beta.6 - 2026-10-09
 
 ### Changed
