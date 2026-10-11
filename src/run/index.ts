@@ -135,7 +135,7 @@ const processUrl = async (
         } else if (outcome.code === 28) {
             printMsg(
                 MSG.Err,
-                `[!] Proxy could not bypass the firewall for this target. ${isBatch ? "Skipping this target." : "Quitting."}`
+                `[!] Proxy request still blocked by the firewall for this target. ${isBatch ? "Skipping this target." : "Quitting."}`
             );
             if (isBatch) return;
             process.exit(29);

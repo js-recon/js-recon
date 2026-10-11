@@ -1,12 +1,12 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "2.0.1-beta.5",
+    "version": "2.0.1-beta.6",
     "lockfileVersion": 3,
     "requires": true,
     "packages": {
         "": {
             "name": "@js-recon/js-recon",
-            "version": "2.0.1-beta.5",
+            "version": "2.0.1-beta.6",
             "hasInstallScript": true,
             "license": "MIT",
             "dependencies": {

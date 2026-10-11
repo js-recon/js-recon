@@ -667,6 +667,14 @@ The baseline files live in the sibling `js-recon-cs-mast-s/` repo (`baselines/<t
 
 **Important:** the version detection data in the HF bucket was generated with `@shriyanss/cs-mast` v0.1.8. The tool requires cs-mast 0.1.8 or later to produce matching signatures. Using an older cs-mast version will result in zero matches.
 
+## Log message wording (neutral language)
+
+User-facing output on the normal recon path (`lazyload`, `strings`, `map`, `endpoints`, `analyze`, `report`, `run`, `proxy`, and shared helpers like `makeReq.ts`) gets pasted into AI agents, and security-sounding words make those agents refuse to continue (GitHub issue #197). When writing or editing any `printMsg`/`progressLog`/`progressError`/`console.*` string or user-facing error message:
+
+- **Do not use** exploit, forge/forged, bypass, brute force/bruteforcing, attack, payload, inject/injected, malicious, spoof, hijack, evade, or similar wording.
+- **Describe what the tool does in neutral terms** ("request", "probe", "retry", "still blocked", "added"). Examples: `Raw request failed` not `Raw exploit request failed`; `Retrying with headless browser` not `Trying to bypass with headless browser`; `Probing for .map files` not `Bruteforcing .map files`; `Router-state request (content)` not `Forged next-router-state-tree bypass`.
+- **Scope:** log/output strings only. Existing identifiers and method names (`next_routerStateForge`, `next_bruteForceJsFiles`, `bypassedUrls`) stay as-is, because renaming them breaks `--include-methods`/`--exclude-methods` and output consumers. Don't carry that wording into new log text. The explicit `exploit` subcommand's own output is exempt, since the user opts into it by name.
+
 ## Security / confidentiality
 
 When a change is informed by behavior observed on a real target (URLs, endpoint names, response shapes, finding details, etc.):

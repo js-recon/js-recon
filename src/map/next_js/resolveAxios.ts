@@ -59,7 +59,7 @@ const resolveAxios = async (chunks: Chunks, directory: string) => {
     if (Object.keys(globalInterceptorHeaders).length > 0) {
         printMsg(
             MSG.Header,
-            `[i] Detected ${Object.keys(globalInterceptorHeaders).length} interceptor-injected header(s): ${Object.keys(globalInterceptorHeaders).join(", ")}`
+            `[i] Detected ${Object.keys(globalInterceptorHeaders).length} interceptor-added header(s): ${Object.keys(globalInterceptorHeaders).join(", ")}`
         );
     }
 

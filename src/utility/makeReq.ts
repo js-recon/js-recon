@@ -427,7 +427,7 @@ const handleFirewall = async (
     const firewall = detection.provider === "cloudfront" ? "CloudFront" : "Cloudflare/CDN";
 
     if (reportErrors) {
-        progressError(chalk.yellow(`[!] ${firewall} Firewall detected. Trying to bypass with headless browser`));
+        progressError(chalk.yellow(`[!] ${firewall} Firewall detected. Retrying with headless browser`));
     }
     const chromiumPath = getChromiumPath();
     const proxyArgs = getActivePuppeteerProxyArgs();
@@ -738,7 +738,7 @@ const makeRequest = async (
             });
             if (fallbackDetection.blocked || !fallbackData.ok) {
                 if (reportErrors) {
-                    progressError(chalk.yellow("[!] Oxylabs fallback did not bypass the CDN/WAF response"));
+                    progressError(chalk.yellow("[!] Oxylabs fallback did not return a usable response"));
                 }
                 return null;
             }
@@ -780,7 +780,7 @@ const makeRequest = async (
             } catch (error) {
                 if (reportErrors && !isCancelled()) {
                     progressError(
-                        chalk.yellow(`[!] Browser firewall bypass failed for ${url}: ${error?.message || error}`)
+                        chalk.yellow(`[!] Headless browser retry failed for ${url}: ${error?.message || error}`)
                     );
                 }
                 return null;

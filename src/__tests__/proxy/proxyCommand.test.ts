@@ -77,6 +77,17 @@ describe("proxy --feasibility with the oxylabs method", () => {
         expect(harness.checkFeasibility).not.toHaveBeenCalled();
     });
 
+    it("refuses an application-config endpoint for a proxy config file password before any request", async () => {
+        const config = proxyConfigPath();
+        fs.writeFileSync(config, JSON.stringify({ oxylabs: { username: "file-user", password: "file-pass" } }));
+        const run = proxy(
+            options({ ...FEASIBILITY, config, oxylabsEndpoint: ENDPOINT, oxylabsEndpointSource: "config" })
+        );
+
+        await expect(run).rejects.toThrow(/endpoint.*password/i);
+        expect(harness.checkFeasibility).not.toHaveBeenCalled();
+    });
+
     it("rejects an endpoint that is not host:port before any request", async () => {
         const run = proxy(
             options({
