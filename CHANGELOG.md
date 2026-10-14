@@ -1,5 +1,7 @@
 # Change Log
 
+## 2.0.1-beta.8 - (unreleased)
+
 ## 2.0.1-beta.7 - 2026-10-11
 
 ### Changed
@@ -343,11 +345,11 @@
 - `rules` (angular): New rule `detect_angular_bypass_security_trust` detects calls to `bypassSecurityTrustHtml`, `bypassSecurityTrustScript`, `bypassSecurityTrustStyle`, `bypassSecurityTrustUrl`, and `bypassSecurityTrustResourceUrl` — Angular's DomSanitizer bypass methods that disable built-in XSS protection. Severity: high. Added `angular` to the `tech` array of all 17 existing AST rules that previously covered only `next`, `vue`, `react`, and `svelte`.
 
 - `refactor -t react-vite`: new Vite (rolldown) React refactor mode. Takes a `mapped.json` whose chunks are Vite-produced ESM files and outputs one `.jsx` file per app chunk with library boilerplate removed and readable source recovered:
-    - Analyzes all vendor chunks (`vendor-react-*.js`) to classify every export as `react`, `react/jsx-runtime`, `react-dom/client`, or `react-router-dom`
-    - Detects CJS interop vars — both `__toESM(getter(), 1)` and bare `getter()` forms — and rewrites `(0, x.prop)(args)` calls to bare canonical names (`useState(args)`, `jsx(...)`, etc.)
-    - Rewrites the vendor import statement to direct canonical library imports (`import { useState, useEffect } from 'react'`, etc.)
-    - Reuses shared cleanup passes from the webpack refactor: `slicedToArray` collapse, JSX recovery (handles rolldown's template literal tag names `` `div` ``), Babel helper removal, unused-import pruning
-    - Runs a Vite build check after writing output: scaffolds a minimal Vite project in the output directory, renames `.js` → `.jsx`, rewrites relative dynamic imports, installs dependencies, and runs `vite build` to confirm the refactored code compiles
+  - Analyzes all vendor chunks (`vendor-react-*.js`) to classify every export as `react`, `react/jsx-runtime`, `react-dom/client`, or `react-router-dom`
+  - Detects CJS interop vars — both `__toESM(getter(), 1)` and bare `getter()` forms — and rewrites `(0, x.prop)(args)` calls to bare canonical names (`useState(args)`, `jsx(...)`, etc.)
+  - Rewrites the vendor import statement to direct canonical library imports (`import { useState, useEffect } from 'react'`, etc.)
+  - Reuses shared cleanup passes from the webpack refactor: `slicedToArray` collapse, JSX recovery (handles rolldown's template literal tag names `` `div` ``), Babel helper removal, unused-import pruning
+  - Runs a Vite build check after writing output: scaffolds a minimal Vite project in the output directory, renames `.js` → `.jsx`, rewrites relative dynamic imports, installs dependencies, and runs `vite build` to confirm the refactored code compiles
 
 - `refactor -t react-webpack`: new `--scat <categories>` flag overrides the CS-MAST scat category set used for both the remote signature download and the module classifier. Accepts a comma-separated list of categories from `lit,id,op,decl,loop,cond,name,val,op_name` (e.g. `--scat lit,decl,cond`). The flag correctly maps to bucket directory names following the canonical `ALL_SCAT_CATEGORIES` ordering (the same ordering used by `jsr-cs-mast-s-gen`), so `--scat lit,cond,decl` and `--scat decl,lit,cond` both resolve to the `lit-decl-cond` bucket directory.
 
@@ -386,17 +388,17 @@
 - `lazyload`: `--research` now tracks and writes technique efficiency output for all frameworks (Vue, Nuxt, Angular, React, Svelte), not just Next.js.
 
 - `cs-mast`: new subcommand that computes CS-MAST-S (Context-Stratified Merkelized Abstract Syntax Tree) signatures for every downloaded `.js` file and finds structural hash collisions across targets (`cs-mast`)
-    - `--ct / --collision-table`: print a collision table sorted by frequency (files sharing the same CS-MAST-S root signature)
-    - `--min-collisions <n>`: minimum number of files that must share a signature to appear in the table (default: 2)
-    - `--co / --collision-output <file>`: write collision results to a file; independent of `--ct` (file is written without printing the table if `--ct` is omitted)
-    - `--cf / --collision-format json|csv`: output format (default: csv); if `--co` is a directory or has no extension, the file is written as `collisions.<fmt>` in the current working directory
-    - Uses `@shriyanss/cs-mast` with `scat: [lit, decl, loop, cond]`, SHA-256, `sourceType: unambiguous`; parse errors are skipped with a warning
+  - `--ct / --collision-table`: print a collision table sorted by frequency (files sharing the same CS-MAST-S root signature)
+  - `--min-collisions <n>`: minimum number of files that must share a signature to appear in the table (default: 2)
+  - `--co / --collision-output <file>`: write collision results to a file; independent of `--ct` (file is written without printing the table if `--ct` is omitted)
+  - `--cf / --collision-format json|csv`: output format (default: csv); if `--co` is a directory or has no extension, the file is written as `collisions.<fmt>` in the current working directory
+  - Uses `@shriyanss/cs-mast` with `scat: [lit, decl, loop, cond]`, SHA-256, `sourceType: unambiguous`; parse errors are skipped with a warning
 
 - `refactor -t react-webpack`: new React webpack refactor mode that splits a webpack 5 bundle into individual ES module files (`refactor`)
-    - Numeric module map (`var e = { 540: fn, … }`) is extracted and each module written to `<id>.js` with full ES import/export conversion (require→import hoisting, exports→named/default export rewriting, outer wrapper stripped)
-    - Non-module IIFE content (bootstrap helpers, root component, `ReactDOM.render` call) is captured into `index.js`
-    - Webpack require helper is detected by its `return (moduleMap[id](…), mod.exports)` return shape and stripped from `index.js`
-    - Top-level `requireFn(N)` calls in `index.js` are hoisted to `import * as x from "./N.js"`; remaining inline calls are replaced recursively throughout the file
+  - Numeric module map (`var e = { 540: fn, … }`) is extracted and each module written to `<id>.js` with full ES import/export conversion (require→import hoisting, exports→named/default export rewriting, outer wrapper stripped)
+  - Non-module IIFE content (bootstrap helpers, root component, `ReactDOM.render` call) is captured into `index.js`
+  - Webpack require helper is detected by its `return (moduleMap[id](…), mod.exports)` return shape and stripped from `index.js`
+  - Top-level `requireFn(N)` calls in `index.js` are hoisted to `import * as x from "./N.js"`; remaining inline calls are replaced recursively throughout the file
 - `refactor --collisions` now accepts a per-feature results directory (a directory whose immediate subdirs each contain `<scat>/collisions.json`, e.g. a 18-feature corpus with `01-usestate-hook-webpack/lit-decl-loop-cond/collisions.json` etc.) — reads only the scat-relevant file per feature subdir, intersects the max-count signature sets across all features, and uses the intersection as the library baseline; works even when the full dataset is hundreds of GB (`refactor`)
 - `refactor -t react-webpack`: Pass G now strips three additional Babel inline helpers emitted to the IIFE body — `_typeof` (lazy self-reassignment typeof polyfill, detected by single-return body reassigning its own binding), `_defineProperty`/`_toPropertyKey`/`_toPrimitive` (property-setter helpers, detected by `Object.defineProperty` call with `{value, enumerable, configurable, writable}` descriptor), and `_objectSpreadPropsHelper` (detected by `Object.keys` first-statement + `getOwnPropertySymbols` reference) — cleaning up noise left by JSX spread and object spread (`refactor`)
 
@@ -870,7 +872,7 @@
 
 - Added `analyze` module
 - Added analysis of OpenAPI spec file (requestEngine)
-- Use the repo https://github.com/js-recon/js-recon-rules to remotely store and download rules
+- Use the repo <https://github.com/js-recon/js-recon-rules> to remotely store and download rules
 
 ### Changed
 
@@ -1106,9 +1108,9 @@
 - Add endpoints module to support client-side path extraction
 - Add subsequent-requests feature (`RSC: 1`) in Next.JS
 - Add map module
-    - Webpack chunk parsing
-    - Interactive mode
-    - `fetch()` detection
+  - Webpack chunk parsing
+  - Interactive mode
+  - `fetch()` detection
 - Permutation in `strings` module
 - OpenAI and Ollama integration for AI descriptions
 
