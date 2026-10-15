@@ -9,8 +9,8 @@ import { parseProxyUrl } from "../proxy/genericProxy.js";
 import { buildOxylabsProxyUrl, composeOxylabsUsername, resolveOxylabsEndpoint } from "../proxy/oxylabsProxy.js";
 import type { ResolvedProxyConfig } from "../proxy/resolveProxyConfig.js";
 import { EventEmitter } from "events";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
+import { getRequestSignal, isRequestCancelled, withRequestSignal } from "./requestSignal.js";
 import { progressError, progressLog } from "./progressLog.js";
 import { isSigintHandlerActive } from "../run/interruptHandler.js";
 import detectBlockedResponse from "../proxy/detectBlockedResponse.js";
@@ -93,14 +93,8 @@ export interface PuppeteerProxyArgs {
     authenticate?: { username: string; password: string };
 }
 
-const requestSignalContext = new AsyncLocalStorage<AbortSignal>();
-
-/** Supplies cancellation to every makeRequest call in the async work scope. */
-export const withRequestSignal = <T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> =>
-    requestSignalContext.run(signal, work);
-
-/** True when the current async request scope has been cancelled. */
-export const isRequestCancelled = (): boolean => requestSignalContext.getStore()?.aborted === true;
+// Re-exported so existing callers keep importing cancellation helpers from makeReq.
+export { withRequestSignal, isRequestCancelled };
 
 /**
  * Builds the Puppeteer `--proxy-server=` launch arg plus optional `page.authenticate()` credentials.
@@ -513,7 +507,7 @@ const makeRequest = async (
         url = "https:" + url;
     }
     const { timeout, reportErrors = true, ...restArgs } = args || {};
-    const contextualSignal = requestSignalContext.getStore();
+    const contextualSignal = getRequestSignal();
     const explicitSignal = restArgs.signal ?? undefined;
     const effectiveSignal =
         contextualSignal && explicitSignal && contextualSignal !== explicitSignal
