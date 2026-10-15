@@ -1,6 +1,9 @@
 import chalk from "chalk";
 import { ProxyAgent, Socks5ProxyAgent, type Dispatcher } from "undici";
-import puppeteer from "./puppeteerInstance.js";
+import type { BrowserContext } from "puppeteer";
+import { acquireSharedBrowser } from "./sharedBrowser.js";
+import { BROWSER_FALLBACK_MAX_CONSECUTIVE_FAILURES, browserFallbackGuard } from "./browserFallbackGuard.js";
+import { closeForCancellation } from "./fatalHandlers.js";
 import { getChromiumPath } from "./getChromiumPath.js";
 import * as globals from "./globals.js";
 import { getWithMetadata } from "../proxy/genReq.js";
@@ -399,7 +402,12 @@ const singleFetch = async (
 };
 
 /**
- * Handles firewall detection and bypass using headless browser.
+ * Handles firewall detection and recovery using a headless browser.
+ *
+ * Every attempt runs in its own browser context on the shared headless browser (see
+ * `sharedBrowser.ts`), so cookies and storage never cross requests while Chrome is launched once
+ * rather than once per blocked request. A host whose challenge the browser keeps failing to clear
+ * is skipped by `browserFallbackGuard` for the rest of the run.
  *
  * @param url - The URL being requested
  * @param resp_text - The response text to check for firewall signatures
@@ -418,14 +426,26 @@ const handleFirewall = async (
         body: responseText,
     });
     if (!detection.blocked || signal?.aborted) return null;
+    const host = new URL(url).host;
+    if (!browserFallbackGuard.shouldAttempt(host)) return null;
     const firewall = detection.provider === "cloudfront" ? "CloudFront" : "Cloudflare/CDN";
 
     if (reportErrors) {
         progressError(chalk.yellow(`[!] ${firewall} Firewall detected. Retrying with headless browser`));
     }
+    const recordFailure = (): void => {
+        if (browserFallbackGuard.recordFailure(host) && reportErrors) {
+            progressError(
+                chalk.yellow(
+                    `[!] Headless browser could not clear the ${firewall} challenge for ${host} ${BROWSER_FALLBACK_MAX_CONSECUTIVE_FAILURES} times in a row; skipping browser retries for this host`
+                )
+            );
+        }
+    };
+
     const chromiumPath = getChromiumPath();
     const proxyArgs = getActivePuppeteerProxyArgs();
-    const browser = await puppeteer.launch({
+    const lease = await acquireSharedBrowser({
         headless: true,
         executablePath: chromiumPath,
         args: [
@@ -436,14 +456,19 @@ const handleFirewall = async (
         ],
         handleSIGINT: !isSigintHandlerActive(),
     });
-    const abortBrowser = () => {
-        void browser.close().catch(() => undefined);
+    let context: BrowserContext | null = null;
+    // Cancellation tears down only this request's context; the shared browser stays up.
+    const abortContext = () => {
+        const openContext = context;
+        if (openContext) void closeForCancellation(() => openContext.close());
     };
-    signal?.addEventListener("abort", abortBrowser, { once: true });
+    signal?.addEventListener("abort", abortContext, { once: true });
 
     try {
         if (signal?.aborted) return null;
-        const page = await browser.newPage();
+        context = await lease.browser.createBrowserContext();
+        if (signal?.aborted) return null;
+        const page = await context.newPage();
         if (proxyArgs.authenticate) await page.authenticate(proxyArgs.authenticate);
         const customHeaders = customHeadersToRecord(globals.getCustomHeaders());
         if (Object.keys(customHeaders).length > 0) await page.setExtraHTTPHeaders(customHeaders);
@@ -472,13 +497,32 @@ const handleFirewall = async (
             const timeout = setTimeout(finish, 5000);
             signal?.addEventListener("abort", finish, { once: true });
         });
-        return signal?.aborted ? null : await page.content();
+        if (signal?.aborted) return null;
+        const content = await page.content();
+        const stillBlocked = detectBlockedResponse({
+            status: 200,
+            headers: { "content-type": "text/html" },
+            body: content,
+        }).blocked;
+        if (stillBlocked) {
+            recordFailure();
+        } else {
+            browserFallbackGuard.recordSuccess(host);
+        }
+        return content;
     } catch (err) {
         if (signal?.aborted) return null;
+        recordFailure();
         throw err;
     } finally {
-        signal?.removeEventListener("abort", abortBrowser);
-        await browser.close().catch(() => undefined);
+        signal?.removeEventListener("abort", abortContext);
+        if (context) {
+            const openContext = context;
+            await (signal?.aborted
+                ? closeForCancellation(() => openContext.close())
+                : openContext.close().catch(() => undefined));
+        }
+        lease.release();
     }
 };
 

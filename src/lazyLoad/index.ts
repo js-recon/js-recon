@@ -57,6 +57,7 @@ import DownloadProgress from "../utility/downloadProgress.js";
 import { progressLog, progressWarn } from "../utility/progressLog.js";
 import { resolveHostOutputDirectory } from "./outputPath.js";
 import { withRequestSignal } from "../utility/makeReq.js";
+import { closeSharedBrowsers } from "../utility/sharedBrowser.js";
 import { resolveTargetInputs, type TargetInput } from "../utility/targetInputs.js";
 import { accumulateTechnique, createTechniqueRecorder } from "./researchUtils.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
@@ -130,6 +131,9 @@ const lazyLoad = async (
         activeDownloadProgress?.stop();
         activeDownloadProgress = null;
         if (hardTimeoutReached) await activeQueue?.drain().catch(() => undefined);
+        // The CDN/WAF fallback's shared browser would otherwise idle for up to 30s and hold the
+        // process open after a standalone `lazyload` run.
+        await closeSharedBrowsers();
     };
     cancellationSignal?.addEventListener("abort", handleExternalCancellation, { once: true });
     if (cancellationSignal?.aborted) requestCancellation();
