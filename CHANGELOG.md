@@ -1,5 +1,19 @@
 # Change Log
 
+## Unreleased
+
+### Fixed
+
+- `lazyload` and `run` no longer treat ordinary pages from sites with Cloudflare JavaScript Detections (Bot Fight Mode / Bot Management) as challenges. Cloudflare injects its `/cdn-cgi/challenge-platform/scripts/jsd/main.js` beacon into every page it serves successfully, and that path matched the challenge-platform marker, so every crawled page started a headless-browser retry that could never "clear" it. A 200-page generic crawl spent about 20 minutes per target this way. Real interstitials are still detected by their `.../orchestrate/chl_page/...` script, challenge title, `_cf_chl_opt` or `cf-mitigated: challenge` header. (`proxy`, `utility`)
+- The CDN/WAF headless-browser fallback reuses one browser, with a fresh browser context per request, instead of launching Chrome for every blocked request. After 3 consecutive challenges the browser cannot clear on a host, it stops retrying that host for the rest of the run. In the Docker image every launch left Chrome's helper processes behind as zombies; one long Kubernetes crawl launched about 5,300 browsers and leaked about 55,000 zombie processes until the node ran out of PIDs and evicted the pod. (`utility`)
+- The lazyload hard timeout (`--lazyload-timeout`) now stops `next_routerStateForge` and every other batch built on `runWithConcurrency` or the raw request helper. They ignored the timeout and kept probing every remaining candidate route: on a large Next.js app the step logged "waiting for in-flight work" for about 2.5 hours after a 30-minute timeout. (`lazyload`, `utility`)
+- In a multi-target run, a target whose redirects end on a page another target already crawled with the generic crawler (wildcard-DNS subdomains, `http`/`https` pairs of one host) now skips the duplicate crawl instead of crawling the same site again. (`lazyload`)
+- A framework detection that times out or is cancelled no longer hands the previous target's intercepted URLs to the generic crawl, which downloaded the earlier target's JavaScript into the current target's output. (`lazyload`)
+
+### Changed
+
+- The Docker images now run js-recon under `tini` (`tini -s`), which reaps the helper processes Chrome leaves behind when a browser closes. Previously js-recon ran as PID 1 and never reaped them, so zombies piled up for as long as the container ran.
+
 ## 2.0.1-beta.7 - 2026-10-11
 
 ### Changed
