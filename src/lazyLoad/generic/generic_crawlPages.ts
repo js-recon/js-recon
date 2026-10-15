@@ -147,6 +147,12 @@ const generic_crawlPages = async (
         // never crawl it again under its own URL.
         servedPages.add(servedUrl);
         queued.add(servedUrl);
+        // Only the seed's own redirect decides where the target lives: a page reached through a
+        // link that redirects out of scope, such as to an SSO provider, contributes nothing.
+        if (pageUrl !== seedUrl && !isInScope(servedUrl, lazyLoadGlobals.getScope())) {
+            printMsg(MSG.Warn, `[i] ${pageUrl} redirected out of scope to ${servedUrl}; skipping it`);
+            continue;
+        }
 
         let newJsUrls = scriptUrls.filter((u) => !downloadedJsUrls.has(u));
 
