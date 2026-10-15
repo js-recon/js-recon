@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased
+## 2.0.1-beta.8 - (unreleased)
 
 ### Fixed
 
@@ -886,7 +886,7 @@
 
 - Added `analyze` module
 - Added analysis of OpenAPI spec file (requestEngine)
-- Use the repo https://github.com/js-recon/js-recon-rules to remotely store and download rules
+- Use the repo <https://github.com/js-recon/js-recon-rules> to remotely store and download rules
 
 ### Changed
 
