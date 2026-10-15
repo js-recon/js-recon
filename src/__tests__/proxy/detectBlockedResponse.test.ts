@@ -52,6 +52,39 @@ describe("detectBlockedResponse", () => {
         expect(result.reason).toBe("explicit-challenge");
     });
 
+    // Cloudflare JavaScript Detections inject this beacon into every successfully served page.
+    const jsdBeaconPage = (beaconPath: string): string => `<!doctype html><html><head><title>Article</title></head>
+        <body><a href="/2026/07/22/article/">Read more</a>
+        <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b8f0c1d2e3f4a5b',t:'MTc2MDU1MDAwMA=='};var a=document.createElement('script');a.src='${beaconPath}';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}})();</script>
+        </body></html>`;
+
+    it.each([
+        "/cdn-cgi/challenge-platform/scripts/jsd/main.js",
+        "/cdn-cgi/challenge-platform/h/b/scripts/jsd/e0c90b6a3ed1/main.js",
+    ])("does not treat the JavaScript Detections beacon %s on a served page as a challenge", (beaconPath) => {
+        const result = detectBlockedResponse(
+            response({
+                headers: { "content-type": "text/html; charset=UTF-8", "cf-ray": "9b8f0c1d2e3f4a5b-SJC" },
+                body: jsdBeaconPage(beaconPath),
+            })
+        );
+
+        expect(result).toEqual({ blocked: false, provider: null, reason: null, evidence: [] });
+    });
+
+    it("still identifies a challenge page that also carries the JavaScript Detections beacon", () => {
+        const result = detectBlockedResponse(
+            response({
+                status: 403,
+                headers: { "content-type": "text/html" },
+                body: `${jsdBeaconPage("/cdn-cgi/challenge-platform/scripts/jsd/main.js")}
+                    <script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=9b8f0c1d2e3f4a5b"></script>`,
+            })
+        );
+
+        expectBlockedBy(result, "cloudflare", "cloudflare-challenge-body");
+    });
+
     it("identifies the legacy Cloudflare bot-management verification marker", () => {
         const result = detectBlockedResponse(
             response({
