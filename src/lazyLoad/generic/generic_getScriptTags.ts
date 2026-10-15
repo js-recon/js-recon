@@ -6,6 +6,7 @@ import crypto from "crypto";
 import * as lazyLoadGlobals from "../globals.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 import { responseBaseUrl } from "../../utility/responseUrl.js";
+import detectBlockedResponse from "../../proxy/detectBlockedResponse.js";
 
 // <script type="..."> values known to hold non-JS content. Browsers never execute
 // these as script — WordPress/plugins routinely stash JSON-LD structured data or
@@ -68,7 +69,8 @@ export const decodeDataUriScript = (dataUri: string): string | null => {
  * — the same seeding pattern applies to any site regardless of framework.
  *
  * Relative script paths resolve against `pageUrl`, where the page was served from after
- * redirects, as a browser resolves them.
+ * redirects, as a browser resolves them. A page that is still a CDN/WAF challenge after
+ * makeRequest's fallbacks contributes nothing: its scripts belong to the challenge, not the site.
  */
 const generic_getScriptTags = async (
     url: string,
@@ -80,6 +82,11 @@ const generic_getScriptTags = async (
     const req = await makeRequest(url);
     const pageSource = req ? await req.text() : "";
     const pageUrl = responseBaseUrl(req, url);
+
+    if (req && detectBlockedResponse({ status: req.status, headers: req.headers, body: pageSource }).blocked) {
+        printMsg(MSG.Warn, `[!] ${url} is still a CDN/WAF challenge; skipping its scripts`);
+        return { urls: [], pageSource: "", pageUrl };
+    }
 
     const $ = cheerio.load(pageSource);
     const host = new URL(url).host.replace(":", "_");

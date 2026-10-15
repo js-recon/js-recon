@@ -1,3 +1,5 @@
+import detectBlockedResponse from "../proxy/detectBlockedResponse.js";
+
 export type DownloadResponseFailure = "download" | "invalidResponse";
 export type DownloadedAssetKind = "javascript" | "json" | "vue" | "typescript";
 
@@ -117,6 +119,52 @@ export const readDownloadedAssetResponse = async (url: string, response: Respons
             ok: false,
             failure: "invalidResponse",
             reason: "received an HTML document instead of a code asset",
+        });
+    }
+
+    return Object.freeze({ ok: true, body });
+};
+
+/**
+ * Validates a script the generic crawler fetched before it is saved as a .js file. Generic targets
+ * are arbitrary sites, so unlike readDownloadedAssetResponse this accepts any content type: some
+ * servers send real JavaScript as text/html. It rejects what can never be the script, so no
+ * challenge page, error page or HTML fallback lands in the output as a .js file: a non-2xx status,
+ * a CDN/WAF challenge or block, and an HTML document body.
+ */
+export const readGenericScriptResponse = async (response: Response): Promise<DownloadResponseResult> => {
+    if (!response.ok) {
+        return Object.freeze({
+            ok: false,
+            failure: "invalidResponse",
+            reason: `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
+        });
+    }
+
+    let body: string;
+    try {
+        body = await response.text();
+    } catch (err) {
+        return Object.freeze({
+            ok: false,
+            failure: "download",
+            reason: `could not read response body: ${err}`,
+        });
+    }
+
+    if (detectBlockedResponse({ status: response.status, headers: response.headers, body }).blocked) {
+        return Object.freeze({
+            ok: false,
+            failure: "invalidResponse",
+            reason: "received a CDN/WAF challenge instead of the script",
+        });
+    }
+
+    if (looksLikeHtmlDocument(body)) {
+        return Object.freeze({
+            ok: false,
+            failure: "invalidResponse",
+            reason: "received an HTML document instead of a script",
         });
     }
 
