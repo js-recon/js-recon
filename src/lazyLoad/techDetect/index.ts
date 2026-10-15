@@ -87,6 +87,10 @@ const frameworkDetect = async (
         if (!globalsUtil.getQuiet()) printMsg(MSG.Plain, args.join(" "));
     };
     log(chalk.cyan("[i] Detecting front-end framework"));
+    // Reset before anything can end detection early (cancellation, the detection timeout): the
+    // generic crawl seeds its downloads from this capture, and a stale one belongs to the previous
+    // target.
+    lastInterceptedUrls = [];
 
     // get the page source. Drain the body immediately into a string — if we
     // wait until after the puppeteer + downstream check* calls, the Response
@@ -111,6 +115,8 @@ const frameworkDetect = async (
     // get the page source in the browser (skipped in cache-only mode — no network allowed)
     let pageSource = "";
     const interceptedUrls: string[] = [];
+    // Published live, so a detection cut short still reports what this target's page requested.
+    lastInterceptedUrls = interceptedUrls;
     // Keyed by URL: the response status/content-type/body for every request Puppeteer
     // saw during page load. Populated below so the intercepted-URL fallback can confirm
     // a framework-shaped URL's response actually looks like JS, not just its path shape.
@@ -247,8 +253,6 @@ const frameworkDetect = async (
             await (cancellationClose ?? browser.close().catch(() => {}));
         }
     }
-    lastInterceptedUrls = interceptedUrls;
-
     if (signal?.aborted) return null;
 
     // if (res === null || res === undefined) {
