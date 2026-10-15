@@ -19,6 +19,8 @@ export interface CacheRow {
     readonly statusText: string;
     readonly bodyBase64: string;
     readonly responseHeaders: Readonly<Record<string, string>>;
+    /** Where the response was served from after redirects; absent for entries cached before this was recorded. */
+    readonly finalUrl?: string | null;
 }
 
 interface CacheEntryTableRow {
@@ -28,6 +30,7 @@ interface CacheEntryTableRow {
     status_text: string;
     body_base64: string;
     response_headers: string;
+    final_url: string | null;
 }
 
 const createCacheTable = (db: Database.Database): void => {
@@ -40,10 +43,16 @@ const createCacheTable = (db: Database.Database): void => {
             status_text       TEXT NOT NULL,
             body_base64       TEXT NOT NULL,
             response_headers  TEXT NOT NULL,
-            created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            final_url         TEXT
         )
     `
     ).run();
+    // Cache files written before final_url existed keep their rows; those rows read back without it.
+    const columns = db.prepare(`PRAGMA table_info(cache_entries)`).all() as { name: string }[];
+    if (!columns.some((column) => column.name === "final_url")) {
+        db.prepare(`ALTER TABLE cache_entries ADD COLUMN final_url TEXT`).run();
+    }
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_cache_entries_url ON cache_entries(url)`).run();
 };
 
@@ -88,13 +97,14 @@ const rowToCacheRow = (row: CacheEntryTableRow): CacheRow => ({
     statusText: row.status_text,
     bodyBase64: row.body_base64,
     responseHeaders: JSON.parse(row.response_headers),
+    finalUrl: row.final_url,
 });
 
 /** Looks up a cache entry by its identity digest. Returns null on miss. */
 export const readCacheEntry = (identityDigest: string): CacheRow | null => {
     const row = getCacheDb()
         .prepare(
-            `SELECT identity_digest, url, status, status_text, body_base64, response_headers FROM cache_entries WHERE identity_digest = ?`
+            `SELECT identity_digest, url, status, status_text, body_base64, response_headers, final_url FROM cache_entries WHERE identity_digest = ?`
         )
         .get(identityDigest) as CacheEntryTableRow | undefined;
     return row ? rowToCacheRow(row) : null;
@@ -108,7 +118,7 @@ export const readCacheEntry = (identityDigest: string): CacheRow | null => {
 export const writeCacheEntryUnsafe = (entry: CacheRow): void => {
     getCacheDb()
         .prepare(
-            `INSERT OR IGNORE INTO cache_entries (identity_digest, url, status, status_text, body_base64, response_headers) VALUES (?, ?, ?, ?, ?, ?)`
+            `INSERT OR IGNORE INTO cache_entries (identity_digest, url, status, status_text, body_base64, response_headers, final_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
             entry.identityDigest,
@@ -116,7 +126,8 @@ export const writeCacheEntryUnsafe = (entry: CacheRow): void => {
             entry.status,
             entry.statusText,
             entry.bodyBase64,
-            JSON.stringify(entry.responseHeaders)
+            JSON.stringify(entry.responseHeaders),
+            entry.finalUrl ?? null
         );
 };
 

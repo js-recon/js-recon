@@ -4,6 +4,7 @@ import traverse from "@babel/traverse";
 import * as cheerio from "cheerio";
 import chalk from "chalk";
 import { progressError, progressLog, progressWarn } from "../../utility/progressLog.js";
+import { responseBaseUrl } from "../../utility/responseUrl.js";
 
 const vue_singleJsFileOnHome = async (url: string) => {
     const jsFilesFound: string[] = [];
@@ -15,6 +16,8 @@ const vue_singleJsFileOnHome = async (url: string) => {
         return jsFilesFound;
     }
     const homePageContent = await req.text();
+    // Relative paths resolve against where the page was served from after redirects.
+    const pageUrl = responseBaseUrl(req, url);
 
     // load the home page content into cheerio
     const $ = cheerio.load(homePageContent);
@@ -40,14 +43,14 @@ const vue_singleJsFileOnHome = async (url: string) => {
     progressLog(chalk.green("[✓] Single JS file detected"));
 
     // add that JS file to the list
-    jsFilesFound.push(new URL(jsUrl, url).href);
+    jsFilesFound.push(new URL(jsUrl, pageUrl).href);
 
     // print the warning
     progressWarn(chalk.yellow("[!] This method is MEMORY INTENSIVE. Underpowered devices may freeze"));
 
     // resolve the URL
     if (jsUrl.startsWith("/") || jsUrl.startsWith("./") || jsUrl.startsWith("../")) {
-        jsUrl = new URL(jsUrl, url).href;
+        jsUrl = new URL(jsUrl, pageUrl).href;
     }
 
     // get the contents of that JS file
@@ -104,7 +107,7 @@ const vue_singleJsFileOnHome = async (url: string) => {
     for (const path of initialFoundJsPaths) {
         if (!path.endsWith(".js")) continue;
 
-        const fullUrl = new URL(path, url).href;
+        const fullUrl = new URL(path, pageUrl).href;
         jsFilesFound.push(fullUrl);
     }
 

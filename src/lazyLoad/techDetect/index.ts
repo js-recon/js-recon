@@ -22,6 +22,7 @@ import { isSigintHandlerActive } from "../../run/interruptHandler.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 import { customHeadersToRecord } from "../../utility/customHeaders.js";
 import { closeForCancellation } from "../../utility/fatalHandlers.js";
+import { responseBaseUrl } from "../../utility/responseUrl.js";
 
 // Every request Puppeteer intercepted during the most recent frameworkDetect() call,
 // including anything a runtime-injected script requested (e.g. Cloudflare's own
@@ -98,6 +99,8 @@ const frameworkDetect = async (
     // response is held idle alongside other in-flight fetches).
     if (signal?.aborted) return null;
     const res = await makeRequest(url, signal ? { signal } : {});
+    // Each copy of the page resolves its references against where it was actually served from.
+    const fetchedPageUrl = responseBaseUrl(res, url);
     let resBody: string | null = null;
     if (res !== null) {
         try {
@@ -114,6 +117,7 @@ const frameworkDetect = async (
 
     // get the page source in the browser (skipped in cache-only mode — no network allowed)
     let pageSource = "";
+    let renderedPageUrl = url;
     const interceptedUrls: string[] = [];
     // Published live, so a detection cut short still reports what this target's page requested.
     lastInterceptedUrls = interceptedUrls;
@@ -235,7 +239,11 @@ const frameworkDetect = async (
                         signal?.addEventListener("abort", finish, { once: true });
                     });
                 }
-                if (!signal?.aborted) pageSource = await page.content();
+                if (!signal?.aborted) {
+                    pageSource = await page.content();
+                    const landedUrl = page.url();
+                    if (/^https?:\/\//i.test(landedUrl)) renderedPageUrl = landedUrl;
+                }
             } catch {
                 if (!signal?.aborted) {
                     log(
@@ -270,10 +278,10 @@ const frameworkDetect = async (
 
     // check all technologies one by one
     const result_checkNextJS = await checkNextJS($);
-    const result_checkVueJS = await checkVueJS($, url);
+    const result_checkVueJS = await checkVueJS($, renderedPageUrl);
     const result_checkSvelte = await checkSvelte($);
-    const result_checkAngular = await checkAngularJS($, url);
-    const result_checkReact = await checkReact($, url);
+    const result_checkAngular = await checkAngularJS($, renderedPageUrl);
+    const result_checkReact = await checkReact($, renderedPageUrl);
 
     // now, also check with the res response
     let result_checkNextJS_res = { detected: false, evidence: "" };
@@ -289,17 +297,18 @@ const frameworkDetect = async (
     } else if (resBody !== null) {
         $res = cheerio.load(resBody);
         result_checkNextJS_res = await checkNextJS($res);
-        result_checkVueJS_res = await checkVueJS($res, url);
+        result_checkVueJS_res = await checkVueJS($res, fetchedPageUrl);
         result_checkSvelte_res = await checkSvelte($res);
-        result_checkAngularJS_res = await checkAngularJS($res, url);
-        result_checkReact_res = await checkReact($res, url);
+        result_checkAngularJS_res = await checkAngularJS($res, fetchedPageUrl);
+        result_checkReact_res = await checkReact($res, fetchedPageUrl);
     }
 
     if (result_checkNextJS.detected === true || result_checkNextJS_res.detected === true) {
         const evidence =
             result_checkNextJS.evidence !== "" ? result_checkNextJS.evidence : result_checkNextJS_res.evidence;
         const isDevServer =
-            isNextDevServer($, url, interceptedUrls) || ($res ? isNextDevServer($res, url, interceptedUrls) : false);
+            isNextDevServer($, renderedPageUrl, interceptedUrls) ||
+            ($res ? isNextDevServer($res, fetchedPageUrl, interceptedUrls) : false);
         return { name: isDevServer ? "next-dev" : "next", evidence };
     } else if (result_checkVueJS.detected === true || result_checkVueJS_res.detected === true) {
         log(chalk.green("[✓] Vue.js detected"));
@@ -310,35 +319,36 @@ const frameworkDetect = async (
             const evidence =
                 result_checkNuxtJS.evidence !== "" ? result_checkNuxtJS.evidence : result_checkNuxtJS_res.evidence;
             const isNuxtDev =
-                isNuxtDevServer($, url, interceptedUrls) ||
-                ($res ? isNuxtDevServer($res, url, interceptedUrls) : false);
+                isNuxtDevServer($, renderedPageUrl, interceptedUrls) ||
+                ($res ? isNuxtDevServer($res, fetchedPageUrl, interceptedUrls) : false);
             return { name: isNuxtDev ? "nuxt-dev" : "nuxt", evidence };
         }
         const evidence =
             result_checkVueJS.evidence !== "" ? result_checkVueJS.evidence : result_checkVueJS_res.evidence;
         const isDevServer =
-            isVueDevServer($, url, interceptedUrls) || ($res ? isVueDevServer($res, url, interceptedUrls) : false);
+            isVueDevServer($, renderedPageUrl, interceptedUrls) ||
+            ($res ? isVueDevServer($res, fetchedPageUrl, interceptedUrls) : false);
         return { name: isDevServer ? "vue-dev" : "vue", evidence };
     } else if (result_checkSvelte.detected === true || result_checkSvelte_res.detected === true) {
         const evidence =
             result_checkSvelte.evidence !== "" ? result_checkSvelte.evidence : result_checkSvelte_res.evidence;
         const isDevServer =
-            isSvelteDevServer($, url, interceptedUrls) ||
-            ($res ? isSvelteDevServer($res, url, interceptedUrls) : false);
+            isSvelteDevServer($, renderedPageUrl, interceptedUrls) ||
+            ($res ? isSvelteDevServer($res, fetchedPageUrl, interceptedUrls) : false);
         return { name: isDevServer ? "svelte-dev" : "svelte", evidence };
     } else if (result_checkAngular.detected === true || result_checkAngularJS_res.detected === true) {
         const evidence =
             result_checkAngular.evidence !== "" ? result_checkAngular.evidence : result_checkAngularJS_res.evidence;
         const isDevServer =
-            isAngularDevServer($, url, interceptedUrls) ||
-            ($res ? isAngularDevServer($res, url, interceptedUrls) : false);
+            isAngularDevServer($, renderedPageUrl, interceptedUrls) ||
+            ($res ? isAngularDevServer($res, fetchedPageUrl, interceptedUrls) : false);
         return { name: isDevServer ? "angular-dev" : "angular", evidence };
     } else if (result_checkReact.detected === true || result_checkReact_res.detected === true) {
         const evidence =
             result_checkReact.evidence !== "" ? result_checkReact.evidence : result_checkReact_res.evidence;
         const isDevServer =
-            (await isReactDevServer($, url, interceptedUrls)) ||
-            ($res ? await isReactDevServer($res, url, interceptedUrls) : false);
+            (await isReactDevServer($, renderedPageUrl, interceptedUrls)) ||
+            ($res ? await isReactDevServer($res, fetchedPageUrl, interceptedUrls) : false);
         return { name: isDevServer ? "react-dev" : "react", evidence };
     }
 
@@ -352,11 +362,11 @@ const frameworkDetect = async (
     for (const interceptedUrl of interceptedUrls) {
         let candidateName: string | null = null;
         if (interceptedUrl.includes("/_nuxt/")) {
-            candidateName = isNuxtDevServer($, url, [interceptedUrl]) ? "nuxt-dev" : "nuxt";
+            candidateName = isNuxtDevServer($, renderedPageUrl, [interceptedUrl]) ? "nuxt-dev" : "nuxt";
         } else if (interceptedUrl.includes("/_next/")) {
-            candidateName = isNextDevServer($, url, [interceptedUrl]) ? "next-dev" : "next";
+            candidateName = isNextDevServer($, renderedPageUrl, [interceptedUrl]) ? "next-dev" : "next";
         } else if (interceptedUrl.includes("/_app/immutable/")) {
-            candidateName = isSvelteDevServer($, url, [interceptedUrl]) ? "svelte-dev" : "svelte";
+            candidateName = isSvelteDevServer($, renderedPageUrl, [interceptedUrl]) ? "svelte-dev" : "svelte";
         } else if (interceptedUrl.includes("/@react-refresh")) {
             // Vite React plugin dev-mode HMR runtime — requested by every Vite/React dev server.
             candidateName = "react-dev";

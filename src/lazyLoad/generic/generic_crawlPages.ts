@@ -89,6 +89,8 @@ const generic_crawlPages = async (
     stagnationMonitorMs: number = 60000
 ): Promise<string[]> => {
     const visitedPages = new Set<string>();
+    // Pages already crawled under the URL a redirect led to; they do not count as visits.
+    const servedPages = new Set<string>();
     const queued = new Set<string>([seedUrl]);
     const queue: string[] = [seedUrl];
     const downloadedJsUrls = new Set<string>();
@@ -130,18 +132,26 @@ const generic_crawlPages = async (
         }
 
         const pageUrl = queue.shift() as string;
-        if (visitedPages.has(pageUrl)) continue;
+        if (visitedPages.has(pageUrl) || servedPages.has(pageUrl)) continue;
         visitedPages.add(pageUrl);
 
         printMsg(MSG.Header, `[i] Crawling page (${visitedPages.size}): ${pageUrl}`);
 
-        const { urls: scriptUrls, pageSource } = await generic_getScriptTags(pageUrl, maxJsSizeMb, outputDir);
+        const {
+            urls: scriptUrls,
+            pageSource,
+            pageUrl: servedUrl,
+        } = await generic_getScriptTags(pageUrl, maxJsSizeMb, outputDir);
         if (researchMap) accumulateTechnique(researchMap, "generic_getScriptTags", scriptUrls);
+        // A redirect's destination is this same page: resolve its references against it, and
+        // never crawl it again under its own URL.
+        servedPages.add(servedUrl);
+        queued.add(servedUrl);
 
         let newJsUrls = scriptUrls.filter((u) => !downloadedJsUrls.has(u));
 
         if (pageSource) {
-            const attrCandidates = await generic_scanAttributesForJs(pageSource, pageUrl, downloadedJsUrls);
+            const attrCandidates = await generic_scanAttributesForJs(pageSource, servedUrl, downloadedJsUrls);
             if (researchMap) accumulateTechnique(researchMap, "generic_scanAttributesForJs", attrCandidates);
             newJsUrls = [...new Set([...newJsUrls, ...attrCandidates.filter((u) => !downloadedJsUrls.has(u))])];
         }
@@ -154,7 +164,7 @@ const generic_crawlPages = async (
         if (!pageSource) continue;
 
         const scope = lazyLoadGlobals.getScope();
-        const links = extractPageLinks(pageSource, pageUrl);
+        const links = extractPageLinks(pageSource, servedUrl);
         const newLinks = links.filter((l) => isInScope(l, scope) && !queued.has(l));
         newLinks.forEach((l) => queued.add(l));
         if (researchMap) accumulateTechnique(researchMap, "generic_crawlPages", newLinks);

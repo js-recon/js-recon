@@ -5,6 +5,7 @@ import path from "path";
 import crypto from "crypto";
 import * as lazyLoadGlobals from "../globals.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { responseBaseUrl } from "../../utility/responseUrl.js";
 
 // <script type="..."> values known to hold non-JS content. Browsers never execute
 // these as script — WordPress/plugins routinely stash JSON-LD structured data or
@@ -65,16 +66,20 @@ export const decodeDataUriScript = (dataUri: string): string | null => {
  * generic_stringsDiscovery.ts later resolve string-literal JS paths found inside
  * these files against the URL they actually came from. Mirrors react_getScriptTags.ts
  * — the same seeding pattern applies to any site regardless of framework.
+ *
+ * Relative script paths resolve against `pageUrl`, where the page was served from after
+ * redirects, as a browser resolves them.
  */
 const generic_getScriptTags = async (
     url: string,
     maxJsSizeMb: number,
     outputDir?: string
-): Promise<{ urls: string[]; pageSource: string }> => {
+): Promise<{ urls: string[]; pageSource: string; pageUrl: string }> => {
     let toReturn: string[] = [];
 
     const req = await makeRequest(url);
     const pageSource = req ? await req.text() : "";
+    const pageUrl = responseBaseUrl(req, url);
 
     const $ = cheerio.load(pageSource);
     const host = new URL(url).host.replace(":", "_");
@@ -89,7 +94,7 @@ const generic_getScriptTags = async (
         if (src) {
             let resolved: URL;
             try {
-                resolved = new URL(src, url);
+                resolved = new URL(src, pageUrl);
             } catch {
                 return;
             }
@@ -106,7 +111,10 @@ const generic_getScriptTags = async (
                 fs.mkdirSync(hostDir, { recursive: true });
                 const filename = `inline-${inlineIndex++}.js`;
                 const filePath = path.join(hostDir, filename);
-                fs.writeFileSync(filePath, `// File Source: ${url} (data URI script #${inlineIndex - 1})\n${content}`);
+                fs.writeFileSync(
+                    filePath,
+                    `// File Source: ${pageUrl} (data URI script #${inlineIndex - 1})\n${content}`
+                );
                 lazyLoadGlobals.recordJsFileHash(crypto.createHash("sha256").update(content).digest("hex"));
                 printMsg(MSG.Run, `[✓] Saved data URI script to ${filePath}`);
                 return;
@@ -126,7 +134,7 @@ const generic_getScriptTags = async (
             fs.mkdirSync(hostDir, { recursive: true });
             const filename = `inline-${inlineIndex++}.js`;
             const filePath = path.join(hostDir, filename);
-            fs.writeFileSync(filePath, `// File Source: ${url} (inline script #${inlineIndex - 1})\n${content}`);
+            fs.writeFileSync(filePath, `// File Source: ${pageUrl} (inline script #${inlineIndex - 1})\n${content}`);
             lazyLoadGlobals.recordJsFileHash(crypto.createHash("sha256").update(content).digest("hex"));
             printMsg(MSG.Run, `[✓] Saved inline script to ${filePath}`);
         }
@@ -136,7 +144,7 @@ const generic_getScriptTags = async (
         const href = $(elem).attr("href");
         if (href) {
             try {
-                toReturn.push(new URL(href, url).href);
+                toReturn.push(new URL(href, pageUrl).href);
             } catch {
                 /* not a resolvable URL — skip */
             }
@@ -144,7 +152,7 @@ const generic_getScriptTags = async (
     });
 
     toReturn = [...new Set(toReturn)];
-    return { urls: toReturn, pageSource };
+    return { urls: toReturn, pageSource, pageUrl };
 };
 
 export default generic_getScriptTags;

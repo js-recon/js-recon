@@ -34,6 +34,7 @@ vi.mock("../../utility/puppeteerInstance.js", () => ({
                 }),
                 waitForNavigation: vi.fn(async () => null),
                 content: vi.fn(async () => "<!doctype html><html><head></head><body></body></html>"),
+                url: vi.fn(() => harness.requests[0] ?? "about:blank"),
             };
             return { close: vi.fn(async () => undefined), newPage: vi.fn(async () => page) };
         }),

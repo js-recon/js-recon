@@ -5,6 +5,7 @@ import { URL } from "url";
 import { pushToJsUrls } from "../globals.js";
 import react_followImports from "../react/react_followImports.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { responseBaseUrl } from "../../utility/responseUrl.js";
 
 const STAGNATION_LIMIT = 3;
 
@@ -92,7 +93,11 @@ const svelte_recursivePageCrawl = async (
     const entryRes = await makeRequest(entryUrl, {});
     if (!entryRes) return [];
     const entryHtml = await entryRes.text();
-    const initialLinks = extractPageLinks(entryUrl, entryHtml);
+    // Links resolve against where each page was served from after redirects.
+    const entryServedUrl = responseBaseUrl(entryRes, entryUrl);
+    visitedPages.add(entryServedUrl);
+    knownPages.add(entryServedUrl);
+    const initialLinks = extractPageLinks(entryServedUrl, entryHtml);
 
     const pendingPages: string[] = [];
     for (const link of initialLinks) {
@@ -124,9 +129,12 @@ const svelte_recursivePageCrawl = async (
                 if (!contentType.includes("text/html")) continue;
 
                 const html = await res.text();
+                const servedUrl = responseBaseUrl(res, pageUrl);
+                visitedPages.add(servedUrl);
+                knownPages.add(servedUrl);
 
                 // Extract JS files from this page's HTML
-                const jsFromPage = await extractJsFromHtml(pageUrl, html);
+                const jsFromPage = await extractJsFromHtml(servedUrl, html);
                 if (jsFromPage.length > 0) {
                     for (const f of jsFromPage) {
                         pushToJsUrls(f);
@@ -139,7 +147,7 @@ const svelte_recursivePageCrawl = async (
                 // Follow ESM imports from the newly found JS files
                 let toFollow = jsFromPage.filter((f) => !importVisited.has(f));
                 while (toFollow.length > 0) {
-                    const newFiles = await react_followImports(toFollow, maxJsSizeMb, pageUrl, importVisited);
+                    const newFiles = await react_followImports(toFollow, maxJsSizeMb, servedUrl, importVisited);
                     if (newFiles.length === 0) break;
                     for (const f of newFiles) {
                         pushToJsUrls(f);
@@ -150,7 +158,7 @@ const svelte_recursivePageCrawl = async (
                 }
 
                 // Queue newly discovered same-origin page links
-                const newLinks = extractPageLinks(pageUrl, html);
+                const newLinks = extractPageLinks(servedUrl, html);
                 for (const link of newLinks) {
                     if (!knownPages.has(link)) {
                         knownPages.add(link);

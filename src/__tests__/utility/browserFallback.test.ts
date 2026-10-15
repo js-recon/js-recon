@@ -17,7 +17,7 @@ const challengeResponse = (): Response =>
         headers: { server: "cloudflare", "cf-ray": "challenge-ray", "content-type": "text/html" },
     });
 
-const fakeBrowser = (pageContent: () => string) => {
+const fakeBrowser = (pageContent: () => string, pageUrl: () => string = () => "") => {
     const contexts: { close: ReturnType<typeof vi.fn> }[] = [];
     const browser = {
         connected: true,
@@ -34,6 +34,7 @@ const fakeBrowser = (pageContent: () => string) => {
                     on: vi.fn(),
                     goto: vi.fn(async () => null),
                     content: vi.fn(async () => pageContent()),
+                    url: vi.fn(() => pageUrl()),
                 })),
             };
             contexts.push(context);
@@ -81,6 +82,19 @@ describe("makeRequest headless-browser fallback", () => {
         expect(harness.launch).toHaveBeenCalledTimes(1);
         expect(browser.createBrowserContext).toHaveBeenCalledTimes(2);
         for (const context of browser.contexts) expect(context.close).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns the URL the browser's navigation ended on", async () => {
+        const browser = fakeBrowser(
+            () => "<!doctype html><html><head><title>Article</title></head></html>",
+            () => "https://www.site.example.test/after-redirect/"
+        );
+        harness.launch.mockResolvedValue(browser);
+        vi.spyOn(globalThis, "fetch").mockImplementation(async () => challengeResponse());
+
+        const response = await requestWithSettle("https://site.example.test/");
+
+        expect(response?.url).toBe("https://www.site.example.test/after-redirect/");
     });
 
     it("stops retrying a host in the browser after three consecutive uncleared challenges", async () => {
