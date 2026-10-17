@@ -29,6 +29,7 @@ vi.mock("../../utility/puppeteerInstance.js", () => ({
                 }),
                 waitForNavigation: vi.fn(async () => undefined),
                 content: vi.fn(async () => "<html></html>"),
+                url: vi.fn(() => "https://example.com/"),
             })),
         })),
     },

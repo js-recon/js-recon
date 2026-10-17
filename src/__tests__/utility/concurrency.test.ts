@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { runWithConcurrency } from "../../utility/concurrency.js";
+import { withRequestSignal } from "../../utility/requestSignal.js";
 
 describe("runWithConcurrency", () => {
     it("processes every item exactly once", async () => {
@@ -53,5 +54,35 @@ describe("runWithConcurrency", () => {
         });
 
         expect(seen.sort((a, b) => a - b)).toEqual([1, 3, 4]);
+    });
+    it("stops claiming new items once the surrounding request scope is cancelled", async () => {
+        const items = [1, 2, 3, 4, 5, 6, 7, 8];
+        const seen: number[] = [];
+        const controller = new AbortController();
+
+        await withRequestSignal(controller.signal, () =>
+            runWithConcurrency(items, 2, async (item) => {
+                seen.push(item);
+                if (item === 3) controller.abort();
+            })
+        );
+
+        // Items 1-3 ran; at most one more was already claimed by the other worker.
+        expect(seen.length).toBeGreaterThanOrEqual(3);
+        expect(seen.length).toBeLessThanOrEqual(4);
+    });
+
+    it("runs nothing when the request scope is already cancelled", async () => {
+        const controller = new AbortController();
+        controller.abort();
+        let called = false;
+
+        await withRequestSignal(controller.signal, () =>
+            runWithConcurrency([1, 2], 2, async () => {
+                called = true;
+            })
+        );
+
+        expect(called).toBe(false);
     });
 });

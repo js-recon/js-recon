@@ -58,6 +58,8 @@ vi.mock("../../sourcemaps/index.js", () => ({
 }));
 
 import lazyLoad from "../../lazyLoad/index.js";
+import { runWithConcurrency } from "../../utility/concurrency.js";
+import rawRequest from "../../exploit/utility/rawRequest.js";
 
 beforeEach(() => {
     globals.setDisableCache(true);
@@ -431,5 +433,55 @@ describe("lazyLoad hard timeout", () => {
         await result;
 
         expect(harness.extractSourceMaps).not.toHaveBeenCalled();
+    });
+    it("cancels in-flight raw-request batches that ignore stop() when the hard timeout fires", async () => {
+        // Mirrors next_routerStateForge: a runWithConcurrency batch of rawRequest probes that never
+        // checks the crawler's stop flag. Before cancellation reached rawRequest and the worker
+        // loop, a timed-out batch ran every remaining candidate (hours on a large app).
+        const fetchMock = vi.fn(
+            (_url: string, init: RequestInit) =>
+                new Promise<Response>((resolve, reject) => {
+                    const timer = setTimeout(() => resolve(new Response("", { status: 200 })), 5);
+                    init.signal?.addEventListener("abort", () => {
+                        clearTimeout(timer);
+                        reject(new DOMException("aborted", "AbortError"));
+                    });
+                })
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        const candidates = Array.from({ length: 2_000 }, (_, i) => `https://example.test/route-${i}`);
+        harness.crawl.mockImplementationOnce(async () => {
+            await runWithConcurrency(candidates, 2, async (candidate) => {
+                await rawRequest(candidate, { timeout: 1_000 });
+            });
+        });
+
+        const startedAt = Date.now();
+        await lazyLoad(
+            "https://example.test",
+            "/tmp/js-recon-timeout-raw-request-test",
+            true,
+            [],
+            1,
+            false,
+            "",
+            false,
+            false,
+            "sourcemaps",
+            false,
+            "research.json",
+            1,
+            2,
+            50,
+            200,
+            [],
+            [],
+            0
+        );
+
+        expect(harness.stop).toHaveBeenCalledTimes(1);
+        expect(fetchMock.mock.calls.length).toBeLessThan(200);
+        expect(Date.now() - startedAt).toBeLessThan(2_000);
+        vi.unstubAllGlobals();
     });
 });

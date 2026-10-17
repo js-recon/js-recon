@@ -2,6 +2,7 @@ import chalk from "chalk";
 import makeRequest from "../../utility/makeReq.js";
 import * as cheerio from "cheerio";
 import { progressError } from "../../utility/progressLog.js";
+import { responseBaseUrl } from "../../utility/responseUrl.js";
 const vue_severalJsFilesHome = async (url: string): Promise<string[]> => {
     const jsFilesToReturn: string[] = [];
 
@@ -12,6 +13,8 @@ const vue_severalJsFilesHome = async (url: string): Promise<string[]> => {
         return jsFilesToReturn;
     }
     const homepageContent = await homepageReq.text();
+    // Relative paths resolve against where the page was served from after redirects.
+    const pageUrl = responseBaseUrl(homepageReq, url);
 
     // parse it with cheerio
     const $ = cheerio.load(homepageContent);
@@ -45,7 +48,7 @@ const vue_severalJsFilesHome = async (url: string): Promise<string[]> => {
     // now that there are files, go through those and get the full path of those
     const fullJsUrls: string[] = [];
     for (const path of jsPaths) {
-        const fullUrl = new URL(path, url).href;
+        const fullUrl = new URL(path, pageUrl).href;
         fullJsUrls.push(fullUrl);
     }
 

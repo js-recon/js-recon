@@ -1,7 +1,13 @@
+import { isRequestCancelled } from "./requestSignal.js";
+
 /**
  * Runs `worker` over `items` using up to `threads` concurrent workers.
  * Each worker pulls the next unclaimed item off a shared cursor, so
  * uneven per-item latency doesn't leave workers idle.
+ *
+ * Workers stop claiming new items once the surrounding request scope (see
+ * `requestSignal.ts`) is cancelled, so a hard timeout ends the batch after the
+ * items already in flight instead of walking every remaining item.
  */
 export const runWithConcurrency = async <T>(
     items: T[],
@@ -14,7 +20,7 @@ export const runWithConcurrency = async <T>(
     const workerCount = Math.max(1, Math.min(threads, items.length));
 
     const runWorker = async () => {
-        while (cursor < items.length) {
+        while (cursor < items.length && !isRequestCancelled()) {
             const index = cursor++;
             try {
                 await worker(items[index], index);

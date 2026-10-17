@@ -52,17 +52,24 @@ export const resolveRedirectChain = async (
     return currentUrl;
 };
 
+export interface GenericScope {
+    /** Hosts the crawl may follow links into. */
+    readonly scope: string[];
+    /** Where the target URL's redirect chain ends, i.e. the page the crawl effectively starts from. */
+    readonly finalUrl: string;
+}
+
 /**
  * Default scope for the `generic` tech: fetch the target URL, follow redirects
  * (capped at maxRedirects), and scope the crawl to the host of the final
  * destination. Without this, an unscoped generic crawl would follow every
  * in-page link across the entire web.
  */
-const resolveGenericScope = async (url: string, maxRedirects: number): Promise<string[]> => {
+const resolveGenericScope = async (url: string, maxRedirects: number): Promise<GenericScope> => {
     const finalUrl = await resolveRedirectChain(url, maxRedirects);
     const host = hostFromUrl(finalUrl);
     printMsg(MSG.Header, `[i] Generic crawl scope resolved to: ${host}`);
-    return [host];
+    return { scope: [host], finalUrl };
 };
 
 export default resolveGenericScope;

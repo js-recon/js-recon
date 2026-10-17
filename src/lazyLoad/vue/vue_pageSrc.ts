@@ -2,6 +2,7 @@ import makeRequest from "../../utility/makeReq.js";
 import chalk from "chalk";
 import * as cheerio from "cheerio";
 import { progressError } from "../../utility/progressLog.js";
+import { responseBaseUrl } from "../../utility/responseUrl.js";
 
 const vue_pageSrc = async (url: string) => {
     const toReturn: string[] = [];
@@ -13,6 +14,8 @@ const vue_pageSrc = async (url: string) => {
         return toReturn;
     }
     const homepageContent = await req.text();
+    // Relative paths resolve against where the page was served from after redirects.
+    const pageUrl = responseBaseUrl(req, url);
 
     // get all the script srcs
     const $script = cheerio.load(homepageContent);
@@ -23,7 +26,7 @@ const vue_pageSrc = async (url: string) => {
             if (src.startsWith("http") || src.startsWith("//")) {
                 toReturn.push(src);
             } else {
-                const fullUrl = new URL(src, url).href;
+                const fullUrl = new URL(src, pageUrl).href;
                 toReturn.push(fullUrl);
             }
         }
@@ -42,7 +45,7 @@ const vue_pageSrc = async (url: string) => {
                 if (src.startsWith("http") || src.startsWith("//")) {
                     toReturn.push(src);
                 } else {
-                    const fullUrl = new URL(src, url).href;
+                    const fullUrl = new URL(src, pageUrl).href;
                     toReturn.push(fullUrl);
                 }
             }

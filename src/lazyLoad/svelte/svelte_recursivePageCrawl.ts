@@ -5,16 +5,17 @@ import { URL } from "url";
 import { pushToJsUrls } from "../globals.js";
 import react_followImports from "../react/react_followImports.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { responseBaseUrl } from "../../utility/responseUrl.js";
 
 const STAGNATION_LIMIT = 3;
 
 /**
- * Extracts same-origin page URLs from <a href> and <link href> tags.
- * Hash fragments are stripped; only URLs matching the entry origin are returned.
+ * Extracts the target's page URLs from <a href> and <link href> tags, resolved against the URL
+ * the page was served from. Hash fragments are stripped; only URLs on one of `allowedOrigins`
+ * (the target's origins) are returned.
  */
-const extractPageLinks = (pageUrl: string, html: string): string[] => {
+export const extractPageLinks = (pageUrl: string, html: string, allowedOrigins: ReadonlySet<string>): string[] => {
     const $ = cheerio.load(html);
-    const origin = new URL(pageUrl).origin;
     const links = new Set<string>();
 
     $("a[href], link[href]").each((_, el) => {
@@ -22,7 +23,7 @@ const extractPageLinks = (pageUrl: string, html: string): string[] => {
         if (!href) return;
         try {
             const resolved = new URL(href, pageUrl);
-            if (resolved.origin !== origin) return;
+            if (!allowedOrigins.has(resolved.origin)) return;
             resolved.hash = "";
             links.add(resolved.href);
         } catch {
@@ -92,7 +93,14 @@ const svelte_recursivePageCrawl = async (
     const entryRes = await makeRequest(entryUrl, {});
     if (!entryRes) return [];
     const entryHtml = await entryRes.text();
-    const initialLinks = extractPageLinks(entryUrl, entryHtml);
+    // Links resolve against where each page was served from after redirects. Only the entry's
+    // own redirect (http to https, apex to www) decides where the target lives: a page reached
+    // later that redirects elsewhere, such as to an SSO provider, never widens the crawl.
+    const entryServedUrl = responseBaseUrl(entryRes, entryUrl);
+    const allowedOrigins: ReadonlySet<string> = new Set([new URL(entryUrl).origin, new URL(entryServedUrl).origin]);
+    visitedPages.add(entryServedUrl);
+    knownPages.add(entryServedUrl);
+    const initialLinks = extractPageLinks(entryServedUrl, entryHtml, allowedOrigins);
 
     const pendingPages: string[] = [];
     for (const link of initialLinks) {
@@ -124,9 +132,16 @@ const svelte_recursivePageCrawl = async (
                 if (!contentType.includes("text/html")) continue;
 
                 const html = await res.text();
+                const servedUrl = responseBaseUrl(res, pageUrl);
+                visitedPages.add(servedUrl);
+                knownPages.add(servedUrl);
+                if (!allowedOrigins.has(new URL(servedUrl).origin)) {
+                    printMsg(MSG.Warn, `[i] ${pageUrl} redirected off the target to ${servedUrl}; skipping it`);
+                    continue;
+                }
 
                 // Extract JS files from this page's HTML
-                const jsFromPage = await extractJsFromHtml(pageUrl, html);
+                const jsFromPage = await extractJsFromHtml(servedUrl, html);
                 if (jsFromPage.length > 0) {
                     for (const f of jsFromPage) {
                         pushToJsUrls(f);
@@ -139,7 +154,7 @@ const svelte_recursivePageCrawl = async (
                 // Follow ESM imports from the newly found JS files
                 let toFollow = jsFromPage.filter((f) => !importVisited.has(f));
                 while (toFollow.length > 0) {
-                    const newFiles = await react_followImports(toFollow, maxJsSizeMb, pageUrl, importVisited);
+                    const newFiles = await react_followImports(toFollow, maxJsSizeMb, servedUrl, importVisited);
                     if (newFiles.length === 0) break;
                     for (const f of newFiles) {
                         pushToJsUrls(f);
@@ -150,7 +165,7 @@ const svelte_recursivePageCrawl = async (
                 }
 
                 // Queue newly discovered same-origin page links
-                const newLinks = extractPageLinks(pageUrl, html);
+                const newLinks = extractPageLinks(servedUrl, html, allowedOrigins);
                 for (const link of newLinks) {
                     if (!knownPages.has(link)) {
                         knownPages.add(link);
