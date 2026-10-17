@@ -1,6 +1,9 @@
 import chalk from "chalk";
 import { ProxyAgent, Socks5ProxyAgent, type Dispatcher } from "undici";
-import puppeteer from "./puppeteerInstance.js";
+import type { BrowserContext } from "puppeteer";
+import { acquireSharedBrowser } from "./sharedBrowser.js";
+import { BROWSER_FALLBACK_MAX_CONSECUTIVE_FAILURES, browserFallbackGuard } from "./browserFallbackGuard.js";
+import { closeForCancellation } from "./fatalHandlers.js";
 import { getChromiumPath } from "./getChromiumPath.js";
 import * as globals from "./globals.js";
 import { getWithMetadata } from "../proxy/genReq.js";
@@ -9,8 +12,9 @@ import { parseProxyUrl } from "../proxy/genericProxy.js";
 import { buildOxylabsProxyUrl, composeOxylabsUsername, resolveOxylabsEndpoint } from "../proxy/oxylabsProxy.js";
 import type { ResolvedProxyConfig } from "../proxy/resolveProxyConfig.js";
 import { EventEmitter } from "events";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
+import { getRequestSignal, isRequestCancelled, withRequestSignal } from "./requestSignal.js";
+import { withResponseUrl } from "./responseUrl.js";
 import { progressError, progressLog } from "./progressLog.js";
 import { isSigintHandlerActive } from "../run/interruptHandler.js";
 import detectBlockedResponse from "../proxy/detectBlockedResponse.js";
@@ -93,14 +97,8 @@ export interface PuppeteerProxyArgs {
     authenticate?: { username: string; password: string };
 }
 
-const requestSignalContext = new AsyncLocalStorage<AbortSignal>();
-
-/** Supplies cancellation to every makeRequest call in the async work scope. */
-export const withRequestSignal = <T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> =>
-    requestSignalContext.run(signal, work);
-
-/** True when the current async request scope has been cancelled. */
-export const isRequestCancelled = (): boolean => requestSignalContext.getStore()?.aborted === true;
+// Re-exported so existing callers keep importing cancellation helpers from makeReq.
+export { withRequestSignal, isRequestCancelled };
 
 /**
  * Builds the Puppeteer `--proxy-server=` launch arg plus optional `page.authenticate()` credentials.
@@ -230,11 +228,13 @@ const readCache = async (url: string, headers: HeadersInit): Promise<Response | 
     try {
         const entry = readCacheEntry(identityDigest);
         if (entry) {
-            return new Response(responseBody(entry.status, Buffer.from(entry.bodyBase64, "base64")), {
+            const response = new Response(responseBody(entry.status, Buffer.from(entry.bodyBase64, "base64")), {
                 status: entry.status,
                 statusText: entry.statusText,
                 headers: entry.responseHeaders,
             });
+            // Entries cached before the final URL was recorded fall back to the requested URL.
+            return withResponseUrl(response, entry.finalUrl ?? url);
         }
     } catch {
         // Corrupt/unreadable cache DB — treat as a cache miss, never break the request.
@@ -279,6 +279,8 @@ const writeCacheUnsafe = async (
 ): Promise<void> => {
     if (signal?.aborted) return;
     const identityDigest = getCacheIdentityDigest(url, headers);
+    // Read before cloning: a clone does not carry the final URL makeRequest sets.
+    const finalUrl = response.url || url;
 
     const clonedResponse = response.clone();
     const bodyBuffer = Buffer.from(await clonedResponse.arrayBuffer());
@@ -290,6 +292,7 @@ const writeCacheUnsafe = async (
         statusText: clonedResponse.statusText,
         bodyBase64: bodyBuffer.toString("base64"),
         responseHeaders: Object.freeze(Object.fromEntries(clonedResponse.headers.entries())),
+        finalUrl,
     });
 };
 
@@ -307,6 +310,8 @@ interface BufferedResponse {
     readonly headers: Headers;
     readonly ok: boolean;
     readonly text: string;
+    /** Where the response was served from after redirects. */
+    readonly url: string;
 }
 
 const singleFetch = async (
@@ -365,6 +370,7 @@ const singleFetch = async (
                     headers: new Headers(response.headers),
                     ok: response.ok,
                     text: body.toString("utf-8"),
+                    url: response.url || url,
                 };
             } catch (err) {
                 counter++;
@@ -405,33 +411,57 @@ const singleFetch = async (
 };
 
 /**
- * Handles firewall detection and bypass using headless browser.
+ * Handles firewall detection and recovery using a headless browser.
+ *
+ * Every attempt runs in its own browser context on the shared headless browser (see
+ * `sharedBrowser.ts`), so cookies and storage never cross requests while Chrome is launched once
+ * rather than once per blocked request. A host whose challenge the browser keeps failing to clear
+ * is skipped by `browserFallbackGuard` for the rest of the run.
  *
  * @param url - The URL being requested
  * @param resp_text - The response text to check for firewall signatures
- * @returns A Promise that resolves to Response content if firewall detected, or null if not
+ * @returns The page the browser rendered and the URL it ended on, or null if no firewall was
+ * detected or the attempt was skipped or cancelled
  */
+interface BrowserRecovery {
+    readonly content: string;
+    /** Where the browser's navigation ended, after redirects. */
+    readonly url: string;
+}
+
 const handleFirewall = async (
     url: string,
     responseText: string,
     responseMetadata?: Readonly<{ status: number; headers: Headers }>,
     signal?: AbortSignal,
     reportErrors: boolean = true
-): Promise<string | null> => {
+): Promise<BrowserRecovery | null> => {
     const detection = detectBlockedResponse({
         status: responseMetadata?.status ?? 200,
         headers: responseMetadata?.headers,
         body: responseText,
     });
     if (!detection.blocked || signal?.aborted) return null;
+    const host = new URL(url).host;
+    if (!browserFallbackGuard.shouldAttempt(host)) return null;
     const firewall = detection.provider === "cloudfront" ? "CloudFront" : "Cloudflare/CDN";
 
     if (reportErrors) {
         progressError(chalk.yellow(`[!] ${firewall} Firewall detected. Retrying with headless browser`));
     }
+    const recordFailure = (): void => {
+        if (browserFallbackGuard.recordFailure(host) && reportErrors) {
+            progressError(
+                chalk.yellow(
+                    `[!] Headless browser could not clear the ${firewall} challenge for ${host} ${BROWSER_FALLBACK_MAX_CONSECUTIVE_FAILURES} times in a row; skipping browser retries for this host`
+                )
+            );
+        }
+    };
+
     const chromiumPath = getChromiumPath();
     const proxyArgs = getActivePuppeteerProxyArgs();
-    const browser = await puppeteer.launch({
+    const lease = await acquireSharedBrowser({
         headless: true,
         executablePath: chromiumPath,
         args: [
@@ -442,14 +472,19 @@ const handleFirewall = async (
         ],
         handleSIGINT: !isSigintHandlerActive(),
     });
-    const abortBrowser = () => {
-        void browser.close().catch(() => undefined);
+    let context: BrowserContext | null = null;
+    // Cancellation tears down only this request's context; the shared browser stays up.
+    const abortContext = () => {
+        const openContext = context;
+        if (openContext) void closeForCancellation(() => openContext.close());
     };
-    signal?.addEventListener("abort", abortBrowser, { once: true });
+    signal?.addEventListener("abort", abortContext, { once: true });
 
     try {
         if (signal?.aborted) return null;
-        const page = await browser.newPage();
+        context = await lease.browser.createBrowserContext();
+        if (signal?.aborted) return null;
+        const page = await context.newPage();
         if (proxyArgs.authenticate) await page.authenticate(proxyArgs.authenticate);
         const customHeaders = customHeadersToRecord(globals.getCustomHeaders());
         if (Object.keys(customHeaders).length > 0) await page.setExtraHTTPHeaders(customHeaders);
@@ -478,13 +513,32 @@ const handleFirewall = async (
             const timeout = setTimeout(finish, 5000);
             signal?.addEventListener("abort", finish, { once: true });
         });
-        return signal?.aborted ? null : await page.content();
+        if (signal?.aborted) return null;
+        const content = await page.content();
+        const stillBlocked = detectBlockedResponse({
+            status: 200,
+            headers: { "content-type": "text/html" },
+            body: content,
+        }).blocked;
+        if (stillBlocked) {
+            recordFailure();
+        } else {
+            browserFallbackGuard.recordSuccess(host);
+        }
+        return { content, url: page.url() || url };
     } catch (err) {
         if (signal?.aborted) return null;
+        recordFailure();
         throw err;
     } finally {
-        signal?.removeEventListener("abort", abortBrowser);
-        await browser.close().catch(() => undefined);
+        signal?.removeEventListener("abort", abortContext);
+        if (context) {
+            const openContext = context;
+            await (signal?.aborted
+                ? closeForCancellation(() => openContext.close())
+                : openContext.close().catch(() => undefined));
+        }
+        lease.release();
     }
 };
 
@@ -513,7 +567,7 @@ const makeRequest = async (
         url = "https:" + url;
     }
     const { timeout, reportErrors = true, ...restArgs } = args || {};
-    const contextualSignal = requestSignalContext.getStore();
+    const contextualSignal = getRequestSignal();
     const explicitSignal = restArgs.signal ?? undefined;
     const effectiveSignal =
         contextualSignal && explicitSignal && contextualSignal !== explicitSignal
@@ -603,7 +657,7 @@ const makeRequest = async (
                 }
             } else {
                 if (globals.getCacheOnly()) return cachedEntry.response;
-                const firewallContent = await handleFirewall(
+                const recovered = await handleFirewall(
                     url,
                     cachedText,
                     { status: cachedEntry.response.status, headers: cachedEntry.response.headers },
@@ -611,16 +665,16 @@ const makeRequest = async (
                     reportErrors
                 );
                 if (isCancelled()) return null;
-                if (firewallContent) {
+                if (recovered) {
                     await writeCache(
                         url,
                         cachedEntry.headers,
-                        new Response(firewallContent),
+                        withResponseUrl(new Response(recovered.content), recovered.url),
                         reportErrors,
                         effectiveSignal
                     );
                     if (isCancelled()) return null;
-                    return new Response(firewallContent);
+                    return withResponseUrl(new Response(recovered.content), recovered.url);
                 }
                 return cachedEntry.response;
             }
@@ -671,7 +725,13 @@ const makeRequest = async (
         // store; undici has been known to flag Responses as already-consumed
         // when buffer-backed bodies share underlying memory. Strip headers
         // that no longer match the decoded body (content-length / encoding).
-        const createResponse = (data: { body: Buffer; status: number; headers: Headers; text?: string }): Response => {
+        const createResponse = (data: {
+            body: Buffer;
+            status: number;
+            headers: Headers;
+            text?: string;
+            url?: string;
+        }): Response => {
             // Copy bytes into a fresh Uint8Array so each Response owns its
             // backing memory — text decoding would corrupt binary payloads.
             const bodyCopy = new Uint8Array(data.body.byteLength);
@@ -680,7 +740,10 @@ const makeRequest = async (
             headers.delete("content-length");
             headers.delete("content-encoding");
             headers.delete("transfer-encoding");
-            return new Response(responseBody(data.status, bodyCopy), { status: data.status, headers });
+            return withResponseUrl(
+                new Response(responseBody(data.status, bodyCopy), { status: data.status, headers }),
+                data.url
+            );
         };
 
         let oxylabsFallbackAttempted = false;
@@ -768,9 +831,9 @@ const makeRequest = async (
             headers: HeadersInit
         ): Promise<Response | null> => {
             if (!blockedData?.ok || isCancelled()) return null;
-            let browserContent: string | null;
+            let recovered: BrowserRecovery | null;
             try {
-                browserContent = await handleFirewall(
+                recovered = await handleFirewall(
                     url,
                     blockedData.text,
                     { status: blockedData.status, headers: blockedData.headers },
@@ -785,12 +848,12 @@ const makeRequest = async (
                 }
                 return null;
             }
-            if (!browserContent || isCancelled()) return null;
+            if (!recovered || isCancelled()) return null;
 
             const browserDetection = detectBlockedResponse({
                 status: 200,
                 headers: { "content-type": "text/html" },
-                body: browserContent,
+                body: recovered.content,
             });
             if (browserDetection.blocked) {
                 if (reportErrors) {
@@ -799,11 +862,11 @@ const makeRequest = async (
                 return null;
             }
 
-            const response = new Response(browserContent);
+            const response = withResponseUrl(new Response(recovered.content), recovered.url);
             if (!globals.getDisableCache()) {
                 await writeCache(url, headers, response, reportErrors, effectiveSignal);
             }
-            return isCancelled() ? null : new Response(browserContent);
+            return isCancelled() ? null : withResponseUrl(new Response(recovered.content), recovered.url);
         };
 
         // When using default headers, try both with and without Referer/Origin

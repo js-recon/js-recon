@@ -108,6 +108,56 @@ describe("cacheDb", () => {
         expect(readCacheEntry("digest-delete")).toBeNull();
     });
 
+    it("stores and returns the URL a response was served from", () => {
+        freshCachePath();
+        writeCacheEntryUnsafe({
+            identityDigest: "digest-redirected",
+            url: "https://example.com/",
+            status: 200,
+            statusText: "OK",
+            bodyBase64: Buffer.from("page").toString("base64"),
+            responseHeaders: {},
+            finalUrl: "https://www.example.com/landing/",
+        });
+
+        expect(readCacheEntry("digest-redirected")?.finalUrl).toBe("https://www.example.com/landing/");
+    });
+
+    it("adds final_url to a cache file written before it existed and keeps its rows", () => {
+        const cachePath = freshCachePath();
+        const legacy = new Database(cachePath);
+        legacy
+            .prepare(
+                `CREATE TABLE cache_entries (
+                    identity_digest TEXT PRIMARY KEY, url TEXT NOT NULL, status INTEGER NOT NULL,
+                    status_text TEXT NOT NULL, body_base64 TEXT NOT NULL, response_headers TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')))`
+            )
+            .run();
+        legacy
+            .prepare(
+                `INSERT INTO cache_entries (identity_digest, url, status, status_text, body_base64, response_headers)
+                 VALUES ('digest-legacy', 'https://example.com/old', 200, 'OK', ?, '{}')`
+            )
+            .run(Buffer.from("old").toString("base64"));
+        legacy.close();
+
+        const entry = readCacheEntry("digest-legacy");
+
+        expect(entry?.url).toBe("https://example.com/old");
+        expect(entry?.finalUrl).toBeNull();
+        writeCacheEntryUnsafe({
+            identityDigest: "digest-new",
+            url: "https://example.com/new",
+            status: 200,
+            statusText: "OK",
+            bodyBase64: Buffer.from("new").toString("base64"),
+            responseHeaders: {},
+            finalUrl: "https://www.example.com/new",
+        });
+        expect(readCacheEntry("digest-new")?.finalUrl).toBe("https://www.example.com/new");
+    });
+
     it("allows a clean reopen after closeCacheDb()", () => {
         const cachePath = freshCachePath();
         getCacheDb();

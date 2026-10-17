@@ -2,6 +2,20 @@
 
 ## 2.0.1-beta.8 - (unreleased)
 
+### Fixed
+
+- `lazyload` and `run` no longer treat ordinary pages from sites with Cloudflare JavaScript Detections (Bot Fight Mode / Bot Management) as challenges. Cloudflare injects its `/cdn-cgi/challenge-platform/scripts/jsd/main.js` beacon into every page it serves successfully, and that path matched the challenge-platform marker, so every crawled page started a headless-browser retry that could never "clear" it. A 200-page generic crawl spent about 20 minutes per target this way. Real interstitials are still detected by their `.../orchestrate/chl_page/...` script, challenge title, `_cf_chl_opt` or `cf-mitigated: challenge` header. (`proxy`, `utility`)
+- The CDN/WAF headless-browser fallback reuses one browser, with a fresh browser context per request, instead of launching Chrome for every blocked request. After 3 consecutive challenges the browser cannot clear on a host, it stops retrying that host for the rest of the run. In the Docker image every launch left Chrome's helper processes behind as zombies; one long Kubernetes crawl launched about 5,300 browsers and leaked about 55,000 zombie processes until the node ran out of PIDs and evicted the pod. (`utility`)
+- The lazyload hard timeout (`--lazyload-timeout`) now stops `next_routerStateForge` and every other batch built on `runWithConcurrency` or the raw request helper. They ignored the timeout and kept probing every remaining candidate route: on a large Next.js app the step logged "waiting for in-flight work" for about 2.5 hours after a 30-minute timeout. (`lazyload`, `utility`)
+- In a multi-target run, a target whose redirects end on a page another target already crawled with the generic crawler (wildcard-DNS subdomains, `http`/`https` pairs of one host) now skips the duplicate crawl instead of crawling the same site again. (`lazyload`)
+- A framework detection that times out or is cancelled no longer hands the previous target's intercepted URLs to the generic crawl, which downloaded the earlier target's JavaScript into the current target's output. (`lazyload`)
+- `lazyload` resolves a page's relative script, module-preload and link paths against the URL its redirects ended on, as a browser does: in the generic crawler, framework detection, and the React, Vue and Svelte page parsers. They resolved against the requested URL, so on a target that redirects elsewhere (`http` to `https`, an apex domain to `www`, a vanity host) relative scripts were requested from the wrong host, and a redirect that dropped the path returned the landing page in place of the script. Responses from `makeRequest` now carry the final URL in `response.url`, including those served from the response cache (a new `final_url` column, added to existing cache files) and from the headless-browser fallback. Only a target's own redirect decides where it lives: a crawled page that redirects elsewhere, such as to an SSO provider, contributes no scripts or links, so following a redirect never widens a crawl. (`lazyload`, `utility`)
+- The generic crawler no longer saves challenge pages, error pages or HTML fallbacks as `.js` files. Each download is checked first: a non-2xx response, a CDN/WAF challenge or block, or an HTML document body is skipped and reported as an invalid response. Any content type is still accepted, because some servers send real JavaScript as `text/html`. A crawled page that is still a CDN/WAF challenge after the fallbacks contributes no scripts, since they belong to the challenge rather than the site. (`lazyload`)
+
+### Changed
+
+- The Docker images now run js-recon under `tini` (`tini -s`), which reaps the helper processes Chrome leaves behind when a browser closes. Previously js-recon ran as PID 1 and never reaped them, so zombies piled up for as long as the container ran.
+
 ## 2.0.1-beta.7 - 2026-10-11
 
 ### Changed

@@ -4,6 +4,7 @@ import crypto from "crypto";
 import makeRequest from "../../utility/makeReq.js";
 import { getURLDirectory } from "../../utility/urlUtils.js";
 import * as lazyLoadGlobals from "../globals.js";
+import { readGenericScriptResponse } from "../downloadResponse.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 
 /**
@@ -37,22 +38,30 @@ const generic_downloadFiles = async (urls: string[], output: string, threads: nu
     printMsg(MSG.Header, `[i] Attempting to download ${urls.length} generic JS file(s)`);
 
     let downloadCount = 0;
+    let rejectedCount = 0;
     let cursor = 0;
     const concurrency = Math.max(1, threads);
 
     const processOne = async (url: string) => {
         try {
-            const { host, directory } = getURLDirectory(url);
-            const childDir = path.join(output, host, directory);
-            fs.mkdirSync(childDir, { recursive: true });
-
             const res = await makeRequest(url, {});
             if (!res) {
                 printMsg(MSG.Err, `[!] Failed to download: ${url}`);
                 return;
             }
 
-            const rawText = await res.text();
+            const responseResult = await readGenericScriptResponse(res);
+            if (responseResult.ok === false) {
+                rejectedCount++;
+                const label = responseResult.failure === "invalidResponse" ? "Invalid response" : "Failed to download";
+                printMsg(MSG.Err, `[!] ${label}: ${url} : ${responseResult.reason}`);
+                return;
+            }
+
+            const rawText = responseResult.body;
+            const { host, directory } = getURLDirectory(url);
+            const childDir = path.join(output, host, directory);
+            fs.mkdirSync(childDir, { recursive: true });
             const filename = synthesizeFilename(url);
             const filePath = path.join(childDir, filename);
             fs.writeFileSync(filePath, `// File Source: ${url}\n${rawText}`);
@@ -75,6 +84,9 @@ const generic_downloadFiles = async (urls: string[], output: string, threads: nu
 
     if (downloadCount > 0) {
         printMsg(MSG.Run, `[✓] Downloaded ${downloadCount} generic JS file(s) to ${output} directory`);
+    }
+    if (rejectedCount > 0) {
+        printMsg(MSG.Warn, `[i] Skipped ${rejectedCount} response(s) that were not scripts`);
     }
 };
 
