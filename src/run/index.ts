@@ -306,7 +306,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -431,7 +433,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -530,7 +534,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -628,7 +634,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -705,7 +713,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -933,7 +943,9 @@ const processUrl = async (
             reportFile,
             cmd.sj,
             cmd.sjBin,
-            cmd.sjArgs
+            cmd.sjArgs,
+            undefined,
+            outputDir
         ),
         getSkipStepPromise(),
     ]);

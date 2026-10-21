@@ -204,6 +204,7 @@ export const startMcpServer = async (): Promise<void> => {
                 endpointsJson: z.string().optional(),
                 mappedOpenapiJson: z.string().optional(),
                 reportFile: z.string().default("report.html"),
+                jsDir: z.string().optional(),
             },
         },
         async (args) => {
@@ -214,7 +215,12 @@ export const startMcpServer = async (): Promise<void> => {
                     args.analyzeJson,
                     args.endpointsJson,
                     args.mappedOpenapiJson,
-                    args.reportFile
+                    args.reportFile,
+                    false,
+                    "sj",
+                    "",
+                    undefined,
+                    args.jsDir
                 );
             });
             return textResult(`${captured}\n\n[Report] ${path.resolve(args.reportFile)}`);

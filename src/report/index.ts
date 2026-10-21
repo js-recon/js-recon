@@ -7,6 +7,7 @@ import { EngineOutput } from "../analyze/helpers/outputHelper.js";
 import { populateAnalysisFindings } from "./utility/populateDb/populateAnalysisFindings.js";
 import populateEndpoints from "./utility/populateDb/populateEndpoints.js";
 import populateMappedOpenapi from "./utility/populateDb/populateMappedOpenapi.js";
+import populateRawFiles from "./utility/populateDb/populateRawFiles.js";
 import genHtml from "./utility/genHtml.js";
 import path from "path";
 import { runSwaggerJacker } from "./swaggerJacker.js";
@@ -29,6 +30,7 @@ import { printMsg, MSG } from "../utility/printMsg.js";
  * @param sjBin - Path/name of the sj binary
  * @param sjArgs - Extra arguments passed through to `sj automate`
  * @param exploitJsonFilePath - Path to the exploit findings JSON file (EngineOutput-shaped, see `exploit --engine-output`)
+ * @param rawFilesDir - Directory of downloaded files to store in the raw_files table
  * @returns Promise that resolves when report generation is complete
  */
 const report = async (
@@ -41,13 +43,15 @@ const report = async (
     swaggerJacker: boolean = false,
     sjBin: string = "sj",
     sjArgs: string = "",
-    exploitJsonFilePath: string | undefined = undefined
+    exploitJsonFilePath: string | undefined = undefined,
+    rawFilesDir: string | undefined = undefined
 ): Promise<void> => {
     printMsg(MSG.Header, "[i] Running 'report' module");
 
-    // check if db exists. if not, init
-    if (!fs.existsSync(sqliteDbPath)) {
-        await initReportDb(sqliteDbPath);
+    // init always runs (CREATE TABLE IF NOT EXISTS), so databases from older versions gain new tables
+    const dbExists = fs.existsSync(sqliteDbPath);
+    await initReportDb(sqliteDbPath);
+    if (!dbExists) {
         printMsg(MSG.Run, "[✓] Report database initialized successfully");
     }
 
@@ -82,6 +86,11 @@ const report = async (
     if (mappedOpenapiJsonFilePath) {
         const openapi = JSON.parse(fs.readFileSync(mappedOpenapiJsonFilePath, "utf8"));
         await populateMappedOpenapi(db, openapi);
+    }
+
+    // store the raw downloaded files, with paths relative to the database
+    if (rawFilesDir) {
+        await populateRawFiles(db, rawFilesDir, path.dirname(path.resolve(sqliteDbPath)));
     }
 
     // finally, generate HTML report

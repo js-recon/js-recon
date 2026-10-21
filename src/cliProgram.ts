@@ -725,6 +725,7 @@ export function buildProgram(): Command {
             "Exploit findings JSON file, in EngineOutput format (see `exploit --engine-output`)"
         )
         .option("-o, --output <file>", "Output file name (without the extension)", "report")
+        .option("-d, --js-dir <dir>", "Directory of downloaded JS files to store in the raw_files table")
         .option("--sj", "Run sj (swagger-jacker) against the mapped OpenAPI spec", false)
         .option("--sj-bin <path>", "Path to the sj binary", "sj")
         .option("--sj-args <args>", "Extra arguments passed through to `sj automate`", "")
@@ -739,7 +740,8 @@ export function buildProgram(): Command {
                 cmd.sj,
                 cmd.sjBin,
                 cmd.sjArgs,
-                cmd.exploitJson
+                cmd.exploitJson,
+                cmd.jsDir
             );
         });
 

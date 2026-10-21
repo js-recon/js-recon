@@ -44,6 +44,13 @@ const mergeDomainIntoGlobalDb = (globalDbPath: string, domainDbPath: string, dom
         `
         ).run(domain);
 
+        db.prepare(
+            `
+            INSERT OR REPLACE INTO raw_files (domain, path, url, content)
+            SELECT ?, path, url, content FROM src.raw_files
+        `
+        ).run(domain);
+
         db.prepare(`DETACH DATABASE src`).run();
     } finally {
         db.close();

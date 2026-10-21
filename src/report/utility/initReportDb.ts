@@ -84,6 +84,24 @@ const createAnalysisFindingsTable = (db: Database.Database) => {
 };
 
 /**
+ * Creates the raw files table in the database, which stores the downloaded files so the
+ * database can be shared as a self-contained session export.
+ *
+ * @param db - The database to create the table in
+ */
+const createRawFilesTable = (db: Database.Database) => {
+    db.prepare(
+        `
+        CREATE TABLE IF NOT EXISTS raw_files (
+            path TEXT PRIMARY KEY,
+            url TEXT,
+            content TEXT
+        )
+    `
+    ).run();
+};
+
+/**
  * Initializes the report database.
  *
  * @param sqliteDbPath - The path to the SQLite database file
@@ -95,6 +113,7 @@ const initReportDb = async (sqliteDbPath: string) => {
     createMappedOpenapiTable(db);
     createEndpointsTable(db);
     createAnalysisFindingsTable(db);
+    createRawFilesTable(db);
 
     db.close();
 };

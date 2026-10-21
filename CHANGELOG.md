@@ -1,5 +1,15 @@
 # Change Log
 
+## 2.1.0-alpha.1 (unreleased)
+
+### Added
+
+- `js-recon.db` now has a `raw_files` table holding the JavaScript files `lazyload` downloaded, so the database is a self-contained export of a session. Each row stores the file's path (relative to the database's directory), the URL it was downloaded from, and its contents. `run` fills it automatically; the `report` module fills it when given the new `-d/--js-dir <dir>` option (the MCP `report` tool takes `jsDir`). In a batch run the combined database gets the same table with a `domain` column. (`report`, `run`)
+
+### Changed
+
+- `report` now creates any missing tables in an existing `js-recon.db`, so a database from an older version gains new tables such as `raw_files` instead of failing on insert. (`report`)
+
 ## 2.0.1 - 2026-10-20
 
 ### Security
