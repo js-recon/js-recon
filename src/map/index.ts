@@ -131,7 +131,6 @@ const map = async (
         process.exit(6);
     }
 
-
     if (tech === "next") {
         let chunks: Chunks;
 
