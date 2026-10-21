@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveVariableInChunk, resolveStringOps, substituteVariablesInString } from "../../map/next_js/utils.js";
+import { resolveVariableInChunk, resolveStringOps, substituteVariablesInString } from "../../map/babel-legacy/next_js/utils.js";
 
 describe("resolveVariableInChunk", () => {
     it("resolves a simple const string declaration", () => {

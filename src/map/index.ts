@@ -1,44 +1,44 @@
 import fs from "fs";
 
 // Next.JS
-import getWebpackConnections from "./next_js/getWebpackConnections.js";
-import getTurbopackConnections from "./next_js/getTurbopackConnections.js";
-import getFetchInstances from "./next_js/getFetchInstances.js";
-import resolveFetch from "./next_js/resolveFetch.js";
-import resolveNewRequest from "./next_js/resolveNewRequest.js";
-import interactive, { runCommands as nextRunCommands } from "./next_js/interactive.js";
+import getWebpackConnections from "./babel-legacy/next_js/getWebpackConnections.js";
+import getTurbopackConnections from "./babel-legacy/next_js/getTurbopackConnections.js";
+import getFetchInstances from "./babel-legacy/next_js/getFetchInstances.js";
+import resolveFetch from "./babel-legacy/next_js/resolveFetch.js";
+import resolveNewRequest from "./babel-legacy/next_js/resolveNewRequest.js";
+import interactive, { runCommands as nextRunCommands } from "./babel-legacy/next_js/interactive.js";
 import { existsSync, readFileSync } from "fs";
 import { Chunks } from "../utility/interfaces.js";
-import getAxiosInstances from "./next_js/getAxiosInstances.js";
-import resolveAxios from "./next_js/resolveAxios.js";
+import getAxiosInstances from "./babel-legacy/next_js/getAxiosInstances.js";
+import resolveAxios from "./babel-legacy/next_js/resolveAxios.js";
 import { getOpenapi, getOpenapiOutput, getOpenapiOutputFile, getGraphqlEnabled } from "../utility/globals.js";
-import resolveGraphql from "./graphql/resolveGraphql.js";
+import resolveGraphql from "./babel-legacy/graphql/resolveGraphql.js";
 import { generateOpenapiV3Spec } from "../utility/openapiGenerator.js";
 import { generatePostmanCollection } from "../utility/postmanGenerator.js";
-import getExports from "./next_js/getExports.js";
-import resolveServerActions from "./next_js/resolveServerActions.js";
+import getExports from "./babel-legacy/next_js/getExports.js";
+import resolveServerActions from "./babel-legacy/next_js/resolveServerActions.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
 
 // Vue.JS
-import getViteConnections from "./vue_js/getViteConnections.js";
-import vueInteractive, { runCommands as vueRunCommands } from "./vue_js/interactive.js";
-import vue_resolveFetch from "./vue_js/vue_resolveFetch.js";
+import getViteConnections from "./babel-legacy/vue_js/getViteConnections.js";
+import vueInteractive, { runCommands as vueRunCommands } from "./babel-legacy/vue_js/interactive.js";
+import vue_resolveFetch from "./babel-legacy/vue_js/vue_resolveFetch.js";
 
 // Svelte/Astro
-import svelteInteractive, { runCommands as svelteRunCommands } from "./svelte_js/interactive.js";
+import svelteInteractive, { runCommands as svelteRunCommands } from "./babel-legacy/svelte_js/interactive.js";
 
 // React
-import getReactConnections from "./react_js/getReactConnections.js";
-import reactInteractive, { runCommands as reactRunCommands } from "./react_js/interactive.js";
-import react_resolveFetch from "./react_js/react_resolveFetch.js";
+import getReactConnections from "./babel-legacy/react_js/getReactConnections.js";
+import reactInteractive, { runCommands as reactRunCommands } from "./babel-legacy/react_js/interactive.js";
+import react_resolveFetch from "./babel-legacy/react_js/react_resolveFetch.js";
 
 // Angular
-import getAngularConnections from "./angular_js/getAngularConnections.js";
-import angularInteractive, { runCommands as angularRunCommands } from "./angular_js/interactive.js";
+import getAngularConnections from "./babel-legacy/angular_js/getAngularConnections.js";
+import angularInteractive, { runCommands as angularRunCommands } from "./babel-legacy/angular_js/interactive.js";
 
 // XHR resolution (shared across Vite-based techs)
-import vue_resolveXhr from "./vue_js/vue_resolveXhr.js";
-import vue_resolveHttpClient from "./vue_js/vue_resolveHttpClient.js";
+import vue_resolveXhr from "./babel-legacy/vue_js/vue_resolveXhr.js";
+import vue_resolveHttpClient from "./babel-legacy/vue_js/vue_resolveHttpClient.js";
 
 const availableTech = {
     next: "Next.JS",

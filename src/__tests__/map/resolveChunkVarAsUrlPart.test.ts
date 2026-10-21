@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveChunkVarAsUrlPart } from "../../map/next_js/utils.js";
+import { resolveChunkVarAsUrlPart } from "../../map/babel-legacy/next_js/utils.js";
 
 describe("resolveChunkVarAsUrlPart", () => {
     it("returns a value containing / for a URL-shaped string", () => {

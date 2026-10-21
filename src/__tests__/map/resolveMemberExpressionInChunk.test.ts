@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveMemberExpressionInChunk } from "../../map/next_js/utils.js";
+import { resolveMemberExpressionInChunk } from "../../map/babel-legacy/next_js/utils.js";
 
 describe("resolveMemberExpressionInChunk", () => {
     it("resolves a string property from an object literal", () => {

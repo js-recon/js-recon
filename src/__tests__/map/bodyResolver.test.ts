@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapLeafStrings, hasMarkers } from "../../map/vue_js/bodyResolver.js";
+import { mapLeafStrings, hasMarkers } from "../../map/babel-legacy/vue_js/bodyResolver.js";
 
 describe("mapLeafStrings", () => {
     it("applies fn to a string value directly", () => {

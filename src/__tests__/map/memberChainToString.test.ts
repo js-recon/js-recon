@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { memberChainToString } from "../../map/next_js/utils.js";
+import { memberChainToString } from "../../map/babel-legacy/next_js/utils.js";
 
 const ident = (name: string) => ({ type: "Identifier", name });
 const member = (object: any, property: string, computed = false) => ({

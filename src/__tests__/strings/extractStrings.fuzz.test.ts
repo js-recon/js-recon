@@ -7,7 +7,7 @@ import { extractStrings } from "../../strings/index.js";
  * js-recon's entire pipeline starts by parsing raw JS text pulled from a third-party target's
  * bundle — that text is fully attacker/target-controlled. This fuzz test drives arbitrary and
  * adversarially-shaped strings through the same parse config used across the codebase
- * (`errorRecovery: true`, matching e.g. `map/next_js/utils.ts`) followed by `extractStrings`.
+ * (`errorRecovery: true`, matching e.g. `map/babel-legacy/next_js/utils.ts`) followed by `extractStrings`.
  *
  * `errorRecovery: true` does NOT guarantee `parser.parse` never throws — some errors (e.g. an
  * unterminated string/template literal) are fatal and unrecoverable in Babel regardless of this
