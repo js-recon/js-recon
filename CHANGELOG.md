@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.0.1 - 2026-10-20
+
+### Changed
+
+- 2.0.1 promotes 2.0.1-beta.8 to stable with no code changes. See the 2.0.1-alpha.* and 2.0.1-beta.* entries below for what changed since 1.4.4.
+
 ## 2.0.1-beta.8 - 2026-10-17
 
 ### Fixed
