@@ -17,6 +17,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: getplumber/plumber@d3536bae4727b9290d9e69ee25c4350ddbcd91cd # v0.6.0
+      - uses: getplumber/plumber@cd1ecdf0a0053f9b0cc123976bb369772d876af3 # v0.7.4
         with:
           score-push: true
