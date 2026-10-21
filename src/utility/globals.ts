@@ -634,3 +634,15 @@ export const setGraphqlEnabled = (value: boolean): void => {
 export const getGraphqlEnabled = (): boolean => {
     return graphqlEnabled;
 };
+
+// taintwire Resolution Configuration
+/** Whether `map` resolves API calls with taintwire (Cypher over the AST graph) instead of the legacy Babel resolvers */
+export let mapTaintwire = false;
+
+export const setMapTaintwire = (value: boolean): void => {
+    mapTaintwire = value;
+};
+
+export const getMapTaintwire = (): boolean => {
+    return mapTaintwire;
+};

@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { resolveNodeValue, substituteVariablesInString } from "../next_js/utils.js";
 import * as globals from "../../../utility/globals.js";
+import { looksLikeStrictUrl } from "../../../utility/urlUtils.js";
 import {
     EnclosingFn,
     inferEnclosingFn,
@@ -315,15 +316,7 @@ const vue_resolveXhr = async (directory: string, frameworkName = "Vue.JS"): Prom
         if (entry.body) printMsg(MSG.Run, `    Body: ${entry.body}`);
 
         const urlStr = entry.url;
-        const looksLikeUrl =
-            urlStr.length > 0 &&
-            !urlStr.startsWith("[") &&
-            urlStr !== "[object Object]" &&
-            (urlStr.startsWith("http://") ||
-                urlStr.startsWith("https://") ||
-                urlStr.startsWith("/") ||
-                /^[A-Za-z0-9_\-.]+\//.test(urlStr));
-        if (!looksLikeUrl) continue;
+        if (!looksLikeStrictUrl(urlStr)) continue;
 
         globals.addOpenapiOutput({
             url: urlStr,

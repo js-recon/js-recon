@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { getURLDirectory, hostMatchesScope, toOutputHost } from "../../utility/urlUtils.js";
+import {
+    getURLDirectory,
+    hostMatchesScope,
+    toOutputHost,
+    looksLikeUrl,
+    looksLikeStrictUrl,
+} from "../../utility/urlUtils.js";
 
 describe("getURLDirectory", () => {
     it("extracts host and directory from a standard JS URL", () => {
@@ -72,5 +78,33 @@ describe("toOutputHost", () => {
 
         expect(encodedPortHost).not.toBe(toOutputHost("localhost_3000"));
         expect(toOutputHost(encodedPortHost)).not.toBe(encodedPortHost);
+    });
+});
+
+describe("looksLikeUrl", () => {
+    it("keeps URLs with a slash outside placeholders", () => {
+        expect(looksLikeUrl("https://x.test")).toBe(true);
+        expect(looksLikeUrl("[call:base()]/api/[var id]")).toBe(true);
+    });
+
+    it("rejects strings with no literal slash", () => {
+        expect(looksLikeUrl("key")).toBe(false);
+        expect(looksLikeUrl("[var a/b]")).toBe(false);
+        expect(looksLikeUrl("")).toBe(false);
+    });
+});
+
+describe("looksLikeStrictUrl", () => {
+    it("accepts schemes, absolute paths and leading path segments", () => {
+        expect(looksLikeStrictUrl("http://x.test/a")).toBe(true);
+        expect(looksLikeStrictUrl("/api/a")).toBe(true);
+        expect(looksLikeStrictUrl("api/a")).toBe(true);
+    });
+
+    it("rejects leading placeholders, query-only strings and plain words", () => {
+        expect(looksLikeStrictUrl("[call:base()]/api")).toBe(false);
+        expect(looksLikeStrictUrl("[object Object]")).toBe(false);
+        expect(looksLikeStrictUrl("?q=1/2")).toBe(false);
+        expect(looksLikeStrictUrl("key")).toBe(false);
     });
 });

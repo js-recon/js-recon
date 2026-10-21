@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { resolveNodeValue, substituteVariablesInString } from "../next_js/utils.js";
 import * as globals from "../../../utility/globals.js";
+import { looksLikeStrictUrl } from "../../../utility/urlUtils.js";
 import {
     EnclosingFn,
     inferEnclosingFn,
@@ -434,15 +435,7 @@ const vue_resolveFetch = async (directory: string, frameworkName = "Vue.JS"): Pr
         //   - non-string AST nodes (objects, member expressions) that have
         //     no chance of being a real path
         const urlStr = entry.url;
-        const looksLikeUrl =
-            urlStr.length > 0 &&
-            !urlStr.startsWith("[") &&
-            urlStr !== "[object Object]" &&
-            (urlStr.startsWith("http://") ||
-                urlStr.startsWith("https://") ||
-                urlStr.startsWith("/") ||
-                /^[A-Za-z0-9_\-.]+\//.test(urlStr));
-        if (!looksLikeUrl) continue;
+        if (!looksLikeStrictUrl(urlStr)) continue;
 
         callsiteCounter++;
         globals.addOpenapiOutput({

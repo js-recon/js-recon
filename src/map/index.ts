@@ -11,7 +11,13 @@ import { existsSync, readFileSync } from "fs";
 import { Chunks } from "../utility/interfaces.js";
 import getAxiosInstances from "./babel-legacy/next_js/getAxiosInstances.js";
 import resolveAxios from "./babel-legacy/next_js/resolveAxios.js";
-import { getOpenapi, getOpenapiOutput, getOpenapiOutputFile, getGraphqlEnabled } from "../utility/globals.js";
+import {
+    getOpenapi,
+    getOpenapiOutput,
+    getOpenapiOutputFile,
+    getGraphqlEnabled,
+    getMapTaintwire,
+} from "../utility/globals.js";
 import resolveGraphql from "./babel-legacy/graphql/resolveGraphql.js";
 import { generateOpenapiV3Spec } from "../utility/openapiGenerator.js";
 import { generatePostmanCollection } from "../utility/postmanGenerator.js";
@@ -108,6 +114,11 @@ const map = async (
     if (!directory) {
         printMsg(MSG.Err, "[!] Please specify a directory with -d/--directory");
         process.exit(6);
+    }
+
+    // taintwire resolvers exist for these techs; the rest keep the legacy Babel resolvers.
+    if (getMapTaintwire() && tech !== "react") {
+        printMsg(MSG.Warn, `[!] --map-taintwire has no '${tech}' implementation yet, using the legacy Babel resolvers`);
     }
 
     if (tech === "next") {
@@ -231,9 +242,15 @@ const map = async (
             chunks = JSON.parse(readFileSync(`${output}.json`, { encoding: "utf8" }));
         }
 
-        await react_resolveFetch(directory);
-        await vue_resolveXhr(directory, "React");
-        await vue_resolveHttpClient(directory, "React");
+        if (getMapTaintwire()) {
+            // Loaded on demand so the native LadybugDB addon only loads when the flag is set.
+            const { default: taintwire_react } = await import("./taintwire/react_js/index.js");
+            await taintwire_react(directory);
+        } else {
+            await react_resolveFetch(directory);
+            await vue_resolveXhr(directory, "React");
+            await vue_resolveHttpClient(directory, "React");
+        }
 
         if (commands.length > 0) {
             await reactRunCommands(chunks, `${output}.json`, commands);

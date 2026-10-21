@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { resolveNodeValue, substituteVariablesInString } from "../next_js/utils.js";
 import * as globals from "../../../utility/globals.js";
+import { looksLikeUrl } from "../../../utility/urlUtils.js";
 import {
     EnclosingFn,
     inferEnclosingFn,
@@ -48,20 +49,6 @@ interface HttpCallEntry {
     bodyValue?: any;
     enclosingFn: EnclosingFn | null;
 }
-
-/**
- * Heuristic: only treat a resolved string as a URL if, after stripping every
- * `[…]` placeholder produced by resolveNodeValue, the remaining literal text
- * still contains a `/` separator or an explicit scheme. This rejects calls on
- * Map/Set/Headers/EventBus (`x.get("key")`, `bus.post(event)`) while keeping
- * partial URLs like `[call:base()]<literal>/[param:e]/[param:t]`.
- */
-const looksLikeUrl = (s: string): boolean => {
-    if (!s) return false;
-    if (s.startsWith("http://") || s.startsWith("https://")) return true;
-    const stripped = s.replace(/\[[^\]]*\]/g, "");
-    return stripped.includes("/");
-};
 
 /**
  * Recovers `[unresolved: NAME]` placeholders by chasing later assignments to

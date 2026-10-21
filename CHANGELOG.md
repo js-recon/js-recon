@@ -5,6 +5,7 @@
 ### Added
 
 - `js-recon.db` now has a `raw_files` table holding the JavaScript files `lazyload` downloaded, so the database is a self-contained export of a session. Each row stores the file's path (relative to the database's directory), the URL it was downloaded from, and its contents. `run` fills it automatically; the `report` module fills it when given the new `-d/--js-dir <dir>` option (the MCP `report` tool takes `jsDir`). In a batch run the combined database gets the same table with a `domain` column. (`report`, `run`)
+- New `--map-taintwire` flag on `map` and `run` resolves API calls with [taintwire](https://taintwire.js-recon.io) instead of the Babel resolvers. taintwire loads the JavaScript files into a graph of their syntax tree and value flow, and Cypher queries find `fetch`, `XMLHttpRequest` and HTTP-client (`.get`/`.post`/...) calls and trace where their URL, method, headers and body come from. It follows local wrappers to each caller, so a wrapper called with two paths yields both URLs. It is implemented for `react` so far; other techs print a notice and use the Babel resolvers. The Babel resolvers moved to `src/map/babel-legacy/` with no change in behavior, and are still the default. (`map`, `run`)
 
 ### Changed
 
