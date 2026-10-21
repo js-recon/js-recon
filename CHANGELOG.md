@@ -1,5 +1,15 @@
 # Change Log
 
+## 2.0.1 - 2026-10-20
+
+### Security
+
+- Bumped `hono` to 4.13.13 (GHSA-5r4p-p66f-jhc7, via `@modelcontextprotocol/sdk`) and the dev dependency `vite` to 8.3.4 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm, via `vitest`).
+
+### Changed
+
+- 2.0.1 promotes 2.0.1-beta.8 to stable with no code changes apart from the dependency updates above. See the 2.0.1-alpha.* and 2.0.1-beta.* entries below for what changed since 1.4.4.
+
 ## 2.0.1-beta.8 - 2026-10-17
 
 ### Fixed
