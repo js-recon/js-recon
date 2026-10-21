@@ -1,15 +1,18 @@
 import { describe, it, expect } from "vitest";
 import * as taintwire from "@js-recon/taintwire";
-import { resolveApiCalls, ApiCall } from "../../map/taintwire/react_js/index.js";
+import { resolveApiCalls, ApiCall, PREFILTER } from "../../map/taintwire/apiCalls.js";
+import { resolveServerActions } from "../../map/taintwire/next_js/index.js";
 
-const resolve = async (code: string): Promise<ApiCall[]> => {
+const withGraph = async <T>(code: string, fn: (graph: taintwire.TaintGraph) => Promise<T>): Promise<T> => {
     const graph = await taintwire.import(code, { filename: "app.js", parser: "babel" });
     try {
-        return await resolveApiCalls(graph);
+        return await fn(graph);
     } finally {
         await graph.close();
     }
 };
+
+const resolve = (code: string): Promise<ApiCall[]> => withGraph(code, resolveApiCalls);
 
 const urlsOf = (calls: ApiCall[], kind: ApiCall["kind"]): string[] =>
     calls
@@ -120,6 +123,65 @@ describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
     it("terminates on self-referencing value flow", async () => {
         const calls = await resolve('let u = "/api/a"; u = u + "/b"; fetch(u);');
         expect(calls[0].urls).toContain("/api/a");
+    });
+
+    it("treats $fetch (ofetch / Nuxt) like fetch", async () => {
+        const [call] = await resolve('$fetch("/api/comments", { method: "POST", body: { a: 1 } });');
+        expect(call).toMatchObject({ kind: "fetch", urls: ["/api/comments"], method: "POST", body: '{"a":"1"}' });
+    });
+
+    it("follows a fetch handed in by destructuring (SvelteKit load)", async () => {
+        const calls = await resolve("const load = async ({ params: n, fetch: t }) => t(`/api/blog/${n.slug}`);");
+        expect(urlsOf(calls, "fetch")).toEqual(["/api/blog/[MemberExpression -> n.slug]"]);
+    });
+
+    it("recognises compiled Nuxt useFetch calls by their $-key argument", async () => {
+        const calls = await resolve(`
+            d("/api/posts/1", { key: "p1" }, "$Qx7Lm2Np9R");
+            d(\`/api/users/\${id}\`, "$Zt4Wk8Hs3V");
+            notFetch("/api/x", "plain");
+        `);
+        expect(urlsOf(calls, "fetch")).toEqual(["/api/posts/1", "/api/users/[var id]"]);
+    });
+
+    it("prefilter keeps files whose only sink is a compiled Nuxt useFetch", () => {
+        expect(PREFILTER.test('D(`/api/users/${u}`,{key:`user-${u}`},"$Mf6Ry1Dc5J")')).toBe(true);
+        expect(PREFILTER.test("const a = 1;")).toBe(false);
+    });
+
+    it("prefixes HTTP-client URLs with the baseURL of the create() call the client comes from", async () => {
+        const calls = await resolve('const api = axios.create({ baseURL: "/api" }); api.get("/reports/" + id);');
+        expect(urlsOf(calls, "client")).toEqual(["/api/reports/[var id]"]);
+    });
+
+    it("reads config-object calls: axios({ url, method }) and new X({ url, method })", async () => {
+        const calls = await resolve(`
+            axios({ url: "/api/a", method: "put", headers: { "X-A": "1" }, data: { n: 1 } });
+            new Req({ url: "/api/b/" + id, method: "DELETE" });
+            $.ajax({ url: "/api/c", type: "POST" });
+        `);
+        expect(
+            calls
+                .filter((c) => c.kind === "config")
+                .map((c) => `${c.method} ${c.urls.join(",")}`)
+                .sort()
+        ).toEqual(["DELETE /api/b/[var id]", "POST /api/c", "PUT /api/a"]);
+        expect(calls.find((c) => c.method === "PUT")).toMatchObject({ headers: { "X-A": "1" }, body: '{"n":"1"}' });
+    });
+
+    it("finds Next.js server actions and hints their same-module call arguments", async () => {
+        const id = "7f".padEnd(42, "a");
+        const actions = await withGraph(
+            `const save = (0, r.createServerReference)("${id}", r.callServer, void 0, r.findSourceMapURL, "saveNote");
+             save(note.title, 3);
+             const other = r.createServerReference("${"40".padEnd(42, "b")}", r.callServer);
+             r.createServerReference("not-a-hash", r.callServer);`,
+            resolveServerActions
+        );
+        expect(actions.map((a) => a.actionId).sort()).toEqual(["40".padEnd(42, "b"), id].sort());
+        const save = actions.find((a) => a.actionId === id)!;
+        expect(save.actionName).toBe("saveNote");
+        expect(JSON.parse(save.body)).toEqual(["<string:title>", "3"]);
     });
 
     it("returns [] for code with none of the sinks", async () => {

@@ -118,6 +118,14 @@ describe("generateOpenapiV3Spec", () => {
         expect(spec.paths["/api/data"]).toBeDefined();
     });
 
+    it("keeps path placeholders of absolute URLs as path params", () => {
+        const items = [makeItem({ path: "https://example.com/api/[var id]/posts", method: "GET" })];
+        const spec = generateOpenapiV3Spec(items, {});
+        expect(spec.paths["/api/{id}/posts"]["get"].parameters).toContainEqual(
+            expect.objectContaining({ name: "id", in: "path" })
+        );
+    });
+
     it("deduplicates identical (path, method) with fragment suffix", () => {
         const items = [
             makeItem({ path: "/api/users", method: "GET" }),

@@ -157,7 +157,8 @@ export const generateOpenapiV3Spec = (items: OpenapiOutputItem[], _chunks: Chunk
         let rawItemPath = typeof item.path === "string" ? replacePlaceholders(item.path) : "";
         try {
             if (rawItemPath.startsWith("http://") || rawItemPath.startsWith("https://")) {
-                rawItemPath = new URL(rawItemPath).pathname;
+                // URL() percent-encodes the `{param}` placeholders replacePlaceholders just produced.
+                rawItemPath = new URL(rawItemPath).pathname.replace(/%7B/gi, "{").replace(/%7D/gi, "}");
             }
         } catch {}
         const pathKeyBeforeQuery = rawItemPath.split("?")[0];

@@ -265,7 +265,7 @@ const traceInternalFunctionCalls = (functionName: string, moduleCode: string): a
  * module (RSC router, Server Actions reducer, etc.) that should not be
  * reported as user-defined API endpoints.
  */
-const isNextJsFrameworkChunk = (code: string): boolean => {
+export const isNextJsFrameworkChunk = (code: string): boolean => {
     // RSC navigation / router internals
     if (code.includes("NEXT_RSC_UNION_QUERY") || code.includes("setCacheBustingSearchParam")) {
         return true;

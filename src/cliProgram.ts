@@ -494,7 +494,7 @@ export function buildProgram(): Command {
         .option("--ngql", "Alias for --no-graphql")
         .option(
             "--map-taintwire",
-            "Resolve API calls in the map step with taintwire (Cypher queries over the AST graph). Implemented for react; other techs fall back to the legacy Babel resolvers",
+            "Resolve API calls in the map step with taintwire (Cypher queries over the AST graph) instead of the legacy Babel resolvers",
             false
         )
         .option(
@@ -839,7 +839,7 @@ export function buildProgram(): Command {
         .option("--ngql", "Alias for --no-graphql")
         .option(
             "--map-taintwire",
-            "Resolve API calls in the map step with taintwire (Cypher queries over the AST graph). Implemented for react; other techs fall back to the legacy Babel resolvers",
+            "Resolve API calls in the map step with taintwire (Cypher queries over the AST graph) instead of the legacy Babel resolvers",
             false
         )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")

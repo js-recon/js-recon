@@ -36,7 +36,6 @@ import svelteInteractive, { runCommands as svelteRunCommands } from "./babel-leg
 // React
 import getReactConnections from "./babel-legacy/react_js/getReactConnections.js";
 import reactInteractive, { runCommands as reactRunCommands } from "./babel-legacy/react_js/interactive.js";
-import react_resolveFetch from "./babel-legacy/react_js/react_resolveFetch.js";
 
 // Angular
 import getAngularConnections from "./babel-legacy/angular_js/getAngularConnections.js";
@@ -56,6 +55,22 @@ const availableTech = {
 
 const availableFormats = {
     json: "JSON",
+};
+
+/**
+ * fetch / XHR / HTTP-client resolution for the directory-scanned techs (React, Vue/Nuxt,
+ * Svelte/Astro, Angular): taintwire with --map-taintwire, the legacy Babel resolvers otherwise.
+ */
+const resolveApiCalls = async (directory: string, frameworkName: string): Promise<void> => {
+    if (getMapTaintwire()) {
+        // Loaded on demand so the native LadybugDB addon only loads when the flag is set.
+        const { default: taintwire_resolveApiCalls } = await import("./taintwire/apiCalls.js");
+        await taintwire_resolveApiCalls(directory, frameworkName);
+        return;
+    }
+    await vue_resolveFetch(directory, frameworkName);
+    await vue_resolveXhr(directory, frameworkName);
+    await vue_resolveHttpClient(directory, frameworkName);
 };
 
 /**
@@ -116,10 +131,6 @@ const map = async (
         process.exit(6);
     }
 
-    // taintwire resolvers exist for these techs; the rest keep the legacy Babel resolvers.
-    if (getMapTaintwire() && tech !== "react") {
-        printMsg(MSG.Warn, `[!] --map-taintwire has no '${tech}' implementation yet, using the legacy Babel resolvers`);
-    }
 
     if (tech === "next") {
         let chunks: Chunks;
@@ -151,17 +162,23 @@ const map = async (
             chunks = JSON.parse(readFileSync(`${output}.json`, { encoding: "utf8" }));
         }
 
-        // resolve fetch once you've got all
-        await resolveFetch(chunks, directory);
+        if (getMapTaintwire()) {
+            // Loaded on demand so the native LadybugDB addon only loads when the flag is set.
+            const { default: taintwire_next } = await import("./taintwire/next_js/index.js");
+            await taintwire_next(chunks, directory);
+        } else {
+            // resolve fetch once you've got all
+            await resolveFetch(chunks, directory);
 
-        // also, the axios instances
-        await resolveAxios(chunks, directory);
+            // also, the axios instances
+            await resolveAxios(chunks, directory);
 
-        // wrapper-class HTTP requests:  new X({url, method, ...})
-        await resolveNewRequest(chunks, directory);
+            // wrapper-class HTTP requests:  new X({url, method, ...})
+            await resolveNewRequest(chunks, directory);
 
-        // Next.js Server Actions registered via createServerReference(...)
-        await resolveServerActions(chunks, directory);
+            // Next.js Server Actions registered via createServerReference(...)
+            await resolveServerActions(chunks, directory);
+        }
 
         if (commands.length > 0) {
             await nextRunCommands(chunks, `${output}.json`, commands);
@@ -204,9 +221,7 @@ const map = async (
         }
 
         // Resolve fetch instances across all Vue.JS files
-        await vue_resolveFetch(directory);
-        await vue_resolveXhr(directory);
-        await vue_resolveHttpClient(directory);
+        await resolveApiCalls(directory, "Vue.JS");
 
         if (commands.length > 0) {
             await vueRunCommands(chunks, `${output}.json`, commands);
@@ -242,15 +257,7 @@ const map = async (
             chunks = JSON.parse(readFileSync(`${output}.json`, { encoding: "utf8" }));
         }
 
-        if (getMapTaintwire()) {
-            // Loaded on demand so the native LadybugDB addon only loads when the flag is set.
-            const { default: taintwire_react } = await import("./taintwire/react_js/index.js");
-            await taintwire_react(directory);
-        } else {
-            await react_resolveFetch(directory);
-            await vue_resolveXhr(directory, "React");
-            await vue_resolveHttpClient(directory, "React");
-        }
+        await resolveApiCalls(directory, "React");
 
         if (commands.length > 0) {
             await reactRunCommands(chunks, `${output}.json`, commands);
@@ -286,9 +293,7 @@ const map = async (
             chunks = JSON.parse(readFileSync(`${output}.json`, { encoding: "utf8" }));
         }
 
-        await vue_resolveFetch(directory, "Svelte/Astro");
-        await vue_resolveXhr(directory, "Svelte/Astro");
-        await vue_resolveHttpClient(directory, "Svelte/Astro");
+        await resolveApiCalls(directory, "Svelte/Astro");
 
         if (commands.length > 0) {
             await svelteRunCommands(chunks, `${output}.json`, commands);
@@ -323,9 +328,7 @@ const map = async (
             chunks = JSON.parse(readFileSync(`${output}.json`, { encoding: "utf8" }));
         }
 
-        await vue_resolveFetch(directory, "Angular");
-        await vue_resolveXhr(directory, "Angular");
-        await vue_resolveHttpClient(directory, "Angular");
+        await resolveApiCalls(directory, "Angular");
 
         if (commands.length > 0) {
             await angularRunCommands(chunks, `${output}.json`, commands);

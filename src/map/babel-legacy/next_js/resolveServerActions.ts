@@ -1,7 +1,7 @@
 import * as parser from "@babel/parser";
 import traverse from "@babel/traverse";
 import path from "path";
-import { Chunks } from "../../../utility/interfaces.js";
+import { Chunk, Chunks } from "../../../utility/interfaces.js";
 import * as globals from "../../../utility/globals.js";
 import { printMsg, MSG } from "../../../utility/printMsg.js";
 
@@ -36,6 +36,37 @@ const deriveRouteFromFile = (filePath: string): string | null => {
     });
 
     return "/" + processedSegments.join("/");
+};
+
+/** Chunk id → ids of the chunks that import it. */
+export const buildImportedBy = (chunks: Chunks): Map<string, Set<string>> => {
+    const importedBy = new Map<string, Set<string>>();
+    for (const [id, chunk] of Object.entries(chunks)) {
+        for (const dep of chunk.imports || []) {
+            if (!importedBy.has(dep)) importedBy.set(dep, new Set());
+            importedBy.get(dep)!.add(id);
+        }
+    }
+    return importedBy;
+};
+
+/**
+ * The App Router route a server action in `chunk` belongs to: from the chunk's own file path, else
+ * from the first importing chunk whose file path has one, else `/`.
+ */
+export const routeForChunk = (chunks: Chunks, importedBy: Map<string, Set<string>>, chunk: Chunk): string => {
+    let route = deriveRouteFromFile(chunk.file);
+    if (!route) {
+        const importers = importedBy.get(chunk.id) ?? new Set<string>();
+        for (const importerId of importers) {
+            const importerRoute = deriveRouteFromFile(chunks[importerId]?.file ?? "");
+            if (importerRoute) {
+                route = importerRoute;
+                break;
+            }
+        }
+    }
+    return route ?? "/";
 };
 
 /**
@@ -357,13 +388,7 @@ interface ServerActionEntry {
 const resolveServerActions = async (chunks: Chunks, directory: string): Promise<void> => {
     printMsg(MSG.Header, "[i] Resolving Next.js Server Actions");
 
-    const importedBy = new Map<string, Set<string>>();
-    for (const [id, chunk] of Object.entries(chunks)) {
-        for (const dep of chunk.imports || []) {
-            if (!importedBy.has(dep)) importedBy.set(dep, new Set());
-            importedBy.get(dep)!.add(id);
-        }
-    }
+    const importedBy = buildImportedBy(chunks);
 
     const seenActionIds = new Set<string>();
 
@@ -371,18 +396,7 @@ const resolveServerActions = async (chunks: Chunks, directory: string): Promise<
         if (!chunk.code || !chunk.file) continue;
         if (!chunk.code.includes("createServerReference")) continue;
 
-        let route = deriveRouteFromFile(chunk.file);
-        if (!route) {
-            const importers = importedBy.get(chunk.id) ?? new Set<string>();
-            for (const importerId of importers) {
-                const importerRoute = deriveRouteFromFile(chunks[importerId]?.file ?? "");
-                if (importerRoute) {
-                    route = importerRoute;
-                    break;
-                }
-            }
-        }
-        if (!route) route = "/";
+        const route = routeForChunk(chunks, importedBy, chunk);
 
         let ast: any;
         try {
