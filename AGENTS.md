@@ -290,7 +290,7 @@ Covered components:
 | `utility/resolvePath.ts` — `resolvePath`                                                 | `src/__tests__/utility/resolvePath.test.ts`            |
 | `strings/index.ts` — `extractStrings`                                                    | `src/__tests__/strings/extractStrings.test.ts`         |
 | `analyze/helpers/validate.ts` — `parseVersion`, `compareVersions`, `isVersionCompatible` | `src/__tests__/analyze/versionCompat.test.ts`          |
-| `map/babel-legacy/next_js/utils.ts` — `memberChainToString`                                           | `src/__tests__/map/memberChainToString.test.ts`        |
+| `map/babel-legacy/next_js/utils.ts` — `memberChainToString`                              | `src/__tests__/map/memberChainToString.test.ts`        |
 | `fingerprint/index.ts` — `deriveOutputPath`                                              | `src/__tests__/fingerprint/deriveOutputPath.test.ts`   |
 
 When adding new pure-logic helpers, add a corresponding test file. Components that require Puppeteer, network I/O, or the full pipeline are still validated through the `run` subcommand.
