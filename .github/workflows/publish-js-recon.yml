@@ -46,9 +46,9 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      # npm 10's retired quick-audit endpoint rejects lockfiles with npm: aliases; npm 11 uses the bulk endpoint
+      # npm 10's retired quick-audit endpoint rejects lockfiles with npm: aliases; npm 12's ci refuses npm-shrinkwrap.json
       - name: Update npm
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
       - run: npm ci
       - name: Run npm audit
         run: npm audit
@@ -105,7 +105,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Ensure npm CLI supports OIDC trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
       - name: Stage release to npm via OIDC
         run: |
           TAG="latest"
