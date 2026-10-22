@@ -660,9 +660,13 @@ const processUrl = async (
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
         const angularHostDir = resolveHostOutputDirectory(outputDir, targetHost, isBatch);
-        if (!fs.existsSync(angularHostDir)) {
+        if (
+            !fs.existsSync(angularHostDir) ||
+            !fs.readdirSync(angularHostDir, { recursive: true }).some((f) => /\.m?js$/.test(String(f)))
+        ) {
             // lazyload saved no JavaScript for this target (for example, every script URL answered
-            // with an HTML fallback page), so its host directory was never created.
+            // with an HTML fallback page). In single-URL mode the host directory is never created;
+            // in batch mode it is the pre-created target directory, so check for files too.
             printMsg(MSG.Warn, `[i] No JavaScript files were downloaded for ${url}; skipping map, analyze and report.`);
             return;
         }
