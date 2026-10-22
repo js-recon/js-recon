@@ -59,3 +59,29 @@ import { createHash } from "node:crypto";
 
 const ENCODED_HOST_PREFIX = "__jsr_host_";
 const MAX_OUTPUT_HOST_LENGTH = 180;
+
+/**
+ * Heuristic: only treat a resolved string as a URL if, after stripping every
+ * `[…]` placeholder produced by the map resolvers, the remaining literal text
+ * still contains a `/` separator or an explicit scheme. This rejects calls on
+ * Map/Set/Headers/EventBus (`x.get("key")`, `bus.post(event)`) while keeping
+ * partial URLs like `[call:base()]<literal>/[param:e]/[param:t]`.
+ */
+export const looksLikeUrl = (s: string): boolean => {
+    if (!s) return false;
+    if (s.startsWith("http://") || s.startsWith("https://")) return true;
+    const stripped = s.replace(/\[[^\]]*\]/g, "");
+    return stripped.includes("/");
+};
+
+/**
+ * Stricter check used for fetch / XHR URLs: rejects anything that starts with a
+ * `[…]` placeholder and requires a scheme, a leading `/`, or a leading `segment/`.
+ * Drops inner wrapper bodies like `fetch(i, l)` (where `i` is a param) and
+ * non-string AST nodes that have no chance of being a real path.
+ */
+export const looksLikeStrictUrl = (url: string): boolean =>
+    url.length > 0 &&
+    !url.startsWith("[") &&
+    url !== "[object Object]" &&
+    (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/") || /^[A-Za-z0-9_\-.]+\//.test(url));

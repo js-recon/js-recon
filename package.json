@@ -1,6 +1,6 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "2.0.1",
+    "version": "2.1.0-alpha.1",
     "description": "JS Recon Tool",
     "main": "build/index.js",
     "type": "module",
@@ -30,6 +30,7 @@
         "@babel/parser": "8.0.7",
         "@babel/traverse": "8.0.7",
         "@babel/types": "8.0.6",
+        "@js-recon/taintwire": "0.1.1",
         "@modelcontextprotocol/sdk": "1.32.1",
         "@shriyanss/cli-print-img": "1.1.1",
         "@shriyanss/cs-mast": "0.1.8",

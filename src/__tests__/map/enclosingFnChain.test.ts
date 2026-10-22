@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { detachEnclosingFn, enclosingFnChainHasBinding } from "../../map/vue_js/taint_utils.js";
-import type { EnclosingFn } from "../../map/vue_js/taint_utils.js";
+import { detachEnclosingFn, enclosingFnChainHasBinding } from "../../map/babel-legacy/vue_js/taint_utils.js";
+import type { EnclosingFn } from "../../map/babel-legacy/vue_js/taint_utils.js";
 
 function makeEnclosingFn(overrides: Partial<EnclosingFn> = {}): EnclosingFn {
     return {

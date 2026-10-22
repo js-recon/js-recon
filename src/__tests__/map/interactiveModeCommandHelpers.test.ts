@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import commandHelpers from "../../map/interactive-mode/commandHelpers.js";
+import commandHelpers from "../../map/babel-legacy/interactive-mode/commandHelpers.js";
 import { Chunks } from "../../utility/interfaces.js";
-import { State } from "../../map/interactive-mode/interactive.js";
+import { State } from "../../map/babel-legacy/interactive-mode/interactive.js";
 
 const makeChunk = (overrides: Partial<Chunks[string]> = {}): Chunks[string] => ({
     id: "chunk-a",

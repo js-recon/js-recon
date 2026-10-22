@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { makeGetCallers } from "../../map/vue_js/taint_utils.js";
+import { makeGetCallers } from "../../map/babel-legacy/vue_js/taint_utils.js";
 
 // Many chunks that each call `loadUser(...)` plus padding, and unrelated chunks
 // that don't. With a budget smaller than the combined source, the caller lookup

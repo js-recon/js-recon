@@ -6,7 +6,7 @@ import {
     MAX_CACHED_AST_NODES,
     getCrossFileCacheNodeCount,
     substituteCrossFileMarkers,
-} from "../../map/vue_js/crossFileResolver.js";
+} from "../../map/babel-legacy/vue_js/crossFileResolver.js";
 
 // Many webpack-style chunks whose combined AST is ~1.5x the node budget: chunk 0
 // imports a config module from the last chunk, which may have been evicted by

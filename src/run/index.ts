@@ -29,6 +29,7 @@ import { getOxylabsFallbackConfiguration } from "../proxy/oxylabsFallback.js";
 import { probeFeasibility } from "../proxy/checkFeasibility.js";
 import { getResolvedProxyConfigFromGlobals } from "../utility/makeReq.js";
 import { resolveHostOutputDirectory } from "../lazyLoad/outputPath.js";
+import { batchExitCode, batchFailureSummary } from "./batchOutcome.js";
 import { awaitCancellableStep } from "./cancellableStep.js";
 import { resolveTargetInputs } from "../utility/targetInputs.js";
 import { clearRunOutputDirectory, getBatchTargetDirectoryName, reserveRunOutputDirectory } from "./outputDirectory.js";
@@ -306,7 +307,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -431,7 +434,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -530,7 +535,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -628,7 +635,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -651,6 +660,16 @@ const processUrl = async (
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
         const angularHostDir = resolveHostOutputDirectory(outputDir, targetHost, isBatch);
+        if (
+            !fs.existsSync(angularHostDir) ||
+            !fs.readdirSync(angularHostDir, { recursive: true }).some((f) => /\.m?js$/.test(String(f)))
+        ) {
+            // lazyload saved no JavaScript for this target (for example, every script URL answered
+            // with an HTML fallback page). In single-URL mode the host directory is never created;
+            // in batch mode it is the pre-created target directory, so check for files too.
+            printMsg(MSG.Warn, `[i] No JavaScript files were downloaded for ${url}; skipping map, analyze and report.`);
+            return;
+        }
 
         printMsg(MSG.Header, "[2/4] Running map to find functions and API calls...");
         globalsUtil.setOpenapi(true);
@@ -705,7 +724,9 @@ const processUrl = async (
                 reportFile,
                 cmd.sj,
                 cmd.sjBin,
-                cmd.sjArgs
+                cmd.sjArgs,
+                undefined,
+                outputDir
             ),
             getSkipStepPromise(),
         ]);
@@ -933,7 +954,9 @@ const processUrl = async (
             reportFile,
             cmd.sj,
             cmd.sjBin,
-            cmd.sjArgs
+            cmd.sjArgs,
+            undefined,
+            outputDir
         ),
         getSkipStepPromise(),
     ]);
@@ -1077,6 +1100,7 @@ export default async (cmd: any): Promise<void> => {
                 new Map()
             );
 
+            let failedTargets = 0;
             for (const url of resolvedTargets.targets) {
                 resetSkipTarget();
 
@@ -1123,7 +1147,7 @@ export default async (cmd: any): Promise<void> => {
                         if (cmd.webStatsDashboard)
                             dashboardState.markError(url, error instanceof Error ? error.message : String(error));
                         printMsg(MSG.Err, `[!] Unhandled error while processing ${url}: ${error}`);
-                        process.exitCode = 1;
+                        failedTargets++;
                         continue;
                     }
 
@@ -1143,6 +1167,12 @@ export default async (cmd: any): Promise<void> => {
                 } finally {
                     targetReservation.release();
                 }
+            }
+            if (failedTargets > 0) {
+                // Every target was attempted: a partial failure gets its own exit code so a caller
+                // can keep the targets that succeeded instead of discarding the whole batch.
+                printMsg(MSG.Err, batchFailureSummary(failedTargets, resolvedTargets.targets.length));
+                process.exitCode = batchExitCode(failedTargets, resolvedTargets.targets.length);
             }
         }
     } catch (error) {

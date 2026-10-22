@@ -15,7 +15,7 @@ const heapAfterGc = (): number => {
 
 // Heap retained (after GC) at the moment the second pass first asks for callers.
 let heapAtFirstGetCallers: number | null = null;
-vi.mock("../../map/vue_js/taint_utils.js", async (importOriginal) => {
+vi.mock("../../map/babel-legacy/vue_js/taint_utils.js", async (importOriginal) => {
     const mod: any = await importOriginal();
     return {
         ...mod,
@@ -29,7 +29,7 @@ vi.mock("../../map/vue_js/taint_utils.js", async (importOriginal) => {
     };
 });
 
-const { default: vue_resolveFetch } = await import("../../map/vue_js/vue_resolveFetch.js");
+const { default: vue_resolveFetch } = await import("../../map/babel-legacy/vue_js/vue_resolveFetch.js");
 
 // One bundle whose AST (plus Babel's path/scope caches) is far larger than its
 // source: lots of small object literals and scopes. The fetch URL depends on a

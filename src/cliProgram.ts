@@ -493,6 +493,11 @@ export function buildProgram(): Command {
         .option("--no-graphql", "Disable GraphQL operation extraction during OpenAPI generation")
         .option("--ngql", "Alias for --no-graphql")
         .option(
+            "--map-taintwire",
+            "Resolve API calls in the map step with taintwire (Cypher queries over the AST graph) instead of the legacy Babel resolvers",
+            false
+        )
+        .option(
             "--max-recursion-depth <n>",
             "Max recursion depth for HTTP-client URL fan-out and cross-file resolution (default 3)",
             "3"
@@ -511,6 +516,7 @@ export function buildProgram(): Command {
             globalsUtil.setOpenapiOutputFile(cmd.openapiOutput);
             // Commander's --no-graphql flips cmd.graphql to false; --ngql is an alias.
             globalsUtil.setGraphqlEnabled(cmd.graphql !== false && !cmd.ngql);
+            globalsUtil.setMapTaintwire(cmd.mapTaintwire);
 
             // validate AI options
             if (globalsUtil.getAi().length !== 0) {
@@ -725,6 +731,7 @@ export function buildProgram(): Command {
             "Exploit findings JSON file, in EngineOutput format (see `exploit --engine-output`)"
         )
         .option("-o, --output <file>", "Output file name (without the extension)", "report")
+        .option("-d, --js-dir <dir>", "Directory of downloaded JS files to store in the raw_files table")
         .option("--sj", "Run sj (swagger-jacker) against the mapped OpenAPI spec", false)
         .option("--sj-bin <path>", "Path to the sj binary", "sj")
         .option("--sj-args <args>", "Extra arguments passed through to `sj automate`", "")
@@ -739,7 +746,8 @@ export function buildProgram(): Command {
                 cmd.sj,
                 cmd.sjBin,
                 cmd.sjArgs,
-                cmd.exploitJson
+                cmd.exploitJson,
+                cmd.jsDir
             );
         });
 
@@ -829,6 +837,11 @@ export function buildProgram(): Command {
         )
         .option("--no-graphql", "Disable GraphQL operation extraction during OpenAPI generation")
         .option("--ngql", "Alias for --no-graphql")
+        .option(
+            "--map-taintwire",
+            "Resolve API calls in the map step with taintwire (Cypher queries over the AST graph) instead of the legacy Babel resolvers",
+            false
+        )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
         .option("-k, --insecure", "Disable SSL certificate verification", false)
         .option("--no-sandbox", "Disable browser sandbox")
@@ -983,6 +996,7 @@ export function buildProgram(): Command {
             if (cmd.aiEndpoint) globalsUtil.setAiEndpoint(cmd.aiEndpoint);
             globalsUtil.setOpenapiChunkTag(cmd.mapOpenapiChunkTag);
             globalsUtil.setGraphqlEnabled(cmd.graphql !== false && !cmd.ngql);
+            globalsUtil.setMapTaintwire(cmd.mapTaintwire);
             globalsUtil.setDisableCache(cmd.disableCache);
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             globalsUtil.setCacheOnly(cmd.cacheOnly);

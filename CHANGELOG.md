@@ -1,5 +1,22 @@
 # Change Log
 
+## 2.1.0-alpha.1 - 2026-10-21
+
+### Added
+
+- `js-recon.db` now has a `raw_files` table holding the JavaScript files `lazyload` downloaded, so the database is a self-contained export of a session. Each row stores the file's path (relative to the database's directory), the URL it was downloaded from, and its contents. `run` fills it automatically; the `report` module fills it when given the new `-d/--js-dir <dir>` option (the MCP `report` tool takes `jsDir`). In a batch run the combined database gets the same table with a `domain` column. (`report`, `run`)
+- New `--map-taintwire` flag on `map` and `run` resolves API calls with [taintwire](https://taintwire.js-recon.io) instead of the Babel resolvers, for every tech (`next`, `react`, `vue`/Nuxt, `svelte`, `angular`). taintwire loads the JavaScript files (for Next.js, each webpack/Turbopack module) into a graph of their syntax tree and value flow, and Cypher queries find the calls and trace where their URL, method, headers and body come from: `fetch` and `$fetch`, a `fetch` passed in by destructuring (SvelteKit `load`), Nuxt's compiled `useFetch`, `XMLHttpRequest`, HTTP clients (`.get`/`.post`/..., prefixed with the `baseURL` of the `create()` call the client comes from), `({ url, method })` config-object calls such as `axios({...})` and `new X({...})`, and Next.js Server Actions. It follows local wrappers to each caller, so a wrapper called with two paths yields both URLs. The Babel resolvers moved to `src/map/babel-legacy/` with no change in behavior, and are still the default. (`map`, `run`)
+- OpenAPI output keeps `{param}` placeholders of absolute URLs as path parameters instead of percent-encoding them to `%7Bparam%7D`. (`map`)
+
+### Changed
+
+- `report` now creates any missing tables in an existing `js-recon.db`, so a database from an older version gains new tables such as `raw_files` instead of failing on insert. (`report`)
+- A batch run (`-u <file>`) in which some targets fail now exits with code `36` instead of `1`, after printing `[!] Batch completed: <failed> of <total> targets failed`. The targets that succeeded have already written their output and been merged into the batch's `js-recon.db`, so a caller can keep them instead of discarding the whole run. A batch in which every target fails, or one stopped by an error outside the per-target loop, still exits with `1`. (`run`)
+
+### Fixed
+
+- An Angular target whose script URLs all answered with an HTML fallback page made `map` fail with `ENOENT ... scandir` on the host directory lazyload never created, which failed the target and, in a batch, the whole run's exit code. In a batch run the same target instead went through `map`, `analyze` and `report` with no files. The target now ends after lazyload with a notice in both modes, as a generic target without JavaScript does. (`run`)
+
 ## 2.0.1 - 2026-10-20
 
 ### Security

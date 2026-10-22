@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findAxiosClients } from "../../map/next_js/resolveAxiosHelpers/findAxiosClients.js";
+import { findAxiosClients } from "../../map/babel-legacy/next_js/resolveAxiosHelpers/findAxiosClients.js";
 import type { Chunks } from "../../utility/interfaces.js";
 
 function makeChunk(overrides: Partial<Chunks[string]> = {}): Chunks[string] {

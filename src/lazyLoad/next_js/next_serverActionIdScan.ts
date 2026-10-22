@@ -6,14 +6,14 @@ import path from "path";
  * `(0, X.createServerReference)("<id>", ...)`) directly in raw chunk text. The property name
  * `createServerReference` itself survives minification (it's accessed off the
  * react-server-dom-webpack runtime import, not a local declaration a minifier would rename),
- * which is also why `map/next_js/resolveServerActions.ts` pre-filters chunks with a substring
+ * which is also why `map/babel-legacy/next_js/resolveServerActions.ts` pre-filters chunks with a substring
  * check on the same string before running its AST-based resolution.
  */
 const ACTION_ID_CALL_PATTERN = /createServerReference\s*\)?\s*\(\s*["'`]([0-9a-f]{40,})["'`]/gi;
 
 /**
  * Extracts Server Action IDs referenced via `createServerReference(...)` in a chunk's raw
- * text. Mirrors the ID-format validation in `map/next_js/resolveServerActions.ts`
+ * text. Mirrors the ID-format validation in `map/babel-legacy/next_js/resolveServerActions.ts`
  * (`/^[0-9a-f]{40,}$/i`), but works on unparsed text rather than a Babel AST — a lightweight
  * signal available at `lazyload` time, before `map`'s full AST-based resolution runs.
  */

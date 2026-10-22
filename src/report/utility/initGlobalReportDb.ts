@@ -98,6 +98,25 @@ const createAnalysisFindingsTable = (db: Database.Database) => {
 };
 
 /**
+ * Creates the raw files table in the global database. Adds a `domain` column.
+ *
+ * @param db - The database to create the table in
+ */
+const createRawFilesTable = (db: Database.Database) => {
+    db.prepare(
+        `
+        CREATE TABLE IF NOT EXISTS raw_files (
+            domain TEXT,
+            path TEXT,
+            url TEXT,
+            content TEXT,
+            PRIMARY KEY (domain, path)
+        )
+    `
+    ).run();
+};
+
+/**
  * Initializes the global report database used to aggregate the per-domain
  * `js-recon.db` files produced during a batch (`-u <file>`) run.
  *
@@ -110,6 +129,7 @@ const initGlobalReportDb = async (sqliteDbPath: string) => {
     createMappedOpenapiTable(db);
     createEndpointsTable(db);
     createAnalysisFindingsTable(db);
+    createRawFilesTable(db);
 
     db.close();
 };
