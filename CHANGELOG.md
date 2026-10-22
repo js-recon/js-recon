@@ -11,6 +11,11 @@
 ### Changed
 
 - `report` now creates any missing tables in an existing `js-recon.db`, so a database from an older version gains new tables such as `raw_files` instead of failing on insert. (`report`)
+- A batch run (`-u <file>`) in which some targets fail now exits with code `36` instead of `1`, after printing `[!] Batch completed: <failed> of <total> targets failed`. The targets that succeeded have already written their output and been merged into the batch's `js-recon.db`, so a caller can keep them instead of discarding the whole run. A batch in which every target fails, or one stopped by an error outside the per-target loop, still exits with `1`. (`run`)
+
+### Fixed
+
+- An Angular target whose script URLs all answered with an HTML fallback page made `map` fail with `ENOENT ... scandir` on the host directory lazyload never created, which failed the target and, in a batch, the whole run's exit code. The target now ends after lazyload with a notice, as a generic target without JavaScript does. (`run`)
 
 ## 2.0.1 - 2026-10-20
 
