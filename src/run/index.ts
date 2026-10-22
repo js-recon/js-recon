@@ -659,6 +659,12 @@ const processUrl = async (
         const endpointsFile = isBatch ? `${workingDir}/endpoints` : "endpoints";
 
         const angularHostDir = resolveHostOutputDirectory(outputDir, targetHost, isBatch);
+        if (!fs.existsSync(angularHostDir)) {
+            // lazyload saved no JavaScript for this target (for example, every script URL answered
+            // with an HTML fallback page), so its host directory was never created.
+            printMsg(MSG.Warn, `[i] No JavaScript files were downloaded for ${url}; skipping map, analyze and report.`);
+            return;
+        }
 
         printMsg(MSG.Header, "[2/4] Running map to find functions and API calls...");
         globalsUtil.setOpenapi(true);
