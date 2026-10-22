@@ -29,6 +29,7 @@ import { getOxylabsFallbackConfiguration } from "../proxy/oxylabsFallback.js";
 import { probeFeasibility } from "../proxy/checkFeasibility.js";
 import { getResolvedProxyConfigFromGlobals } from "../utility/makeReq.js";
 import { resolveHostOutputDirectory } from "../lazyLoad/outputPath.js";
+import { batchExitCode, batchFailureSummary } from "./batchOutcome.js";
 import { awaitCancellableStep } from "./cancellableStep.js";
 import { resolveTargetInputs } from "../utility/targetInputs.js";
 import { clearRunOutputDirectory, getBatchTargetDirectoryName, reserveRunOutputDirectory } from "./outputDirectory.js";
@@ -1095,6 +1096,7 @@ export default async (cmd: any): Promise<void> => {
                 new Map()
             );
 
+            let failedTargets = 0;
             for (const url of resolvedTargets.targets) {
                 resetSkipTarget();
 
@@ -1141,7 +1143,7 @@ export default async (cmd: any): Promise<void> => {
                         if (cmd.webStatsDashboard)
                             dashboardState.markError(url, error instanceof Error ? error.message : String(error));
                         printMsg(MSG.Err, `[!] Unhandled error while processing ${url}: ${error}`);
-                        process.exitCode = 1;
+                        failedTargets++;
                         continue;
                     }
 
@@ -1161,6 +1163,12 @@ export default async (cmd: any): Promise<void> => {
                 } finally {
                     targetReservation.release();
                 }
+            }
+            if (failedTargets > 0) {
+                // Every target was attempted: a partial failure gets its own exit code so a caller
+                // can keep the targets that succeeded instead of discarding the whole batch.
+                printMsg(MSG.Err, batchFailureSummary(failedTargets, resolvedTargets.targets.length));
+                process.exitCode = batchExitCode(failedTargets, resolvedTargets.targets.length);
             }
         }
     } catch (error) {
