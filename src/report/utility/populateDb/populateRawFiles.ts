@@ -23,13 +23,19 @@ const populateRawFiles = async (db: Database.Database, rawFilesDir: string, base
 
     const insert = db.prepare("INSERT OR REPLACE INTO raw_files (path, url, content) VALUES (?, ?, ?)");
 
-    db.prepare("DELETE FROM raw_files").run();
-
     let count = 0;
     db.transaction(() => {
+        db.prepare("DELETE FROM raw_files").run();
         for (const entry of fs.readdirSync(rawFilesDir, { recursive: true, withFileTypes: true })) {
             if (!entry.isFile()) continue;
             const absPath = path.join(entry.parentPath, entry.name);
+            // Check the header from the first bytes before reading the whole file, so large
+            // pipeline outputs such as js-recon.db are never read in full.
+            const head = Buffer.alloc(4096);
+            const fd = fs.openSync(absPath, "r");
+            const headLen = fs.readSync(fd, head, 0, head.length, 0);
+            fs.closeSync(fd);
+            if (!head.toString("utf8", 0, headLen).startsWith("// File Source: ")) continue;
             const content = fs.readFileSync(absPath, "utf8");
             const url = /^\/\/ File Source: (\S+)/.exec(content)?.[1];
             if (!url) continue;
