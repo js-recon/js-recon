@@ -15,7 +15,7 @@
 
 ### Fixed
 
-- An Angular target whose script URLs all answered with an HTML fallback page made `map` fail with `ENOENT ... scandir` on the host directory lazyload never created, which failed the target and, in a batch, the whole run's exit code. The target now ends after lazyload with a notice, as a generic target without JavaScript does. (`run`)
+- An Angular target whose script URLs all answered with an HTML fallback page made `map` fail with `ENOENT ... scandir` on the host directory lazyload never created, which failed the target and, in a batch, the whole run's exit code. In a batch run the same target instead went through `map`, `analyze` and `report` with no files. The target now ends after lazyload with a notice in both modes, as a generic target without JavaScript does. (`run`)
 
 ## 2.0.1 - 2026-10-20
 
