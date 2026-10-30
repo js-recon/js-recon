@@ -188,7 +188,8 @@ const next_interceptRouteNextUrl = async (
     const found = await findBuildManifest(origin, knownUrls);
     if (found) {
         const manifest = await rawRequest(found.manifestUrl, { timeout: REQUEST_TIMEOUT_MS });
-        if (manifest && manifest.status === 200) {
+        // A catch-all route can answer 200 HTML here; only a real manifest rules out blind mode.
+        if (manifest && manifest.status === 200 && manifest.body.includes("__BUILD_MANIFEST")) {
             rules = [];
             for (const rule of parseInterceptRules(manifest.body)) {
                 const req = interceptRuleToRequest(rule);
