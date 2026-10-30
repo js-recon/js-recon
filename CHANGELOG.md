@@ -1,5 +1,15 @@
 # Change Log
 
+## 2.1.0-alpha.2 (unreleased)
+
+### Added
+
+- New Next.js lazyload method `next_interceptRouteNextUrl` covers intercepting routes defined under a path that middleware guards, such as `app/admin/@modal/(..)pub/[id]`. Next.js serves such a route through its public source route when the request sends a `Next-Url` header naming the guarded path, and the middleware matcher only sees the public URL. The method reads the intercepting-route rules from `_buildManifest.js` (`__rewrites.beforeFiles`, the `next-url` condition). When the crawl hasn't found that file, it builds the URL from the buildId in the landing page. Each rule's parent path and every crawled, `strings`-extracted or `--wordlist` path gets a plain request. A path that redirects then gets the same path and its `/_next/data/<buildId>/<path>.json` route with `x-nextjs-data: 1`. The path counts as middleware-guarded if a response carries a header only middleware sets (any `x-middleware-*`, `x-nextjs-redirect` or `x-nextjs-rewrite`). For each rule whose condition matches a guarded path, the public route is requested with `Next-Url: <parent>`, and chunk paths that are missing from the plain response are downloaded. Without a manifest, the method tries every pair of guarded path and public page, up to 200 pairs. It runs after `next_routerStateForge` on every Next.js lazyload pass, and `--include-methods`/`--exclude-methods` control it. (`lazyload`, `run`)
+
+### Changed
+
+- `--wordlist` entries now also feed `next_interceptRouteNextUrl`, as well as `next_routerStateForge`. (`lazyload`, `run`)
+
 ## 2.1.0-alpha.1 - 2026-10-21
 
 ### Added
