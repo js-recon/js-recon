@@ -179,7 +179,7 @@ export function buildProgram(): Command {
         )
         .option(
             "--wordlist <file>",
-            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to next_routerStateForge's candidate URLs"
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of next_routerStateForge and next_interceptRouteNextUrl"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
@@ -865,7 +865,7 @@ export function buildProgram(): Command {
         )
         .option(
             "--wordlist <file>",
-            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to next_routerStateForge's candidate URLs"
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of next_routerStateForge and next_interceptRouteNextUrl"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(

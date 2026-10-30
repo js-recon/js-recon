@@ -11,6 +11,7 @@ import next_scriptTagsSubsequentRequests from "./next_scriptTagsSubsequentReques
 import next_bruteForceJsFiles from "./next_bruteForceJsFiles.js";
 import next_getClientSidePaths from "./next_getClientSidePaths.js";
 import next_routerStateForge from "./next_routerStateForge.js";
+import next_interceptRouteNextUrl from "./next_interceptRouteNextUrl.js";
 
 import * as lazyLoadGlobals from "../globals.js";
 import { shouldRunMethod } from "../methodFilter.js";
@@ -503,26 +504,40 @@ class NextJsCrawler {
         // re-executing that layout when the client claims to already have it mounted,
         // which can return protected content (and reveal JS chunks a plain crawl never
         // sees) for a request with no session at all.
+        const pageUrls = [...this.discoveredUrls].filter((u) => {
+            try {
+                const p = new URL(u).pathname;
+                return !p.endsWith(".js") && !p.endsWith(".js.map");
+            } catch {
+                return false;
+            }
+        });
+        // internal#165: also feed in path-like strings already extracted by the `strings`
+        // module and, optionally, --wordlist entries — additive to the crawl-discovered set,
+        // so routes with no client-visible trace at all still get a forge attempt.
+        const candidateUrls = [
+            ...new Set([...pageUrls, ...this.readStringsPathCandidates(), ...this.readWordlistCandidates()]),
+        ];
         if (!this.stopped && shouldRunMethod("next_routerStateForge", this.includeMethods, this.excludeMethods)) {
-            const pageUrls = [...this.discoveredUrls].filter((u) => {
-                try {
-                    const p = new URL(u).pathname;
-                    return !p.endsWith(".js") && !p.endsWith(".js.map");
-                } catch {
-                    return false;
-                }
-            });
-            // internal#165: also feed in path-like strings already extracted by the `strings`
-            // module and, optionally, --wordlist entries — additive to the crawl-discovered set,
-            // so routes with no client-visible trace at all still get a forge attempt.
-            const candidateUrls = [
-                ...new Set([...pageUrls, ...this.readStringsPathCandidates(), ...this.readWordlistCandidates()]),
-            ];
             const { bypassedUrls, metadataOnlyBypassedUrls, legacyKeyAcceptedUrls, newJsUrls } =
                 await next_routerStateForge(candidateUrls, this.threads, undefined, this.rscParamBruteforceLimit);
             this.techniqueEfficiencyMapping["next_routerStateForge"] = bypassedUrls;
             this.techniqueEfficiencyMapping["next_routerStateForge_metadataOnly"] = metadataOnlyBypassedUrls;
             this.techniqueEfficiencyMapping["next_routerStateForge_legacyKeyAccepted"] = legacyKeyAcceptedUrls;
+            this.emitDownloadable(this.registerUrls(newJsUrls));
+        }
+
+        // Phase 5 – intercepting routes via Next-Url: a route intercepted under a middleware-protected
+        // segment is served through its public source route when `Next-Url` names the segment,
+        // and the middleware matcher only sees the public URL. Rules come from _buildManifest.js.
+        if (!this.stopped && shouldRunMethod("next_interceptRouteNextUrl", this.includeMethods, this.excludeMethods)) {
+            const { revealedUrls, newJsUrls } = await next_interceptRouteNextUrl(
+                new URL(this.url).origin,
+                [...this.discoveredUrls],
+                candidateUrls,
+                this.threads
+            );
+            this.techniqueEfficiencyMapping["next_interceptRouteNextUrl"] = revealedUrls;
             this.emitDownloadable(this.registerUrls(newJsUrls));
         }
 
