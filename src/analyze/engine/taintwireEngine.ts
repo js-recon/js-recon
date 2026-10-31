@@ -102,8 +102,9 @@ export const flows = async (
 export const runTaintwireRules = async (graph: TaintGraph, rules: Rule[]): Promise<EngineOutput[]> => {
     const { query } = makeResolver(graph);
     const q: Query = async (cypher, params = {}) => {
-        const rows: Row[] = [];
-        for (const c of [cypher].flat()) rows.push(...(await query(c, params)));
+        // concat, not push(...rows): a large graph's flow query can return more rows than fit in an argument list
+        let rows: Row[] = [];
+        for (const c of [cypher].flat()) rows = rows.concat(await query(c, params));
         return rows;
     };
     await query("CALL var_length_extend_max_depth=60");
@@ -180,7 +181,7 @@ const taintwireEngine = async (rules: Rule[], chunks: Chunks): Promise<EngineOut
 
     const findings: EngineOutput[] = [];
     await forEachGraph(units, async (graph) => {
-        findings.push(...(await runTaintwireRules(graph, rules)));
+        for (const f of await runTaintwireRules(graph, rules)) findings.push(f);
     });
     return findings;
 };
