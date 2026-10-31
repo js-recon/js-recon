@@ -31,6 +31,11 @@ describe("computeRequiredVersion", () => {
         expect(computeRequiredVersion(rule)).toEqual({ min: "1.3.1-alpha.4" });
     });
 
+    it("resolves a rule type requirement (taintwire)", () => {
+        const rule = baseRule({ type: "taintwire", steps: [{ name: "s", message: "m", taintwire: { query: "q" } }] });
+        expect(computeRequiredVersion(rule)).toEqual({ min: "2.1.0-alpha.2" });
+    });
+
     it("resolves a rule type requirement (cs-mast-s)", () => {
         const rule = baseRule({
             type: "cs-mast-s",
