@@ -133,8 +133,9 @@ const nuxt_stringAnalysisJSFiles = async (url, threads: number = 1, output: stri
                 if (analyzedFiles.includes(resolvedPath)) {
                     continue;
                 }
-                pushToJsUrls(resolvedPath);
-                filesFound.push(resolvedPath);
+                if (pushToJsUrls(resolvedPath) > 0) {
+                    filesFound.push(resolvedPath);
+                }
             }
 
             analyzedFiles.push(js_url);
