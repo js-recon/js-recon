@@ -646,7 +646,13 @@ export function buildProgram(): Command {
             "Same as --determine-compatible-version, but rewrites the rule files in place",
             false
         )
+        .option(
+            "--analyze-taintwire",
+            "Run taintwire rules (Cypher taint queries over the AST graph); they are skipped otherwise",
+            false
+        )
         .action(async (cmd) => {
+            globalsUtil.setAnalyzeTaintwire(cmd.analyzeTaintwire);
             await analyze(
                 cmd.rules,
                 cmd.mappedJson,
@@ -842,6 +848,11 @@ export function buildProgram(): Command {
             "Resolve API calls in the map step with taintwire (Cypher queries over the AST graph) instead of the legacy Babel resolvers",
             false
         )
+        .option(
+            "--analyze-taintwire",
+            "Run taintwire rules in the analyze step (Cypher taint queries over the AST graph); they are skipped otherwise",
+            false
+        )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
         .option("-k, --insecure", "Disable SSL certificate verification", false)
         .option("--no-sandbox", "Disable browser sandbox")
@@ -997,6 +1008,7 @@ export function buildProgram(): Command {
             globalsUtil.setOpenapiChunkTag(cmd.mapOpenapiChunkTag);
             globalsUtil.setGraphqlEnabled(cmd.graphql !== false && !cmd.ngql);
             globalsUtil.setMapTaintwire(cmd.mapTaintwire);
+            globalsUtil.setAnalyzeTaintwire(cmd.analyzeTaintwire);
             globalsUtil.setDisableCache(cmd.disableCache);
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             globalsUtil.setCacheOnly(cmd.cacheOnly);

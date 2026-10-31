@@ -10,6 +10,7 @@ import { OpenAPISpec } from "../utility/openapiGenerator.js";
 import initRules from "./helpers/initRules.js";
 import { EngineOutput, generateEngineOutput } from "./helpers/outputHelper.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import { getAnalyzeTaintwire } from "../utility/globals.js";
 
 const availableTechs = {
     next: "Next.js",
@@ -165,9 +166,16 @@ const analyze = async (
 
     // iterate over the ruleFiles
     const ruleFindings: EngineOutput[] = [];
+    const taintwireRules: Rule[] = [];
     for (const ruleFile of compatibleRuleFiles) {
         // load the rule
         const rule: Rule = yaml.parse(fs.readFileSync(ruleFile, "utf8"));
+
+        // taintwire rules share one set of graphs, so they run together below
+        if (rule.type === "taintwire") {
+            if (rule.tech.includes(tech) || rule.tech.includes("all")) taintwireRules.push(rule);
+            continue;
+        }
 
         // run the rule
         const engineFindings: EngineOutput[] = await engine(rule, mappedJsonData, openapiData, tech);
@@ -175,6 +183,19 @@ const analyze = async (
         // add findings to the global findings
         if (engineFindings) {
             ruleFindings.push(...engineFindings);
+        }
+    }
+
+    if (taintwireRules.length > 0 && mappedJsonData) {
+        if (getAnalyzeTaintwire()) {
+            // dynamic import: the native graph database loads only when taintwire rules run
+            const { default: taintwireEngine } = await import("./engine/taintwireEngine.js");
+            ruleFindings.push(...(await taintwireEngine(taintwireRules, mappedJsonData)));
+        } else {
+            printMsg(
+                MSG.Info,
+                `[i] Skipped ${taintwireRules.length} taintwire rule(s); pass --analyze-taintwire to run them`
+            );
         }
     }
 

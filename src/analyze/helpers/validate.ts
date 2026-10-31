@@ -60,9 +60,13 @@ const validateRules = async (ruleFiles: string[]): Promise<{ allValid: boolean; 
         try {
             const ruleData = fs.readFileSync(ruleFile, "utf8");
             const rule = yaml.parse(ruleData);
-            ruleSchema.parse(rule);
 
-            if (!isVersionCompatible(rule.js_recon_version, CONFIG.version)) {
+            // Version first: a rule written for a newer js-recon (say, a rule type this version
+            // doesn't know) is skipped rather than failing schema validation.
+            if (
+                typeof rule?.js_recon_version === "string" &&
+                !isVersionCompatible(rule.js_recon_version, CONFIG.version)
+            ) {
                 printMsg(
                     MSG.Warn,
                     `[!] Skipping ${ruleFile}: requires js-recon ${rule.js_recon_version} (current: ${CONFIG.version})`
@@ -70,7 +74,10 @@ const validateRules = async (ruleFiles: string[]): Promise<{ allValid: boolean; 
                 continue;
             }
 
-            if (rule.js_recon_max_version && !isVersionCompatible(rule.js_recon_max_version, CONFIG.version)) {
+            if (
+                typeof rule?.js_recon_max_version === "string" &&
+                !isVersionCompatible(rule.js_recon_max_version, CONFIG.version)
+            ) {
                 printMsg(
                     MSG.Warn,
                     `[!] Skipping ${ruleFile}: requires js-recon ${rule.js_recon_max_version} (current: ${CONFIG.version})`
@@ -78,6 +85,7 @@ const validateRules = async (ruleFiles: string[]): Promise<{ allValid: boolean; 
                 continue;
             }
 
+            ruleSchema.parse(rule);
             compatibleRuleFiles.push(ruleFile);
         } catch (error: any) {
             allValid = false;
