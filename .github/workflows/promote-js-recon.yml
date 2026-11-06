@@ -339,10 +339,20 @@ jobs:
           path: js-recon-labs
           persist-credentials: false
 
+      # Old formulas can't validate rules newer than the release they ship with,
+      # so test against the rules release installed binaries download (releases/latest),
+      # not js-recon-rules main.
+      - name: Resolve latest js-recon-rules release
+        id: rules
+        run: echo "tag=$(gh api repos/js-recon/js-recon-rules/releases/latest --jq .tag_name)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Checkout js-recon-rules
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: js-recon/js-recon-rules
+          ref: ${{ steps.rules.outputs.tag }}
           path: js-recon-rules
           persist-credentials: false
 
