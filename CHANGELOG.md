@@ -13,7 +13,7 @@
 
 ### Changed
 
-- taintwire is updated to 0.2.0-alpha.1. `analyze --analyze-taintwire` now runs its rules through taintwire's pgq runner (`runPgq`), with the same results. (`analyze`, `run`)
+- taintwire is updated to 0.2.0-alpha.2. `analyze --analyze-taintwire` now runs its rules through taintwire's pgq runner (`runPgq`), with the same results. (`analyze`, `run`)
 - `--wordlist` entries now also feed `next_interceptRouteNextUrl`, as well as `next_routerStateForge`. (`lazyload`, `run`)
 
 ### Fixed
