@@ -3,7 +3,7 @@ import * as taintwire from "@js-recon/taintwire";
 import { resolveApiCalls, ApiCall, PREFILTER } from "../../map/taintwire/apiCalls.js";
 import { resolveServerActions } from "../../map/taintwire/next_js/index.js";
 
-const withGraph = async <T>(code: string, fn: (graph: taintwire.TaintGraph) => Promise<T>): Promise<T> => {
+const withGraph = async <T>(code: string, fn: (graph: taintwire.PookieGraph) => Promise<T>): Promise<T> => {
     const graph = await taintwire.import(code, { filename: "app.js", parser: "babel" });
     try {
         return await fn(graph);

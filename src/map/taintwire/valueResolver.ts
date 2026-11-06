@@ -1,4 +1,4 @@
-import type { TaintGraph } from "@js-recon/taintwire";
+import type { PookieGraph } from "@js-recon/taintwire";
 
 // Variants kept per expression; any fan-out past this is dropped.
 const MAX_VARIANTS = 16;
@@ -32,10 +32,10 @@ const cross = (parts: string[][]): string[] =>
  *
  * ponytail: flow-insensitive (taintwire's FLOWS_TO summarises every write to a binding), so a
  * compound `u += "/x"` loses its ordering and cycles are cut on revisit; property reads
- * (`cfg.url`), destructuring and webpack-module exports stay placeholders because taintwire
- * 0.1.1 has no property/heap or module pass, and nothing flows across files.
+ * (`cfg.url`) and destructuring stay placeholders because taintwire has no property/heap pass,
+ * and nothing flows across files: map loads files one graph batch at a time, not with addFiles().
  */
-export const makeResolver = (graph: TaintGraph) => {
+export const makeResolver = (graph: PookieGraph) => {
     /** graph.query, treating a node table that doesn't exist (no node of that AST type) as no rows. */
     const query = async (cypher: string, params?: Record<string, unknown>): Promise<Row[]> => {
         try {
@@ -132,15 +132,8 @@ export const makeResolver = (graph: TaintGraph) => {
             const [right] = await kids(id, "right");
             return cross([await values(left), await values(right)]);
         }
-        if (!STRUCTURAL.has(type)) {
-            const sources = await inflow(id);
-            if (sources.length > 0) {
-                const out: string[] = [];
-                for (const s of sources) out.push(...(await values(s)));
-                return uniq(out);
-            }
-        }
-        // `"/a/".concat(x)`: Babel/webpack output for template literals; unresolved as a call.
+        // `"/a/".concat(x)`: Babel/webpack output for template literals; ordered, so it's built
+        // before the inflow union (taintwire >= 0.2 flows the receiver and arguments into the call).
         if (type === "CallExpression") {
             const [callee] = await kids(id, "callee");
             if (label(callee) === "MemberExpression") {
@@ -151,6 +144,14 @@ export const makeResolver = (graph: TaintGraph) => {
                     for (const a of await kids(id, "arguments")) parts.push(await values(a));
                     return cross(parts);
                 }
+            }
+        }
+        if (!STRUCTURAL.has(type)) {
+            const sources = await inflow(id);
+            if (sources.length > 0) {
+                const out: string[] = [];
+                for (const s of sources) out.push(...(await values(s)));
+                return uniq(out);
             }
         }
         return [await placeholder(id)];

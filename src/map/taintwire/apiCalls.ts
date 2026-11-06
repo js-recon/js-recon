@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import * as taintwire from "@js-recon/taintwire";
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { listJsFiles } from "../../utility/listFiles.js";
 import * as globals from "../../utility/globals.js";
 import { looksLikeUrl, looksLikeStrictUrl } from "../../utility/urlUtils.js";
 import { makeResolver } from "./valueResolver.js";
@@ -122,7 +123,7 @@ const withBase = (base: string, url: string): string =>
     !base || /^https?:\/\//.test(url) ? url : `${base.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
 
 /** Every fetch, XHR, HTTP-client and config-object call in a taintwire graph, with its URL variants, method, headers and body. */
-export const resolveApiCalls = async (graph: taintwire.TaintGraph): Promise<ApiCall[]> => {
+export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<ApiCall[]> => {
     const { query, kids, values, render } = makeResolver(graph);
     const calls: ApiCall[] = [];
 
@@ -241,7 +242,7 @@ export interface GraphUnit {
  */
 export const forEachGraph = async (
     units: GraphUnit[],
-    use: (graph: taintwire.TaintGraph) => Promise<void>
+    use: (graph: taintwire.PookieGraph) => Promise<void>
 ): Promise<void> => {
     const batches: GraphUnit[][] = [[]];
     let batchBytes = 0;
@@ -256,7 +257,7 @@ export const forEachGraph = async (
     for (const batch of batches.filter((b) => b.length > 0)) {
         // The babel parser builds the same tree as cs-mast, recovers from syntax errors like
         // js-recon's own parser, and skips the per-node hash nothing here uses.
-        const graph = await taintwire.TaintGraph.open(":memory:", { parser: "babel" });
+        const graph = await taintwire.PookieGraph.open(":memory:", { parser: "babel" });
         try {
             for (const unit of batch) {
                 try {
@@ -322,15 +323,11 @@ const taintwire_resolveApiCalls = async (directory: string, frameworkName: strin
 
     let files: string[];
     try {
-        files = fs.readdirSync(directory, { recursive: true, encoding: "utf8" }) as string[];
+        files = listJsFiles(directory);
     } catch {
         printMsg(MSG.Err, `[!] Could not read directory: ${directory}`);
         return;
     }
-    files = files
-        .filter((f) => (f.endsWith(".js") || f.endsWith(".mjs")) && !f.includes("___subsequent_requests"))
-        .filter((f) => !fs.lstatSync(path.join(directory, f)).isDirectory())
-        .sort();
 
     const units: GraphUnit[] = [];
     for (const file of files) {

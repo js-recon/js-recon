@@ -1,166 +1,80 @@
-import type { TaintGraph } from "@js-recon/taintwire";
-import { Rule, TaintwireStep } from "../types/index.js";
+import type { PGRule, PGSelector, PgqFinding, PgqLocation, PookieGraph } from "@js-recon/taintwire";
+import { Rule } from "../types/index.js";
 import { Chunks } from "../../utility/interfaces.js";
 import { EngineOutput } from "../helpers/outputHelper.js";
 import { GraphUnit, forEachGraph } from "../../map/taintwire/apiCalls.js";
-import { makeResolver } from "../../map/taintwire/valueResolver.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 
-// Value-flow queries shared by every taintwire rule. FLOWS_TO
-// doesn't cross unresolved calls or member reads (`new URLSearchParams(location.search).get("q")`,
-// `location.hash.slice(1)`), so lenient/deep widen a source to the expressions wrapping it and a
-// sink to the expressions inside it, up to 3 levels.
-const WRAP = "['object', 'callee', 'arguments', 'argument', 'expression', 'expressions', 'quasis']";
-const WIDEN_SOURCE = `MATCH (s)-[e:SON*0..3]->(m) WHERE m.id IN $S AND all(r IN rels(e) WHERE r.key IN ${WRAP})
-RETURN DISTINCT m.id AS anchor, s.id AS id`;
-const WIDEN_SINK = `MATCH (x)-[e:SON*0..3]->(y) WHERE x.id IN $X AND all(r IN rels(e) WHERE r.key IN ${WRAP} OR r.key IN ['left', 'right', 'consequent', 'alternate'])
-RETURN DISTINCT x.id AS anchor, y.id AS id`;
-const FLOW = `MATCH p = (s)-[:FLOWS_TO|ARGUMENT_TO|RETURNS_TO* SHORTEST 1..30]->(x)
-WHERE s.id IN $S AND x.id IN $X
-RETURN s.id AS s, x.id AS x, length(p) AS hops`;
-const REACH = `MATCH p = (s)-[:FLOWS_TO|ARGUMENT_TO|RETURNS_TO* SHORTEST 1..30]->(x)
-WHERE s.id IN $S
-RETURN s.id AS s, x.id AS x, length(p) AS hops`;
-// Deep mode rounds: each one gets a value past one more opaque call or member read.
-const DEEP_ROUNDS = 4;
 // Characters of the sink expression kept in findingLocation.
 const MAX_CODE = 300;
 
-type Row = Record<string, any>;
-type Query = (cypher: string | string[], params?: Record<string, unknown>) => Promise<Row[]>;
-interface Hit {
-    source: string;
-    sink: string;
-    hops: number;
-}
+const SEVERITY_MSG = { info: MSG.Header, low: MSG.Warn, medium: MSG.Info, high: MSG.Err, critical: MSG.Err } as const;
 
-const SEVERITY_MSG = { info: MSG.Header, low: MSG.Warn, medium: MSG.Info, high: MSG.Err } as const;
+/** Rule metadata for an EngineOutput. */
+export type FindingMeta = Pick<EngineOutput, "ruleName" | "ruleType" | "ruleDescription" | "ruleAuthor" | "ruleTech">;
 
-/** `ids` mapped to themselves, plus every node the widening query returns for them (node -> the id it widens). */
-const widen = async (q: Query, cypher: string, key: string, ids: string[]): Promise<Map<string, string>> => {
-    const m = new Map(ids.map((id) => [id, id]));
-    for (const r of await q(cypher, { [key]: ids })) if (!m.has(r.id)) m.set(r.id, r.anchor);
-    return m;
-};
-
-/** Every sink in `sinks` that a source in `sources` reaches, with the shortest hop count found. */
-export const flows = async (
-    q: Query,
-    sources: string[],
-    sinks: string[],
-    mode: NonNullable<TaintwireStep["mode"]>
-): Promise<Hit[]> => {
-    const best = new Map<string, Hit>();
-    const add = (source: string, sink: string, hops: number) => {
-        if (!best.has(sink) || best.get(sink)!.hops > hops) best.set(sink, { source, sink, hops });
-    };
-    if (!sources.length || !sinks.length) return [];
-    const X = mode === "strict" ? new Map(sinks.map((id) => [id, id])) : await widen(q, WIDEN_SINK, "X", sinks);
-
-    if (mode !== "deep") {
-        const S =
-            mode === "strict" ? new Map(sources.map((id) => [id, id])) : await widen(q, WIDEN_SOURCE, "S", sources);
-        for (const [id, source] of S) if (X.has(id)) add(source, X.get(id)!, 0); // source inside the sink expression
-        for (const r of await q(FLOW, { S: [...S.keys()], X: [...X.keys()] })) add(S.get(r.s)!, X.get(r.x)!, r.hops);
-        return [...best.values()];
-    }
-
-    // deep: widen whatever the previous round reached and flow again, so
-    // `p = new URLSearchParams(location.search); t = p.get("k"); sink(t)` survives both opaque steps
-    const origin = new Map(sources.map((id) => [id, { source: id, hops: 0 }]));
-    let frontier = [...sources];
-    for (let i = 0; i < DEEP_ROUNDS && frontier.length; i++) {
-        for (const r of await q(WIDEN_SOURCE, { S: frontier })) {
-            if (!origin.has(r.id)) {
-                origin.set(r.id, origin.get(r.anchor)!);
-                frontier.push(r.id);
-            }
-        }
-        const next: string[] = [];
-        for (const r of await q(REACH, { S: frontier })) {
-            if (!origin.has(r.x)) {
-                const o = origin.get(r.s)!;
-                origin.set(r.x, { source: o.source, hops: o.hops + r.hops });
-                next.push(r.x);
-            }
-        }
-        frontier = next;
-    }
-    for (const [id, sink] of X) {
-        const o = origin.get(id);
-        if (o) add(o.source, sink, o.hops);
-    }
-    return [...best.values()];
+/** Print a runPgq finding and turn it into an EngineOutput (the location plus up to 300 characters of the sink's code). */
+export const toEngineOutput = async (graph: PookieGraph, f: PgqFinding, meta: FindingMeta): Promise<EngineOutput> => {
+    const at = (x: PgqLocation) => `${x.file}:${x.line}:${x.col}`;
+    const message = `[+] "${meta.ruleName}" found in chunk ${f.file}`;
+    const code = (await graph.code(f.id)).slice(0, MAX_CODE);
+    const via = f.source ? ` <- ${at(f.source)} (${f.hops} hops)` : "";
+    printMsg(SEVERITY_MSG[f.severity], message);
+    printMsg(MSG.Plain, `${at(f)}${via}\n${code}`);
+    return { ruleId: f.ruleId, ...meta, severity: f.severity, message, findingLocation: `// ${at(f)}${via}\n\n${code}` };
 };
 
 /**
- * Runs `rules` on one graph. Steps run in order; each step's row ids are a Cypher parameter
- * (`$<step name>`) for the steps after it, a step with `taintFrom` keeps only the rows a value
- * from that step flows into, and a step with no rows ends the rule. The last step's rows are the
- * findings.
+ * A YAML taintwire rule as a pgq rule. Steps run in order: each step's row ids are a Cypher parameter
+ * (`$<step name>`) for the steps after it, so step k `uses` every earlier step (an empty one empties it, as a step
+ * with no rows used to end the rule). `taintFrom` becomes `from`, with no hop limit unless the rule sets one. The
+ * last step's rows are the findings.
  */
-export const runTaintwireRules = async (graph: TaintGraph, rules: Rule[]): Promise<EngineOutput[]> => {
-    const { query } = makeResolver(graph);
-    const q: Query = async (cypher, params = {}) => {
-        // concat, not push(...rows): a large graph's flow query can return more rows than fit in an argument list
-        let rows: Row[] = [];
-        for (const c of [cypher].flat()) rows = rows.concat(await query(c, params));
-        return rows;
-    };
-    await query("CALL var_length_extend_max_depth=60");
-
-    const findings: EngineOutput[] = [];
-    for (const rule of rules) {
-        try {
-            const ids: Record<string, string[]> = {};
-            const rowById = new Map<string, Row>();
-            const hits = new Map<string, Hit>();
-            let rows: Row[] = [];
-            for (const step of rule.steps) {
-                const tw = step.taintwire!;
-                rows = [...new Map((await q(tw.query, ids)).map((r) => [r.id, r])).values()];
-                if (tw.taintFrom) {
-                    for (const h of await flows(
-                        q,
-                        ids[tw.taintFrom] ?? [],
-                        rows.map((r) => r.id),
-                        tw.mode ?? "deep"
-                    )) {
-                        if (tw.maxHops === undefined || h.hops <= tw.maxHops) hits.set(h.sink, h);
-                    }
-                    rows = rows.filter((r) => hits.has(r.id));
-                }
-                for (const r of rows) rowById.set(r.id, r);
-                ids[step.name] = rows.map((r) => r.id);
-                if (!rows.length) break;
-            }
-
-            for (const r of rows) {
-                const at = (x: Row) => `${x.file}:${x.line}:${x.col}`;
-                const hit = hits.get(r.id);
-                const source = hit && rowById.get(hit.source);
-                const message = `[+] "${rule.name}" found in chunk ${r.file}`;
-                const code = (await graph.code(r.id)).slice(0, MAX_CODE);
-                const via = source ? ` <- ${at(source)} (${hit!.hops} hops)` : "";
-                printMsg(SEVERITY_MSG[rule.severity], message);
-                printMsg(MSG.Plain, `${at(r)}${via}\n${code}`);
-                findings.push({
-                    ruleId: rule.id,
-                    ruleName: rule.name,
-                    ruleType: rule.type,
-                    ruleDescription: rule.description,
-                    ruleAuthor: rule.author,
-                    ruleTech: rule.tech,
-                    severity: rule.severity,
-                    message,
-                    findingLocation: `// ${at(r)}${via}\n\n${code}`,
-                });
-            }
-        } catch (e) {
-            printMsg(MSG.Err, `[!] taintwire rule ${rule.id} failed: ${(e as Error).message}`);
+export const toPgRule = (rule: Rule): PGRule => {
+    const steps: Record<string, PGSelector> = {};
+    let last: PGSelector | undefined;
+    let broken = false;
+    for (const step of rule.steps) {
+        const tw = step.taintwire!;
+        const sel: PGSelector = { cypher: [tw.query].flat().map((query) => ({ query })), uses: { ...steps } };
+        if (tw.taintFrom) {
+            if (!steps[tw.taintFrom]) broken = true; // no such earlier step: nothing flows, so no findings
+            sel.from = steps[tw.taintFrom];
+            sel.mode = tw.mode ?? "deep";
+            sel.maxHops = tw.maxHops ?? Number.POSITIVE_INFINITY;
         }
+        steps[step.name] = last = sel;
     }
-    return findings;
+    const lastStep = rule.steps[rule.steps.length - 1];
+    return {
+        id: rule.id,
+        name: rule.name,
+        severity: rule.severity,
+        message: lastStep?.message ?? rule.name,
+        return: last && !broken ? [last] : [],
+    };
+};
+
+/** Runs YAML taintwire `rules` on one graph through taintwire's pgq runner. */
+export const runTaintwireRules = async (graph: PookieGraph, rules: Rule[]): Promise<EngineOutput[]> => {
+    const { runPgq } = await import("@js-recon/taintwire");
+    const byId = new Map(rules.map((r) => [r.id, r]));
+    const { findings, errors } = await runPgq(graph, rules.map(toPgRule));
+    for (const e of errors) printMsg(MSG.Err, `[!] taintwire rule ${e.ruleId} failed: ${e.message}`);
+    const out: EngineOutput[] = [];
+    for (const f of findings) {
+        const r = byId.get(f.ruleId)!;
+        out.push(
+            await toEngineOutput(graph, f, {
+                ruleName: r.name,
+                ruleType: r.type,
+                ruleDescription: r.description,
+                ruleAuthor: r.author,
+                ruleTech: r.tech,
+            })
+        );
+    }
+    return out;
 };
 
 /**

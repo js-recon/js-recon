@@ -21,6 +21,7 @@ import fingerprint from "./fingerprint/index.js";
 import { applyHeapLimit } from "./utility/heap.js";
 import csMast from "./cs_mast/index.js";
 import sourcemaps from "./sourcemaps/index.js";
+import * as taintwire from "./taintwire/index.js";
 import completion from "./completion/index.js";
 import { getLoadedApplicationConfig, prepareProgramConfiguration } from "./config/applicationConfig.js";
 import {
@@ -1186,6 +1187,34 @@ export function buildProgram(): Command {
         .option("-o, --output <directory>", "Output directory for extracted source files", "extracted")
         .action(async (cmd) => {
             await sourcemaps(cmd.input, cmd.output);
+        });
+
+    const taintwireCmd = program
+        .command("taintwire")
+        .description("Build PookieGraphs (.pg) from JS files and query them with .pgq files");
+    taintwireCmd
+        .command("build")
+        .description("Load every JS file of a directory into one linked PookieGraph (.pg)")
+        .requiredOption("-d, --directory <directory>", "Directory of JS files (e.g. lazyload's output/<host>)")
+        .option("-o, --output <file>", "PookieGraph file to write", "graph.pg")
+        .action(async (cmd) => {
+            await taintwire.build(cmd.directory, cmd.output);
+        });
+    taintwireCmd
+        .command("analyze")
+        .description("Run .pgq query files against a PookieGraph")
+        .requiredOption("-g, --graph <file>", "PookieGraph (.pg) file built by `taintwire build`")
+        .requiredOption("-q, --queries <file/dir>", "A .pgq file, or a directory searched recursively for them")
+        .option("-o, --output <file>", "Findings JSON file", "taintwire.json")
+        .action(async (cmd) => {
+            await taintwire.analyze(cmd.graph, cmd.queries, cmd.output);
+        });
+    taintwireCmd
+        .command("validate")
+        .description("Check .pgq query files: evaluate, validate and compile every query")
+        .requiredOption("-q, --queries <file/dir>", "A .pgq file, or a directory searched recursively for them")
+        .action(async (cmd) => {
+            await taintwire.validate(cmd.queries);
         });
 
     program
