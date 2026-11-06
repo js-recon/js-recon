@@ -1,6 +1,6 @@
 # Change Log
 
-## 2.1.0-alpha.2 (unreleased)
+## 2.1.0-alpha.2 - 2026-11-06
 
 ### Security
 
@@ -9,11 +9,12 @@
 ### Added
 
 - New `taintwire` command builds a PookieGraph (a `.pg` file) once and queries it with `.pgq` files. `taintwire build -d <dir> -o graph.pg` loads every JS file of a directory (for example lazyload's `output/<host>`) into one [taintwire](https://taintwire.js-recon.io) graph. The files are linked through the webpack or Turbopack module registry, so a value can flow from one chunk into another. `taintwire analyze -g graph.pg -q <file/dir>` runs the rules in `.pgq` query files against it and writes the findings to `taintwire.json` (the `analyze.json` shape). `taintwire validate -q <file/dir>` checks query files without a graph. A `.pgq` file is a TypeScript module of Cypher selectors and rules, evaluated in a separate, locked-down Node.js process that can read only its query pack (Node.js 22.15 or newer); the [taintwire-queries](https://github.com/js-recon/taintwire-queries) repository is the public pack. New exit codes `37` to `40`. (`taintwire`)
+- New rule type `taintwire` and the `--analyze-taintwire` flag on `analyze` and `run`. A taintwire rule's steps are Cypher queries over a [taintwire](https://taintwire.js-recon.io) graph of each `mapped.json` chunk: a step's row ids are passed to later steps as `$<step name>`, and a step with `taintFrom` keeps only the rows that a value from that step flows into (strict, lenient or deep, with an optional `maxHops`), following variables, function arguments and return values. An optional rule-level `prefilter` regex skips chunks before they are loaded. The rules run through taintwire's pgq runner (`runPgq`). They are opt-in because loading the graphs is slow: without the flag, `analyze` prints `Skipped N taintwire rule(s)`. js-recon-rules 2.0.0 ships 31 of them. (`analyze`, `run`)
 - New Next.js lazyload method `next_interceptRouteNextUrl` covers intercepting routes defined under a path that middleware guards, such as `app/admin/@modal/(..)pub/[id]`. Next.js serves such a route through its public source route when the request sends a `Next-Url` header naming the guarded path, and the middleware matcher only sees the public URL. The method reads the intercepting-route rules from `_buildManifest.js` (`__rewrites.beforeFiles`, the `next-url` condition). When the crawl hasn't found that file, it builds the URL from the buildId in the landing page. Each rule's parent path and every crawled, `strings`-extracted or `--wordlist` path gets a plain request. A path that redirects then gets the same path and its `/_next/data/<buildId>/<path>.json` route with `x-nextjs-data: 1`. The path counts as middleware-guarded if a response carries a header only middleware sets (any `x-middleware-*`, `x-nextjs-redirect` or `x-nextjs-rewrite`). For each rule whose condition matches a guarded path, the public route is requested with `Next-Url: <parent>`, and chunk paths that are missing from the plain response are downloaded. Without a manifest, the method tries every pair of guarded path and public page, up to 200 pairs. It runs after `next_routerStateForge` on every Next.js lazyload pass, and `--include-methods`/`--exclude-methods` control it. (`lazyload`, `run`)
 
 ### Changed
 
-- taintwire is updated to 0.2.0-alpha.2. `analyze --analyze-taintwire` now runs its rules through taintwire's pgq runner (`runPgq`), with the same results. (`analyze`, `run`)
+- taintwire is updated to 0.2.0-alpha.2. (`analyze`, `map`, `run`, `taintwire`)
 - `--wordlist` entries now also feed `next_interceptRouteNextUrl`, as well as `next_routerStateForge`. (`lazyload`, `run`)
 
 ### Fixed
