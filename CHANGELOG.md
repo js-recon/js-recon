@@ -2,6 +2,10 @@
 
 ## 2.1.0-alpha.2 (unreleased)
 
+### Security
+
+- `npm audit` is clean again; it had reported 51 vulnerabilities (32 high). `zod` moves to 4.6.7: no 3.x release fixes the memory-exhaustion advisory, and `jimp`, which `cli-print-img` uses, is overridden to the same version. `undici` moves to 7.30.2. Transitive `@hono/node-server`, `body-parser`, `fast-uri`, `glob`, `ip-address`, `minimatch` and `qs` are updated, and `deepmerge` is pinned to 4.1.2, which predates the prototype-poisoning advisory. (all)
+
 ### Added
 
 - New `taintwire` command builds a PookieGraph (a `.pg` file) once and queries it with `.pgq` files. `taintwire build -d <dir> -o graph.pg` loads every JS file of a directory (for example lazyload's `output/<host>`) into one [taintwire](https://taintwire.js-recon.io) graph. The files are linked through the webpack or Turbopack module registry, so a value can flow from one chunk into another. `taintwire analyze -g graph.pg -q <file/dir>` runs the rules in `.pgq` query files against it and writes the findings to `taintwire.json` (the `analyze.json` shape). `taintwire validate -q <file/dir>` checks query files without a graph. A `.pgq` file is a TypeScript module of Cypher selectors and rules, evaluated in a separate, locked-down Node.js process that can read only its query pack (Node.js 22.15 or newer); the [taintwire-queries](https://github.com/js-recon/taintwire-queries) repository is the public pack. New exit codes `37` to `40`. (`taintwire`)
@@ -11,6 +15,10 @@
 
 - taintwire is updated to 0.2.0-alpha.1. `analyze --analyze-taintwire` now runs its rules through taintwire's pgq runner (`runPgq`), with the same results. (`analyze`, `run`)
 - `--wordlist` entries now also feed `next_interceptRouteNextUrl`, as well as `next_routerStateForge`. (`lazyload`, `run`)
+
+### Fixed
+
+- `mcp --server` no longer prints the banner. The banner is an image written to stdout, which is the server's JSON-RPC channel, so MCP clients got a corrupted stream. (`mcp`)
 
 ## 2.1.0-alpha.1 - 2026-10-21
 
