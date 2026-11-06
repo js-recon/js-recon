@@ -76,12 +76,11 @@ export const makeResolver = (graph: PookieGraph) => {
             .map((r) => r.id);
     };
 
-    const inflow = async (id: string): Promise<string[]> =>
+    const inflow = async (id: string, rels = "FLOWS_TO|ARGUMENT_TO|RETURNS_TO"): Promise<string[]> =>
         (
-            await query(
-                `MATCH (src)-[:FLOWS_TO|ARGUMENT_TO|RETURNS_TO]->(n:\`${label(id)}\`) WHERE n.id = $id RETURN DISTINCT src.id AS id`,
-                { id }
-            )
+            await query(`MATCH (src)-[:${rels}]->(n:\`${label(id)}\`) WHERE n.id = $id RETURN DISTINCT src.id AS id`, {
+                id,
+            })
         ).map((r) => r.id);
 
     // Placeholders use the legacy formats, so replaceUrlPlaceholders turns them into OpenAPI params.
@@ -134,11 +133,18 @@ export const makeResolver = (graph: PookieGraph) => {
         }
         // `"/a/".concat(x)`: Babel/webpack output for template literals; ordered, so it's built
         // before the inflow union (taintwire >= 0.2 flows the receiver and arguments into the call).
+        // A `concat` that resolves to a function of the app (RETURNS_TO) is that function's result instead.
         if (type === "CallExpression") {
             const [callee] = await kids(id, "callee");
             if (label(callee) === "MemberExpression") {
                 const [prop] = await kids(callee, "property");
                 if ((await row(prop)).name === "concat") {
+                    const returned = await inflow(id, "RETURNS_TO");
+                    if (returned.length > 0) {
+                        const out: string[] = [];
+                        for (const r of returned) out.push(...(await values(r)));
+                        return uniq(out);
+                    }
                     const [obj] = await kids(callee, "object");
                     const parts = [await values(obj)];
                     for (const a of await kids(id, "arguments")) parts.push(await values(a));

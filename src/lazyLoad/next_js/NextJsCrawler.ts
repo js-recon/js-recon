@@ -515,8 +515,10 @@ class NextJsCrawler {
         // internal#165: also feed in path-like strings already extracted by the `strings`
         // module and, optionally, --wordlist entries — additive to the crawl-discovered set,
         // so routes with no client-visible trace at all still get a forge attempt.
+        // The crawl target itself too: it's the first page a blind intercept pass should try, and a
+        // crawl doesn't always rediscover it.
         const candidateUrls = [
-            ...new Set([...pageUrls, ...this.readStringsPathCandidates(), ...this.readWordlistCandidates()]),
+            ...new Set([this.url, ...pageUrls, ...this.readStringsPathCandidates(), ...this.readWordlistCandidates()]),
         ];
         if (!this.stopped && shouldRunMethod("next_routerStateForge", this.includeMethods, this.excludeMethods)) {
             const { bypassedUrls, metadataOnlyBypassedUrls, legacyKeyAcceptedUrls, newJsUrls } =

@@ -47,7 +47,7 @@ const taintwireStepSchema = z.object({
     query: z.union([z.string(), z.array(z.string()).min(1)]),
     taintFrom: z.string().optional(),
     mode: z.enum(["strict", "lenient", "deep"]).optional(),
-    maxHops: z.number().int().positive().optional(),
+    maxHops: z.number().int().nonnegative().optional(),
 });
 
 const stepSchema = z.object({
@@ -78,9 +78,23 @@ export const ruleSchema = z
         steps: z.array(stepSchema),
     })
     .refine(
-        (r) => r.type !== "taintwire" || r.steps.every((s) => s.taintwire && /^[A-Za-z_]\w*$/.test(s.name)),
-        // step names become Cypher parameters ($<name>) for later steps
-        { message: "every step of a taintwire rule needs a taintwire block and a name made of letters, digits and _" }
+        (r) =>
+            r.type !== "taintwire" ||
+            r.steps.every((s) => s.taintwire && /^[A-Za-z_]\w*$/.test(s.name) && s.name !== "__proto__"),
+        // step names become Cypher parameters ($<name>) for later steps; __proto__ would be lost as an object key
+        {
+            message:
+                "every step of a taintwire rule needs a taintwire block and a name made of letters, digits and _ (not __proto__)",
+        }
+    )
+    .refine(
+        (r) =>
+            r.type !== "taintwire" ||
+            r.steps.every((s, i) => {
+                const from = s.taintwire?.taintFrom;
+                return from === undefined || r.steps.slice(0, i).some((earlier) => earlier.name === from);
+            }),
+        { message: "a taintwire step's taintFrom must name an earlier step" }
     )
     .refine(
         (r) => {

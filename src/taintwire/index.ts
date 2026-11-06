@@ -115,6 +115,8 @@ export const analyze = async (graphPath: string, queries: string, output: string
         }
         printMsg(MSG.Run, `[✓] ${out.length} finding(s)`);
         generateEngineOutput(output, out);
+        // the findings of the other rules are written; 41 tells a caller they are incomplete
+        if (errors.length) process.exitCode = 41;
     } finally {
         await graph.close();
     }

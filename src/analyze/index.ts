@@ -157,16 +157,18 @@ const analyze = async (
         const engineFindings: EngineOutput[] = await engine(rule, mappedJsonData, openapiData, tech);
 
         // add findings to the global findings
-        if (engineFindings) {
-            ruleFindings.push(...engineFindings);
-        }
+        // one at a time: spreading a large array into push() exceeds the argument limit
+        if (engineFindings) for (const finding of engineFindings) ruleFindings.push(finding);
     }
 
+    let failedTaintwireRules: string[] = [];
     if (taintwireRules.length > 0 && mappedJsonData) {
         if (getAnalyzeTaintwire()) {
             // dynamic import: the native graph database loads only when taintwire rules run
             const { default: taintwireEngine } = await import("./engine/taintwireEngine.js");
-            ruleFindings.push(...(await taintwireEngine(taintwireRules, mappedJsonData)));
+            const { findings, failedRules } = await taintwireEngine(taintwireRules, mappedJsonData);
+            for (const finding of findings) ruleFindings.push(finding);
+            failedTaintwireRules = failedRules;
         } else {
             printMsg(
                 MSG.Info,
@@ -177,6 +179,16 @@ const analyze = async (
 
     // generate the engine output
     generateEngineOutput(outputFile, ruleFindings);
+
+    // The findings of the other rules are written; the exit code tells a caller this analysis is incomplete.
+    // exitCode, not exit(): run keeps going to the report step and exits with it.
+    if (failedTaintwireRules.length > 0) {
+        printMsg(
+            MSG.Err,
+            `[!] ${failedTaintwireRules.length} taintwire rule(s) failed: ${failedTaintwireRules.join(", ")}`
+        );
+        process.exitCode = 41;
+    }
 };
 
 export default analyze;
