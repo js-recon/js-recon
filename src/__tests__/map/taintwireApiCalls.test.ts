@@ -3,7 +3,7 @@ import * as taintwire from "@js-recon/taintwire";
 import { resolveApiCalls, ApiCall, PREFILTER } from "../../map/taintwire/apiCalls.js";
 import { resolveServerActions } from "../../map/taintwire/next_js/index.js";
 
-const withGraph = async <T>(code: string, fn: (graph: taintwire.TaintGraph) => Promise<T>): Promise<T> => {
+const withGraph = async <T>(code: string, fn: (graph: taintwire.PookieGraph) => Promise<T>): Promise<T> => {
     const graph = await taintwire.import(code, { filename: "app.js", parser: "babel" });
     try {
         return await fn(graph);
@@ -21,6 +21,25 @@ const urlsOf = (calls: ApiCall[], kind: ApiCall["kind"]): string[] =>
         .sort();
 
 describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
+    it("uses the result of a webpack-exported function named concat instead of string concatenation", async () => {
+        const graph = await taintwire.PookieGraph.open(":memory:", { parser: "babel" });
+        try {
+            await graph.addFiles([
+                {
+                    filename: "a.js",
+                    code: `(self.webpackChunk=self.webpackChunk||[]).push([[1],{10:(e,t,n)=>{n.d(t,{concat:()=>c});function c(x){return "/api/real"}}}]);`,
+                },
+                {
+                    filename: "b.js",
+                    code: `(self.webpackChunk=self.webpackChunk||[]).push([[2],{20:(e,t,n)=>{var r=n(10);fetch(r.concat("/ignored"));}}]);`,
+                },
+            ]);
+            expect(urlsOf(await resolveApiCalls(graph), "fetch")).toEqual(["/api/real"]);
+        } finally {
+            await graph.close();
+        }
+    });
+
     it("resolves fetch URLs built from literals, templates, concat, conditionals and defaults", async () => {
         const calls = await resolve(`
             fetch("/api/a");

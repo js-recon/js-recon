@@ -71,6 +71,7 @@ npm run start -- <subcommand> [options]
 | `mcp`        | AI-powered CLI / one-shot chat (`-c`) / Model Context Protocol server (`--server`)    |
 | `cs-mast`    | Compute CS-MAST structural hashes for downloaded JS files; find hash collisions       |
 | `sourcemaps` | Extract source files from `.map` sourcemap file(s)                                    |
+| `taintwire`  | `build` a PookieGraph (`.pg`) from JS files; `analyze`/`validate` `.pgq` query files  |
 
 ## Key source files
 

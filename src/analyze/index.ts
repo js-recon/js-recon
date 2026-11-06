@@ -10,6 +10,8 @@ import { OpenAPISpec } from "../utility/openapiGenerator.js";
 import initRules from "./helpers/initRules.js";
 import { EngineOutput, generateEngineOutput } from "./helpers/outputHelper.js";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import { getAnalyzeTaintwire } from "../utility/globals.js";
+import { listFilesRecursive } from "../utility/listFiles.js";
 
 const availableTechs = {
     next: "Next.js",
@@ -17,31 +19,6 @@ const availableTechs = {
     react: "React",
     svelte: "Svelte/Astro",
     angular: "Angular",
-};
-
-/**
- * Recursively searches for YAML rule files in a directory.
- *
- * @param dir - The directory path to search for rule files
- * @returns An array of file paths to YAML rule files (.yml or .yaml)
- */
-const getRuleFilesRecursive = (dir: string): string[] => {
-    let results: string[] = [];
-    const list = fs.readdirSync(dir);
-    list.forEach(function (entry) {
-        // skip hidden directories (e.g. .github)
-        if (entry.startsWith(".")) return;
-        const file = path.join(dir, entry);
-        const stat = fs.statSync(file);
-        if (stat && stat.isDirectory()) {
-            results = results.concat(getRuleFilesRecursive(file));
-        } else {
-            if (file.endsWith(".yml") || file.endsWith(".yaml")) {
-                results.push(file);
-            }
-        }
-    });
-    return results;
 };
 
 /**
@@ -93,7 +70,7 @@ const analyze = async (
     let ruleFiles: string[] = [];
 
     if (fs.lstatSync(rulesPath).isDirectory()) {
-        ruleFiles = getRuleFilesRecursive(rulesPath);
+        ruleFiles = listFilesRecursive(rulesPath, [".yml", ".yaml"]);
     } else {
         ruleFiles = [rulesPath];
     }
@@ -165,21 +142,53 @@ const analyze = async (
 
     // iterate over the ruleFiles
     const ruleFindings: EngineOutput[] = [];
+    const taintwireRules: Rule[] = [];
     for (const ruleFile of compatibleRuleFiles) {
         // load the rule
         const rule: Rule = yaml.parse(fs.readFileSync(ruleFile, "utf8"));
+
+        // taintwire rules share one set of graphs, so they run together below
+        if (rule.type === "taintwire") {
+            if (rule.tech.includes(tech) || rule.tech.includes("all")) taintwireRules.push(rule);
+            continue;
+        }
 
         // run the rule
         const engineFindings: EngineOutput[] = await engine(rule, mappedJsonData, openapiData, tech);
 
         // add findings to the global findings
-        if (engineFindings) {
-            ruleFindings.push(...engineFindings);
+        // one at a time: spreading a large array into push() exceeds the argument limit
+        if (engineFindings) for (const finding of engineFindings) ruleFindings.push(finding);
+    }
+
+    let failedTaintwireRules: string[] = [];
+    if (taintwireRules.length > 0 && mappedJsonData) {
+        if (getAnalyzeTaintwire()) {
+            // dynamic import: the native graph database loads only when taintwire rules run
+            const { default: taintwireEngine } = await import("./engine/taintwireEngine.js");
+            const { findings, failedRules } = await taintwireEngine(taintwireRules, mappedJsonData);
+            for (const finding of findings) ruleFindings.push(finding);
+            failedTaintwireRules = failedRules;
+        } else {
+            printMsg(
+                MSG.Info,
+                `[i] Skipped ${taintwireRules.length} taintwire rule(s); pass --analyze-taintwire to run them`
+            );
         }
     }
 
     // generate the engine output
     generateEngineOutput(outputFile, ruleFindings);
+
+    // The findings of the other rules are written; the exit code tells a caller this analysis is incomplete.
+    // exitCode, not exit(): run keeps going to the report step and exits with it.
+    if (failedTaintwireRules.length > 0) {
+        printMsg(
+            MSG.Err,
+            `[!] ${failedTaintwireRules.length} taintwire rule(s) failed: ${failedTaintwireRules.join(", ")}`
+        );
+        process.exitCode = 41;
+    }
 };
 
 export default analyze;

@@ -2,12 +2,23 @@ import fs from "fs";
 import path from "path";
 import * as taintwire from "@js-recon/taintwire";
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { listJsFiles } from "../../utility/listFiles.js";
 import * as globals from "../../utility/globals.js";
 import { looksLikeUrl, looksLikeStrictUrl } from "../../utility/urlUtils.js";
 import { makeResolver } from "./valueResolver.js";
 
-// Same per-file cap as the legacy fetch resolver.
+// Same per-file cap as the legacy fetch resolver: one unit's graph is never bigger than this much source.
 const MAX_MAP_FILE_SIZE_BYTES = 8 * 1024 * 1024;
+
+/** True (with a warning) when a unit of `size` bytes is too big to load into a graph. */
+export const tooBigForGraph = (name: string, size: number): boolean => {
+    if (size <= MAX_MAP_FILE_SIZE_BYTES) return false;
+    printMsg(
+        MSG.Warn,
+        `[!] Skipping ${name} (${(size / 1024 / 1024).toFixed(1)} MB > ${MAX_MAP_FILE_SIZE_BYTES / 1024 / 1024} MB limit); taintwire results may be incomplete`
+    );
+    return true;
+};
 // Source bytes loaded into one in-memory graph. One graph per file would open Ladybug hundreds of
 // times on large targets, and each open reserves address space that is only released on GC.
 const MAX_GRAPH_BYTES = 2 * 1024 * 1024;
@@ -122,7 +133,7 @@ const withBase = (base: string, url: string): string =>
     !base || /^https?:\/\//.test(url) ? url : `${base.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
 
 /** Every fetch, XHR, HTTP-client and config-object call in a taintwire graph, with its URL variants, method, headers and body. */
-export const resolveApiCalls = async (graph: taintwire.TaintGraph): Promise<ApiCall[]> => {
+export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<ApiCall[]> => {
     const { query, kids, values, render } = makeResolver(graph);
     const calls: ApiCall[] = [];
 
@@ -237,15 +248,17 @@ export interface GraphUnit {
 
 /**
  * Loads `units` into in-memory taintwire graphs of about MAX_GRAPH_BYTES each and calls `use` on
- * each graph before closing it.
+ * each graph before closing it. A unit over MAX_MAP_FILE_SIZE_BYTES is skipped: a graph's memory grows
+ * with its source, and a lone oversized unit would still get a graph of its own.
  */
 export const forEachGraph = async (
     units: GraphUnit[],
-    use: (graph: taintwire.TaintGraph) => Promise<void>
+    use: (graph: taintwire.PookieGraph) => Promise<void>
 ): Promise<void> => {
     const batches: GraphUnit[][] = [[]];
     let batchBytes = 0;
     for (const unit of units) {
+        if (tooBigForGraph(unit.name, unit.size)) continue;
         if (batchBytes + unit.size > MAX_GRAPH_BYTES && batches[batches.length - 1].length > 0) {
             batches.push([]);
             batchBytes = 0;
@@ -256,7 +269,7 @@ export const forEachGraph = async (
     for (const batch of batches.filter((b) => b.length > 0)) {
         // The babel parser builds the same tree as cs-mast, recovers from syntax errors like
         // js-recon's own parser, and skips the per-node hash nothing here uses.
-        const graph = await taintwire.TaintGraph.open(":memory:", { parser: "babel" });
+        const graph = await taintwire.PookieGraph.open(":memory:", { parser: "babel" });
         try {
             for (const unit of batch) {
                 try {
@@ -322,27 +335,17 @@ const taintwire_resolveApiCalls = async (directory: string, frameworkName: strin
 
     let files: string[];
     try {
-        files = fs.readdirSync(directory, { recursive: true, encoding: "utf8" }) as string[];
+        files = listJsFiles(directory);
     } catch {
         printMsg(MSG.Err, `[!] Could not read directory: ${directory}`);
         return;
     }
-    files = files
-        .filter((f) => (f.endsWith(".js") || f.endsWith(".mjs")) && !f.includes("___subsequent_requests"))
-        .filter((f) => !fs.lstatSync(path.join(directory, f)).isDirectory())
-        .sort();
 
     const units: GraphUnit[] = [];
     for (const file of files) {
         const filePath = path.join(directory, file);
         const size = fs.statSync(filePath).size;
-        if (size > MAX_MAP_FILE_SIZE_BYTES) {
-            printMsg(
-                MSG.Warn,
-                `[!] Skipping ${file} (${(size / 1024 / 1024).toFixed(1)} MB > ${MAX_MAP_FILE_SIZE_BYTES / 1024 / 1024} MB limit) — API call coverage may be incomplete`
-            );
-            continue;
-        }
+        if (tooBigForGraph(file, size)) continue; // before reading it for the prefilter
         if (!PREFILTER.test(fs.readFileSync(filePath, "utf-8"))) continue;
         units.push({ name: file, size, code: () => fs.readFileSync(filePath, "utf-8") });
     }

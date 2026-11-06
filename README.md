@@ -149,6 +149,7 @@ Oxylabs traffic goes through the datacenter entry endpoint `dc.oxylabs.io:8000` 
 | `load`        | Populates the response cache from a Caido or Burp Suite export.                  | [Read Docs](https://js-recon.io/docs/docs/modules/load)        |
 | `cs-mast`     | Computes CS-MAST structural hashes for JS files and finds hash collisions.       | [Read Docs](https://js-recon.io/docs/docs/modules/cs-mast)     |
 | `sourcemaps`  | Extracts original source files from `.map` sourcemap files.                      | [Read Docs](https://js-recon.io/docs/docs/modules/sourcemaps)  |
+| `taintwire`   | Builds a PookieGraph (`.pg`) from JS files and queries it with `.pgq` rules.     | [Read Docs](https://js-recon.io/docs/docs/modules/taintwire)   |
 | `completion`  | Generates shell completion scripts for bash, zsh, or fish.                       | [Read Docs](https://js-recon.io/docs/docs/modules/completion)  |
 
 ## Key Features

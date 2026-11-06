@@ -7,7 +7,9 @@ export interface Rule {
     js_recon_max_version?: string;
     tech: ("next" | "vue" | "react" | "svelte" | "angular" | "all")[];
     severity: "info" | "low" | "medium" | "high";
-    type: "request" | "ast" | "cs-mast-s";
+    type: "request" | "ast" | "cs-mast-s" | "taintwire";
+    /** taintwire only: chunks matching no rule's prefilter are never loaded into a graph */
+    prefilter?: string;
     steps: Step[];
 }
 
@@ -21,6 +23,7 @@ export type Step = {
     checkAssignmentExist?: CheckAssignmentExistStep;
     regexMatch?: RegexMatchStep;
     csMastS?: CsMastSStep;
+    taintwire?: TaintwireStep;
 };
 
 export type RegexMatchStep = {
@@ -69,4 +72,14 @@ export type CheckAssignmentExistStep = {
 
 export type CsMastSStep = {
     signature: string;
+};
+
+export type TaintwireStep = {
+    /** Cypher returning `id` (plus `file`, `line`, `col`); a list is run variant by variant and concatenated */
+    query: string | string[];
+    /** keep only rows that a value from this earlier step's rows flows into */
+    taintFrom?: string;
+    /** strict: source node to sink node; lenient: both ends widened through wrappers; deep (default): lenient, iterated */
+    mode?: "strict" | "lenient" | "deep";
+    maxHops?: number;
 };

@@ -53,7 +53,7 @@ const hint = (value: string | undefined): string => {
  * Every `createServerReference(...)` in a taintwire graph, with its call-site argument hints when
  * the reference is called in the same module (cross-module calls aren't followed).
  */
-export const resolveServerActions = async (graph: taintwire.TaintGraph): Promise<ServerAction[]> => {
+export const resolveServerActions = async (graph: taintwire.PookieGraph): Promise<ServerAction[]> => {
     const { query, kids, values } = makeResolver(graph);
     const actions: ServerAction[] = [];
     for (const cypher of SERVER_ACTIONS) {

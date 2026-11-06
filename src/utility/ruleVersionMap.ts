@@ -22,6 +22,7 @@ export const RULE_VERSION_MAP: Record<string, VersionRequirement> = {
     "tech.svelte": { min: "1.3.1-alpha.4" },
     "tech.angular": { min: "1.4.1-alpha.4" },
     "type.cs-mast-s": { min: "1.4.1-alpha.5" },
+    "type.taintwire": { min: "2.1.0-alpha.2" },
     "step.esquery.inScopeOf": { min: "1.3.1-alpha.1" },
     "step.esquery.taintFrom": { min: "1.3.1-alpha.2" },
     "step.regexMatch": { min: "1.3.1-alpha.4" },

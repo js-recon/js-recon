@@ -252,7 +252,7 @@ export const extractParamNameCandidatesFromFlightBody = (body: string, knownValu
 };
 
 /** Resolves an extracted chunk path (with or without a `_next/` prefix) to an absolute URL. */
-const resolveChunkUrl = (chunkPath: string, origin: string): string => {
+export const resolveChunkUrl = (chunkPath: string, origin: string): string => {
     const normalized = chunkPath.startsWith("_next/") ? chunkPath : `_next/${chunkPath}`;
     return new URL(`/${normalized}`, origin).toString();
 };

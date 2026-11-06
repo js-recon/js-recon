@@ -21,6 +21,7 @@ import fingerprint from "./fingerprint/index.js";
 import { applyHeapLimit } from "./utility/heap.js";
 import csMast from "./cs_mast/index.js";
 import sourcemaps from "./sourcemaps/index.js";
+import * as taintwire from "./taintwire/index.js";
 import completion from "./completion/index.js";
 import { getLoadedApplicationConfig, prepareProgramConfiguration } from "./config/applicationConfig.js";
 import {
@@ -179,7 +180,7 @@ export function buildProgram(): Command {
         )
         .option(
             "--wordlist <file>",
-            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to next_routerStateForge's candidate URLs"
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of next_routerStateForge and next_interceptRouteNextUrl"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
@@ -646,7 +647,13 @@ export function buildProgram(): Command {
             "Same as --determine-compatible-version, but rewrites the rule files in place",
             false
         )
+        .option(
+            "--analyze-taintwire",
+            "Run taintwire rules (Cypher taint queries over the AST graph); they are skipped otherwise",
+            false
+        )
         .action(async (cmd) => {
+            globalsUtil.setAnalyzeTaintwire(cmd.analyzeTaintwire);
             await analyze(
                 cmd.rules,
                 cmd.mappedJson,
@@ -842,6 +849,11 @@ export function buildProgram(): Command {
             "Resolve API calls in the map step with taintwire (Cypher queries over the AST graph) instead of the legacy Babel resolvers",
             false
         )
+        .option(
+            "--analyze-taintwire",
+            "Run taintwire rules in the analyze step (Cypher taint queries over the AST graph); they are skipped otherwise",
+            false
+        )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
         .option("-k, --insecure", "Disable SSL certificate verification", false)
         .option("--no-sandbox", "Disable browser sandbox")
@@ -865,7 +877,7 @@ export function buildProgram(): Command {
         )
         .option(
             "--wordlist <file>",
-            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to next_routerStateForge's candidate URLs"
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of next_routerStateForge and next_interceptRouteNextUrl"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
@@ -997,6 +1009,7 @@ export function buildProgram(): Command {
             globalsUtil.setOpenapiChunkTag(cmd.mapOpenapiChunkTag);
             globalsUtil.setGraphqlEnabled(cmd.graphql !== false && !cmd.ngql);
             globalsUtil.setMapTaintwire(cmd.mapTaintwire);
+            globalsUtil.setAnalyzeTaintwire(cmd.analyzeTaintwire);
             globalsUtil.setDisableCache(cmd.disableCache);
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             globalsUtil.setCacheOnly(cmd.cacheOnly);
@@ -1174,6 +1187,34 @@ export function buildProgram(): Command {
         .option("-o, --output <directory>", "Output directory for extracted source files", "extracted")
         .action(async (cmd) => {
             await sourcemaps(cmd.input, cmd.output);
+        });
+
+    const taintwireCmd = program
+        .command("taintwire")
+        .description("Build PookieGraphs (.pg) from JS files and query them with .pgq files");
+    taintwireCmd
+        .command("build")
+        .description("Load every JS file of a directory into one linked PookieGraph (.pg)")
+        .requiredOption("-d, --directory <directory>", "Directory of JS files (e.g. lazyload's output/<host>)")
+        .option("-o, --output <file>", "PookieGraph file to write", "graph.pg")
+        .action(async (cmd) => {
+            await taintwire.build(cmd.directory, cmd.output);
+        });
+    taintwireCmd
+        .command("analyze")
+        .description("Run .pgq query files against a PookieGraph")
+        .requiredOption("-g, --graph <file>", "PookieGraph (.pg) file built by `taintwire build`")
+        .requiredOption("-q, --queries <file/dir>", "A .pgq file, or a directory searched recursively for them")
+        .option("-o, --output <file>", "Findings JSON file", "taintwire.json")
+        .action(async (cmd) => {
+            await taintwire.analyze(cmd.graph, cmd.queries, cmd.output);
+        });
+    taintwireCmd
+        .command("validate")
+        .description("Check .pgq query files: evaluate, validate and compile every query")
+        .requiredOption("-q, --queries <file/dir>", "A .pgq file, or a directory searched recursively for them")
+        .action(async (cmd) => {
+            await taintwire.validate(cmd.queries);
         });
 
     program

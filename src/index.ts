@@ -13,7 +13,9 @@ registerFatalHandlers();
 const args = process.argv.slice(2);
 const isVersionFlag = args.length === 1 && (args[0] === "-V" || args[0] === "--version");
 const isCompletionCmd = args[0] === "completion";
-if (!isVersionFlag && !isCompletionCmd) {
+// `mcp --server` speaks JSON-RPC on stdout, so the banner (an image written to stdout) would corrupt the stream.
+const isMcpServer = args.includes("mcp") && args.includes("--server");
+if (!isVersionFlag && !isCompletionCmd && !isMcpServer) {
     await (async () => printBanner())();
 }
 

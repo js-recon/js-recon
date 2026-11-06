@@ -646,3 +646,14 @@ export const setMapTaintwire = (value: boolean): void => {
 export const getMapTaintwire = (): boolean => {
     return mapTaintwire;
 };
+
+/** Whether `analyze` runs `type: taintwire` rules (they are skipped otherwise: loading the graphs is slow) */
+export let analyzeTaintwire = false;
+
+export const setAnalyzeTaintwire = (value: boolean): void => {
+    analyzeTaintwire = value;
+};
+
+export const getAnalyzeTaintwire = (): boolean => {
+    return analyzeTaintwire;
+};
