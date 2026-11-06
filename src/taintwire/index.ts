@@ -76,7 +76,10 @@ export const build = async (directory: string, output: string) => {
         throw e;
     }
     const mb = (fs.statSync(output).size / 1024 / 1024).toFixed(1);
-    printMsg(MSG.Run, `[✓] PookieGraph written to ${output} (${mb} MB, ${((Date.now() - started) / 1000).toFixed(1)}s)`);
+    printMsg(
+        MSG.Run,
+        `[✓] PookieGraph written to ${output} (${mb} MB, ${((Date.now() - started) / 1000).toFixed(1)}s)`
+    );
 };
 
 /** Run the .pgq rules at `queries` against the PookieGraph at `graphPath`; writes findings to `output` as JSON. */

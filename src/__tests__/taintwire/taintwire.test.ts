@@ -64,10 +64,16 @@ describe("taintwire build / analyze / validate", { timeout: 120000 }, () => {
             await validate(dir);
 
             const exit = exits();
-            fs.writeFileSync(path.join(dir, "bad.pgq"), `export default { id: "b", name: "b", severity: "urgent", message: "m", return: [] };`);
+            fs.writeFileSync(
+                path.join(dir, "bad.pgq"),
+                `export default { id: "b", name: "b", severity: "urgent", message: "m", return: [] };`
+            );
             await expect(validate(dir)).rejects.toThrow("exit 40");
             fs.rmSync(path.join(dir, "bad.pgq"));
-            fs.writeFileSync(path.join(dir, "syntax.pgq"), `export default { id: "s", name: "s", severity: "low", message: "m", return: [{ query: "MATCH (n RETURN n" }] };`);
+            fs.writeFileSync(
+                path.join(dir, "syntax.pgq"),
+                `export default { id: "s", name: "s", severity: "low", message: "m", return: [{ query: "MATCH (n RETURN n" }] };`
+            );
             await expect(validate(dir)).rejects.toThrow("exit 40");
             await expect(validate(path.join(dir, "missing"))).rejects.toThrow("exit 40");
             expect(exit).toHaveBeenCalledTimes(3);

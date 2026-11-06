@@ -21,7 +21,13 @@ export const toEngineOutput = async (graph: PookieGraph, f: PgqFinding, meta: Fi
     const via = f.source ? ` <- ${at(f.source)} (${f.hops} hops)` : "";
     printMsg(SEVERITY_MSG[f.severity], message);
     printMsg(MSG.Plain, `${at(f)}${via}\n${code}`);
-    return { ruleId: f.ruleId, ...meta, severity: f.severity, message, findingLocation: `// ${at(f)}${via}\n\n${code}` };
+    return {
+        ruleId: f.ruleId,
+        ...meta,
+        severity: f.severity,
+        message,
+        findingLocation: `// ${at(f)}${via}\n\n${code}`,
+    };
 };
 
 /**
