@@ -307,7 +307,7 @@ export const startMcpServer = async (): Promise<void> => {
             inputSchema: {
                 name: z.string().describe("Skill name (see list_skills)"),
                 params: z
-                    .record(z.string())
+                    .record(z.string(), z.string())
                     .default({})
                     .describe("Parameter map for the skill (e.g. { target: 'https://example.com' })"),
             },

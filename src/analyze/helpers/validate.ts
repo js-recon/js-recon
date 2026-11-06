@@ -90,8 +90,8 @@ const validateRules = async (ruleFiles: string[]): Promise<{ allValid: boolean; 
         } catch (error: any) {
             allValid = false;
             printMsg(MSG.Err, `[!] Invalid rule in ${ruleFile}:`);
-            if (error.errors) {
-                for (const err of error.errors) {
+            if (error.issues) {
+                for (const err of error.issues) {
                     printMsg(MSG.Err, `  - ${err.path.join(".")} - ${err.message}`);
                 }
             }
