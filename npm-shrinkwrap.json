@@ -27,7 +27,7 @@
                 "cheerio": "1.2.0",
                 "cli-highlight": "2.1.11",
                 "cli-progress": "3.12.0",
-                "commander": "14.0.0",
+                "commander": "15.0.0",
                 "datatables.net": "2.3.8",
                 "datatables.net-dt": "2.3.8",
                 "esquery": "1.7.0",
@@ -3837,12 +3837,12 @@
             "license": "MIT"
         },
         "node_modules/commander": {
-            "version": "14.0.0",
-            "resolved": "https://registry.npmjs.org/commander/-/commander-14.0.0.tgz",
-            "integrity": "sha512-2uM9rYjPvyq39NwLRqaiLtWHyDC1FvryJDa2ATTVims5YAS4PupsEQsDvP14FqhFr0P49CYDugi59xaxJlTXRA==",
+            "version": "15.0.0",
+            "resolved": "https://registry.npmjs.org/commander/-/commander-15.0.0.tgz",
+            "integrity": "sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==",
             "license": "MIT",
             "engines": {
-                "node": ">=20"
+                "node": ">=22.12.0"
             }
         },
         "node_modules/content-disposition": {
