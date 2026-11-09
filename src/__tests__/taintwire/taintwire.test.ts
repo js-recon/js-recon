@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import * as tar from "tar";
 import { build, analyze, validate } from "../../taintwire/index.js";
 
 const AT = "n.file AS file, n.line AS line, n.col AS col";
@@ -52,11 +53,19 @@ describe("taintwire build / analyze / validate", { timeout: 120000 }, () => {
             await analyze(tw, q, out);
             expect(JSON.parse(fs.readFileSync(out, "utf-8"))).toEqual(findings);
 
+            // a manifest that names a graph outside the archive is rejected, and that graph is left alone
+            const evil = path.join(dir, "evil");
+            fs.mkdirSync(evil);
+            fs.writeFileSync(path.join(evil, "manifest.json"), JSON.stringify({ format: 1, units: [{ pg: "../app.pg" }] }));
+            await tar.c({ file: path.join(dir, "evil.tw"), cwd: evil }, ["manifest.json"]);
+
             const exit = exits();
             await expect(build(js, pg)).rejects.toThrow("exit 38"); // output exists
             await expect(build(path.join(dir, "nope"), path.join(dir, "x.pg"))).rejects.toThrow("exit 37");
             await expect(analyze(path.join(dir, "nope.pg"), q, out)).rejects.toThrow("exit 39");
-            expect(exit).toHaveBeenCalledTimes(3);
+            await expect(analyze(path.join(dir, "evil.tw"), q, out)).rejects.toThrow("exit 39");
+            expect(fs.existsSync(pg)).toBe(true);
+            expect(exit).toHaveBeenCalledTimes(4);
         } finally {
             fs.rmSync(dir, { recursive: true, force: true });
         }

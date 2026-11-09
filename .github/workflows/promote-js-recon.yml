@@ -344,7 +344,10 @@ jobs:
       # not js-recon-rules main.
       - name: Resolve latest js-recon-rules release
         id: rules
-        run: echo "tag=$(gh api repos/js-recon/js-recon-rules/releases/latest --jq .tag_name)" >> "$GITHUB_OUTPUT"
+        run: |
+          tag=$(gh api repos/js-recon/js-recon-rules/releases/latest --jq .tag_name)
+          [ -n "$tag" ] || { echo "::error::No js-recon-rules release found"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -352,7 +355,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: js-recon/js-recon-rules
-          ref: ${{ steps.rules.outputs.tag }}
+          ref: refs/tags/${{ steps.rules.outputs.tag }}
           path: js-recon-rules
           persist-credentials: false
 

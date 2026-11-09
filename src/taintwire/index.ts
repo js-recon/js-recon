@@ -95,9 +95,8 @@ export const build = async (directory: string, output: string, limits: Limits = 
         await writeGraph(output, directory, names, limits);
     } else {
         const tw = await import("@js-recon/taintwire");
-        const tmp = `${output}.tmp`;
-        fs.rmSync(tmp, { recursive: true, force: true });
-        fs.mkdirSync(tmp, { recursive: true });
+        // A fresh directory next to the output (same disk), so cleanup never touches anything else.
+        const tmp = fs.mkdtempSync(path.join(path.dirname(path.resolve(output)), ".jsr-tw-"));
         try {
             // One file at a time: only its module ids are kept.
             const links = new Map(
@@ -140,14 +139,6 @@ export const analyze = async (graphPath: string, queries: string, output: string
     const { tw, files, rules } = await loadQueries(queries);
     let dir: string | undefined;
     let graphs = [graphPath];
-    if (graphPath.endsWith(".tw")) {
-        dir = fs.mkdtempSync(path.join(os.tmpdir(), "jsr-tw-"));
-        await tar.x({ file: graphPath, cwd: dir });
-        const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf-8")) as {
-            units: { pg: string }[];
-        };
-        graphs = manifest.units.map((u) => path.join(dir!, u.pg));
-    }
     const { toEngineOutput } = await import("../analyze/engine/taintwireEngine.js");
     const byId = new Map(rules.map((r) => [r.id, r]));
     const out: EngineOutput[] = [];
@@ -155,6 +146,32 @@ export const analyze = async (graphPath: string, queries: string, output: string
     const failed = new Set<string>();
     let cypherErrors: string[] = [];
     try {
+        if (graphPath.endsWith(".tw")) {
+            dir = fs.mkdtempSync(path.join(os.tmpdir(), "jsr-tw-"));
+            // Regular files only: a link entry could make a unit name a file outside the archive.
+            await tar.x({ file: graphPath, cwd: dir, filter: (_p, e) => (e as { type?: string }).type === "File" });
+            let pgs: unknown;
+            try {
+                pgs = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf-8")).units.map(
+                    (u: { pg: unknown }) => u.pg
+                );
+            } catch {
+                pgs = undefined;
+            }
+            // Each unit must be a file at the top of the archive, so nothing outside it is opened or deleted.
+            const valid = (p: unknown) =>
+                typeof p === "string" &&
+                path.basename(p) === p &&
+                p !== ".." &&
+                fs.existsSync(path.join(dir!, p)) &&
+                fs.lstatSync(path.join(dir!, p)).isFile();
+            if (!Array.isArray(pgs) || !pgs.length || !pgs.every(valid)) {
+                fs.rmSync(dir, { recursive: true, force: true }); // process.exit skips the finally below
+                printMsg(MSG.Err, `[!] ${graphPath} is not a valid .tw file: its manifest.json must list its graphs`);
+                process.exit(39);
+            }
+            graphs = (pgs as string[]).map((p) => path.join(dir!, p));
+        }
         printMsg(MSG.Header, `[i] Running ${rules.length} rule(s) from ${files.length} .pgq file(s) on ${graphPath}`);
         for (const [i, pg] of graphs.entries()) {
             if (graphs.length > 1) printMsg(MSG.Info, `[i] Graph ${i + 1}/${graphs.length}`);
