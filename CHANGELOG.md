@@ -4,7 +4,7 @@
 
 ### Added
 
-- `taintwire build -o <file>.tw` writes one PookieGraph per unit instead of one graph of every file: each file plus the files that define the modules it loads through the webpack or Turbopack registry, transitively. The unit graphs and a `manifest.json` are packed into one `.tw` file (a tar archive), and `taintwire analyze -g <file>.tw` runs the rules on each unit's graph in turn, reporting a finding once even if several units contain it. A `.tw` saves memory only when every unit is much smaller than the app; in most framework builds the shared framework and vendor chunks are loaded into every unit, so it is larger and slower than a `.pg`. The default output stays `graph.pg`. (`taintwire`)
+- `taintwire build -o <file>.tw` writes one PookieGraph per unit instead of one graph of every file: each file plus the files that define the modules it loads through the webpack or Turbopack registry, transitively. The unit graphs and a `manifest.json` are packed into one `.tw` file (a tar archive), and `taintwire analyze -g <file>.tw` runs the rules on each unit's graph in turn, reporting a finding once even if several units contain it. A `.tw` saves memory only when every unit is much smaller than the app; in most framework builds the shared framework and vendor chunks are loaded into every unit, so it is larger and slower than a `.pg`. The default output stays `graph.pg`. A `.tw` whose `manifest.json` is missing, malformed or empty, or names a file outside the archive, exits with `39`. (`taintwire`)
 - `--buffer-pool <MB>` and `--threads <n>` on `taintwire build` and `taintwire analyze` set the memory taintwire's database may use per graph and its query threads. (`taintwire`)
 
 ### Changed
