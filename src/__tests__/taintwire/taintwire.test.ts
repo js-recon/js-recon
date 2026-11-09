@@ -46,6 +46,12 @@ describe("taintwire build / analyze / validate", { timeout: 120000 }, () => {
             expect(findings[0]).toMatchObject({ ruleId: "hash_html", ruleType: "pgq", severity: "high" });
             expect(findings[0].findingLocation).toMatch(/^\/\/ a\.js:1:\d+ <- a\.js:1:\d+ \(\d+ hops\)/);
 
+            // one graph per unit, packed into a .tw, finds the same
+            const tw = path.join(dir, "app.tw");
+            await build(js, tw);
+            await analyze(tw, q, out);
+            expect(JSON.parse(fs.readFileSync(out, "utf-8"))).toEqual(findings);
+
             const exit = exits();
             await expect(build(js, pg)).rejects.toThrow("exit 38"); // output exists
             await expect(build(path.join(dir, "nope"), path.join(dir, "x.pg"))).rejects.toThrow("exit 37");

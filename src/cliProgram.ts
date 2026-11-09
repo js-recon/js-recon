@@ -50,6 +50,16 @@ function parseMaxHeapMb(rawValue: string | undefined): number {
     return parsed;
 }
 
+/** Validates a positive integer option value (e.g. `--threads`), exiting with an error otherwise. */
+function parsePositiveInt(flag: string, rawValue: string): number {
+    const parsed = Number(rawValue);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+        console.error(chalk.red(`[!] Invalid ${flag} value: ${rawValue}. Use a positive integer.`));
+        process.exit(1);
+    }
+    return parsed;
+}
+
 /**
  * Validates a timeout string and updates the global request timeout.
  * @param timeoutValue Timeout value provided via CLI.
@@ -1191,24 +1201,36 @@ export function buildProgram(): Command {
 
     const taintwireCmd = program
         .command("taintwire")
-        .description("Build PookieGraphs (.pg) from JS files and query them with .pgq files");
-    taintwireCmd
-        .command("build")
-        .description("Load every JS file of a directory into one linked PookieGraph (.pg)")
-        .requiredOption("-d, --directory <directory>", "Directory of JS files (e.g. lazyload's output/<host>)")
-        .option("-o, --output <file>", "PookieGraph file to write", "graph.pg")
-        .action(async (cmd) => {
-            await taintwire.build(cmd.directory, cmd.output);
-        });
-    taintwireCmd
-        .command("analyze")
-        .description("Run .pgq query files against a PookieGraph")
-        .requiredOption("-g, --graph <file>", "PookieGraph (.pg) file built by `taintwire build`")
-        .requiredOption("-q, --queries <file/dir>", "A .pgq file, or a directory searched recursively for them")
-        .option("-o, --output <file>", "Findings JSON file", "taintwire.json")
-        .action(async (cmd) => {
-            await taintwire.analyze(cmd.graph, cmd.queries, cmd.output);
-        });
+        .description("Build PookieGraphs (.tw / .pg) from JS files and query them with .pgq files");
+    const limitOptions = (c: Command) =>
+        c
+            .option("--buffer-pool <MB>", "Most memory Ladybug may use per graph, in MB (default: half of the container or machine memory)")
+            .option("--threads <n>", "Ladybug query threads (default: taintwire's, 2)");
+    const limits = (cmd: { bufferPool?: string; threads?: string }) => ({
+        bufferPoolMB: cmd.bufferPool === undefined ? undefined : parsePositiveInt("--buffer-pool", cmd.bufferPool),
+        threads: cmd.threads === undefined ? undefined : parsePositiveInt("--threads", cmd.threads),
+    });
+    limitOptions(
+        taintwireCmd
+            .command("build")
+            .description(
+                "Load every JS file of a directory into PookieGraphs: a .tw holds one graph per file and the files it loads, a .pg one linked graph of every file"
+            )
+            .requiredOption("-d, --directory <directory>", "Directory of JS files (e.g. lazyload's output/<host>)")
+            .option("-o, --output <file>", "Output file: .pg (one graph) or .tw (one graph per unit)", "graph.pg")
+    ).action(async (cmd) => {
+        await taintwire.build(cmd.directory, cmd.output, limits(cmd));
+    });
+    limitOptions(
+        taintwireCmd
+            .command("analyze")
+            .description("Run .pgq query files against a .tw or a PookieGraph (.pg)")
+            .requiredOption("-g, --graph <file>", "A .tw or PookieGraph (.pg) file built by `taintwire build`")
+            .requiredOption("-q, --queries <file/dir>", "A .pgq file, or a directory searched recursively for them")
+            .option("-o, --output <file>", "Findings JSON file", "taintwire.json")
+    ).action(async (cmd) => {
+        await taintwire.analyze(cmd.graph, cmd.queries, cmd.output, limits(cmd));
+    });
     taintwireCmd
         .command("validate")
         .description("Check .pgq query files: evaluate, validate and compile every query")
