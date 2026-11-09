@@ -1204,7 +1204,10 @@ export function buildProgram(): Command {
         .description("Build PookieGraphs (.tw / .pg) from JS files and query them with .pgq files");
     const limitOptions = (c: Command) =>
         c
-            .option("--buffer-pool <MB>", "Most memory Ladybug may use per graph, in MB (default: half of the container or machine memory)")
+            .option(
+                "--buffer-pool <MB>",
+                "Most memory Ladybug may use per graph, in MB (default: half of the container or machine memory)"
+            )
             .option("--threads <n>", "Ladybug query threads (default: taintwire's, 2)");
     const limits = (cmd: { bufferPool?: string; threads?: string }) => ({
         bufferPoolMB: cmd.bufferPool === undefined ? undefined : parsePositiveInt("--buffer-pool", cmd.bufferPool),

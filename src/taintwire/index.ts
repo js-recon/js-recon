@@ -47,7 +47,9 @@ const writeGraph = async (pgPath: string, directory: string, names: string[], li
     try {
         await graph.query("CALL auto_checkpoint=false");
         // one call, so chunks are linked through the bundler's module registry
-        await graph.addFiles(names.map((f) => ({ filename: f, code: fs.readFileSync(path.join(directory, f), "utf-8") })));
+        await graph.addFiles(
+            names.map((f) => ({ filename: f, code: fs.readFileSync(path.join(directory, f), "utf-8") }))
+        );
         await graph.query("CHECKPOINT");
         await graph.close();
     } catch (e) {
@@ -98,10 +100,15 @@ export const build = async (directory: string, output: string, limits: Limits = 
         fs.mkdirSync(tmp, { recursive: true });
         try {
             // One file at a time: only its module ids are kept.
-            const links = new Map(names.map((f) => [f, tw.moduleLinks(fs.readFileSync(path.join(directory, f), "utf-8"), f, "babel")]));
+            const links = new Map(
+                names.map((f) => [f, tw.moduleLinks(fs.readFileSync(path.join(directory, f), "utf-8"), f, "babel")])
+            );
             const units = tw.planUnits(links);
             const largest = Math.max(...units.map((u) => u.length));
-            printMsg(MSG.Header, `[i] Building ${units.length} PookieGraph(s) from ${names.length} file(s) into ${output} (largest: ${largest} file(s))`);
+            printMsg(
+                MSG.Header,
+                `[i] Building ${units.length} PookieGraph(s) from ${names.length} file(s) into ${output} (largest: ${largest} file(s))`
+            );
             const manifest = { format: 1, units: [] as { pg: string; files: string[] }[] };
             for (const [i, files] of units.entries()) {
                 const pg = `unit-${i}.pg`;
@@ -136,7 +143,9 @@ export const analyze = async (graphPath: string, queries: string, output: string
     if (graphPath.endsWith(".tw")) {
         dir = fs.mkdtempSync(path.join(os.tmpdir(), "jsr-tw-"));
         await tar.x({ file: graphPath, cwd: dir });
-        const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf-8")) as { units: { pg: string }[] };
+        const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf-8")) as {
+            units: { pg: string }[];
+        };
         graphs = manifest.units.map((u) => path.join(dir!, u.pg));
     }
     const { toEngineOutput } = await import("../analyze/engine/taintwireEngine.js");
@@ -163,7 +172,15 @@ export const analyze = async (graphPath: string, queries: string, output: string
                     failed.add(msg);
                 }
                 for (const f of findings) {
-                    const key = JSON.stringify([f.ruleId, f.file, f.line, f.col, f.source?.file, f.source?.line, f.source?.col]);
+                    const key = JSON.stringify([
+                        f.ruleId,
+                        f.file,
+                        f.line,
+                        f.col,
+                        f.source?.file,
+                        f.source?.line,
+                        f.source?.col,
+                    ]);
                     if (seen.has(key)) continue;
                     here.add(key);
                     const r = byId.get(f.ruleId)!;
