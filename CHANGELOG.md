@@ -1,5 +1,16 @@
 # Change Log
 
+## 2.1.0-alpha.3 - 2026-11-09
+
+### Added
+
+- `taintwire build -o <file>.tw` writes one PookieGraph per unit instead of one graph of every file: each file plus the files that define the modules it loads through the webpack or Turbopack registry, transitively. The unit graphs and a `manifest.json` are packed into one `.tw` file (a tar archive), and `taintwire analyze -g <file>.tw` runs the rules on each unit's graph in turn, reporting a finding once even if several units contain it. A `.tw` saves memory only when every unit is much smaller than the app; in most framework builds the shared framework and vendor chunks are loaded into every unit, so it is larger and slower than a `.pg`. The default output stays `graph.pg`. (`taintwire`)
+- `--buffer-pool <MB>` and `--threads <n>` on `taintwire build` and `taintwire analyze` set the memory taintwire's database may use per graph and its query threads. (`taintwire`)
+
+### Changed
+
+- taintwire is updated to 0.2.0-alpha.3. Its database now takes at most half of the memory the process may use, which is the container's limit inside Docker or Kubernetes. Before, the limit was sized from the host's RAM even inside a container, so a large app could grow past the container's limit until the container killed the process; past the new limit, a load or query fails with `The buffer pool is full`. Queries run on 2 threads instead of one per core of the host, which lowered the peak CPU of `taintwire analyze` by about a third with the same run time. Query results are freed as soon as they are read, which lowers memory when graphs are built one after another. (`analyze`, `map`, `run`, `taintwire`)
+
 ## 2.1.0-alpha.2 - 2026-11-06
 
 ### Security
