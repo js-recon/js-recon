@@ -1,12 +1,12 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "2.1.0-alpha.2",
+    "version": "2.1.0-alpha.3",
     "lockfileVersion": 3,
     "requires": true,
     "packages": {
         "": {
             "name": "@js-recon/js-recon",
-            "version": "2.1.0-alpha.2",
+            "version": "2.1.0-alpha.3",
             "hasInstallScript": true,
             "license": "MIT",
             "dependencies": {
@@ -16,7 +16,7 @@
                 "@babel/parser": "8.0.7",
                 "@babel/traverse": "8.0.7",
                 "@babel/types": "8.0.6",
-                "@js-recon/taintwire": "0.2.0-alpha.2",
+                "@js-recon/taintwire": "0.2.0-alpha.3",
                 "@modelcontextprotocol/sdk": "1.32.1",
                 "@shriyanss/cli-print-img": "1.1.1",
                 "@shriyanss/cs-mast": "0.1.8",
@@ -1653,9 +1653,9 @@
             }
         },
         "node_modules/@js-recon/taintwire": {
-            "version": "0.2.0-alpha.2",
-            "resolved": "https://registry.npmjs.org/@js-recon/taintwire/-/taintwire-0.2.0-alpha.2.tgz",
-            "integrity": "sha512-nRdDzo0wUiZnXfwh1YWh0fPimVw+/ziGMrtF/QLdmvBL8VIazTgM7Ew/LT8qaAmZEA+W34M+4Cjuxem2fbLq9A==",
+            "version": "0.2.0-alpha.3",
+            "resolved": "https://registry.npmjs.org/@js-recon/taintwire/-/taintwire-0.2.0-alpha.3.tgz",
+            "integrity": "sha512-YOGFlgK/wpV5B0ihvM5863H6KiN+FbAbjZw5Z03MdOn/p1FDHe9iFu1hbT3apBEr01gxLZiIex8fe/UUygWUPg==",
             "license": "MIT",
             "dependencies": {
                 "@babel/parser": "8.0.4",
