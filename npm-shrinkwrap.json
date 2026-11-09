@@ -29,7 +29,7 @@
                 "cli-progress": "3.12.0",
                 "commander": "14.0.0",
                 "datatables.net": "2.3.8",
-                "datatables.net-dt": "2.3.8",
+                "datatables.net-dt": "3.1.4",
                 "esquery": "1.7.0",
                 "express": "5.2.1",
                 "graphql": "17.0.2",
@@ -3970,14 +3970,19 @@
             }
         },
         "node_modules/datatables.net-dt": {
-            "version": "2.3.8",
-            "resolved": "https://registry.npmjs.org/datatables.net-dt/-/datatables.net-dt-2.3.8.tgz",
-            "integrity": "sha512-GD4on0YvNlUS/l+mrXeA1OC2JDzF2/GGbehVv4AacwtiFaoTwqxZseiR0cED6w59u/lgpVrZRC2RwuubUX996Q==",
+            "version": "3.1.4",
+            "resolved": "https://registry.npmjs.org/datatables.net-dt/-/datatables.net-dt-3.1.4.tgz",
+            "integrity": "sha512-HST6HmWEMr6SA6FM2SpYu2ko0In5nHjUb03Ocop2gsHLWoRP18sgVbehxUtRS3QZP4eHfU68ujs/gnzd0U2t9g==",
             "license": "MIT",
             "dependencies": {
-                "datatables.net": "2.3.8",
-                "jquery": ">=1.7"
+                "datatables.net": "3.1.4"
             }
+        },
+        "node_modules/datatables.net-dt/node_modules/datatables.net": {
+            "version": "3.1.4",
+            "resolved": "https://registry.npmjs.org/datatables.net/-/datatables.net-3.1.4.tgz",
+            "integrity": "sha512-tnk14y/AOr0Z1d7avIUvCcOGgqZpeo7B6g6RQiycMQckEMq2FaaZTG1Q1xD6Kci5gpAvdjZInDmbscoiVSTyGw==",
+            "license": "MIT"
         },
         "node_modules/debug": {
             "version": "4.4.3",
