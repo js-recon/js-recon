@@ -56,7 +56,10 @@ describe("taintwire build / analyze / validate", { timeout: 120000 }, () => {
             // a manifest that names a graph outside the archive is rejected, and that graph is left alone
             const evil = path.join(dir, "evil");
             fs.mkdirSync(evil);
-            fs.writeFileSync(path.join(evil, "manifest.json"), JSON.stringify({ format: 1, units: [{ pg: "../app.pg" }] }));
+            fs.writeFileSync(
+                path.join(evil, "manifest.json"),
+                JSON.stringify({ format: 1, units: [{ pg: "../app.pg" }] })
+            );
             await tar.c({ file: path.join(dir, "evil.tw"), cwd: evil }, ["manifest.json"]);
 
             const exit = exits();
