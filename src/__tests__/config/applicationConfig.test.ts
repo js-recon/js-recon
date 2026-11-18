@@ -579,7 +579,10 @@ describe("application YAML configuration", () => {
     it("ignores keys of removed options left in older config files", () => {
         const root = makeTemporaryDirectory();
         const explicitPath = path.join(root, "old.yaml");
-        fs.writeFileSync(explicitPath, "version: 1\ncommands:\n  run:\n    disableRefactor: false\n    enableRefactor: true\n");
+        fs.writeFileSync(
+            explicitPath,
+            "version: 1\ncommands:\n  run:\n    disableRefactor: false\n    enableRefactor: true\n"
+        );
         let captured: Record<string, unknown> | undefined;
         const program = new Command().exitOverride().option("--config <file>", "Application YAML config");
         program

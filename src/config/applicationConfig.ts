@@ -141,7 +141,7 @@ export const getOptionEnvironmentVariable = (commandName: string, optionName: st
 
 const removedOptionKeys: ReadonlySet<string> = new Set(["run.disableRefactor"]);
 
-const legacyEnvironmentAliases:Readonly<Record<string, readonly string[]>> = Object.freeze({
+const legacyEnvironmentAliases: Readonly<Record<string, readonly string[]>> = Object.freeze({
     "run.outputOverwrite": ["JS_RECON_OUTPUT_OVERWRITE"],
     "run.disableRulesVersionCheck": ["JS_RECON_DISABLE_RULES_VERSION_CHECK"],
     "analyze.disableRulesVersionCheck": ["JS_RECON_DISABLE_RULES_VERSION_CHECK"],
