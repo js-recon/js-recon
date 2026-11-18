@@ -185,12 +185,12 @@ export function buildProgram(): Command {
         .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
         .option(
             "--rsc-param-bruteforce-limit <n>",
-            "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
+            "Max harvested dynamic-route param-name candidates to try per URL in next_rsfParamBruteforce's RSC-body keyword fallback (0 = disable the fallback)",
             "20"
         )
         .option(
             "--wordlist <file>",
-            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of next_routerStateForge and next_interceptRouteNextUrl"
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of the next_rsf* methods and next_interceptRouteNextUrl"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
@@ -882,12 +882,12 @@ export function buildProgram(): Command {
         .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
         .option(
             "--rsc-param-bruteforce-limit <n>",
-            "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
+            "Max harvested dynamic-route param-name candidates to try per URL in next_rsfParamBruteforce's RSC-body keyword fallback (0 = disable the fallback)",
             "20"
         )
         .option(
             "--wordlist <file>",
-            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of next_routerStateForge and next_interceptRouteNextUrl"
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of the next_rsf* methods and next_interceptRouteNextUrl"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(

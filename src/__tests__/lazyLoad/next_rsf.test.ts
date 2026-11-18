@@ -4,11 +4,11 @@ import {
     buildStateTreeHeader,
     computeStrongRscKey,
     computeLegacyRscKey,
-    buildAncestorAttempts,
     containsNextRedirectMarker,
     extractChunkPathsFromFlightBody,
-    extractParamNameCandidatesFromFlightBody,
-} from "../../lazyLoad/next_js/next_routerStateForge.js";
+} from "../../lazyLoad/next_js/next_rsf/rsfShared.js";
+import { buildAncestorAttempts } from "../../lazyLoad/next_js/next_rsf/index.js";
+import { extractParamNameCandidatesFromFlightBody } from "../../lazyLoad/next_js/next_rsf/next_rsfParamBruteforce.js";
 
 describe("buildStateTreeHeader", () => {
     it("builds a single-ancestor page tree matching the reference PoC shape", () => {
@@ -162,6 +162,19 @@ describe("buildAncestorAttempts", () => {
         const attempts = buildAncestorAttempts(["organizations", "acme", "reports"], ["workspace"]);
         expect(attempts).toEqual([
             ["organizations", { paramName: "workspace", value: "acme" }],
+            ["organizations", "acme"],
+            ["organizations"],
+        ]);
+    });
+
+    it("drops the static claims when next_rsfAncestorClaim is filtered out", () => {
+        expect(buildAncestorAttempts(["organizations", "acme", "reports"], ["workspace"], { static: false })).toEqual([
+            ["organizations", { paramName: "workspace", value: "acme" }],
+        ]);
+    });
+
+    it("drops the dynamic guesses when next_rsfParamBruteforce is filtered out", () => {
+        expect(buildAncestorAttempts(["organizations", "acme", "reports"], ["workspace"], { dynamic: false })).toEqual([
             ["organizations", "acme"],
             ["organizations"],
         ]);

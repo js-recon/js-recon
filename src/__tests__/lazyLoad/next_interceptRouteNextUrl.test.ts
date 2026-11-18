@@ -9,7 +9,7 @@ import {
     assetBase,
     basePathOf,
     chunkUrl,
-} from "../../lazyLoad/next_js/next_interceptRouteNextUrl.js";
+} from "../../lazyLoad/next_js/next_rsf/next_interceptRouteNextUrl.js";
 
 describe("extractBuildId", () => {
     it("reads the id from a _buildManifest.js reference", () => {

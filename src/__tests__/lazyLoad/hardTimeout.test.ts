@@ -435,7 +435,7 @@ describe("lazyLoad hard timeout", () => {
         expect(harness.extractSourceMaps).not.toHaveBeenCalled();
     });
     it("cancels in-flight raw-request batches that ignore stop() when the hard timeout fires", async () => {
-        // Mirrors next_routerStateForge: a runWithConcurrency batch of rawRequest probes that never
+        // Mirrors next_rsf: a runWithConcurrency batch of rawRequest probes that never
         // checks the crawler's stop flag. Before cancellation reached rawRequest and the worker
         // loop, a timed-out batch ran every remaining candidate (hours on a large app).
         const fetchMock = vi.fn(
