@@ -2,6 +2,10 @@
 
 ## 2.1.0-alpha.4
 
+### Changed
+
+- The Next.js lazyload method `next_routerStateForge` is split into two methods, so each technique can be turned on or off on its own. `next_rsfAncestorClaim` claims the route's parent path segments as ordinary segments (the full parent chain, then only the first segment). `next_rsfParamBruteforce` claims the last parent segment as a dynamic route segment, guessing its parameter name from the wordlist and then from names found in responses already received (`--rsc-param-bruteforce-limit`). With both on, the requests are the same, in the same order, as before. `next_routerStateForge` is no longer a valid name for `--include-methods` or `--exclude-methods`. The research-output keys `next_routerStateForge`, `next_routerStateForge_metadataOnly` and `next_routerStateForge_legacyKeyAccepted` are replaced by `next_rsfAncestorClaim`, `next_rsfParamBruteforce` (each with a `_metadataOnly` variant) and `next_rsf_legacyKeyAccepted`. (`lazyload`, `run`)
+
 ## 2.1.0-alpha.3 - 2026-11-09
 
 ### Added
