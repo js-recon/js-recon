@@ -211,6 +211,9 @@ jobs:
           fi
           git clone --depth 1 --branch "$BRANCH" https://github.com/js-recon/js-recon-rules.git js-recon-rules
 
+      - name: Checkout taintwire-queries
+        run: git clone --depth 1 https://github.com/js-recon/taintwire-queries.git taintwire-queries
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

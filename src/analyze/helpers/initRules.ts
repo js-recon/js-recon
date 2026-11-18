@@ -4,14 +4,25 @@ import * as tar from "tar";
 import { withActiveProxyDispatcher, type FetchOptsWithDispatcher } from "../../utility/makeReq.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 
-const RULES_RELEASE_URL = "https://api.github.com/repos/js-recon/js-recon-rules/releases/latest";
+/** A GitHub repo whose latest release is cached at `~/.js-recon/<dir>`, checked against its `version.txt`. */
+interface Pack {
+    readonly repo: string;
+    readonly dir: string;
+    readonly label: string;
+}
+
+const RULES: Pack = { repo: "js-recon-rules", dir: "rules", label: "Rules" };
+const TAINTWIRE_QUERIES: Pack = { repo: "taintwire-queries", dir: "taintwire-queries", label: "taintwire queries" };
+
+const latestReleaseApiUrl = (pack: Pack) => `https://api.github.com/repos/js-recon/${pack.repo}/releases/latest`;
 
 interface RulesRelease {
     readonly tagName: string;
     readonly tarballUrl: string;
 }
 
-const fetchLatestRulesRelease = async (options: FetchOptsWithDispatcher): Promise<RulesRelease> => {
+const fetchLatestRulesRelease = async (pack: Pack, options: FetchOptsWithDispatcher): Promise<RulesRelease> => {
+    const RULES_RELEASE_URL = latestReleaseApiUrl(pack);
     const response = await fetch(RULES_RELEASE_URL, options);
     if (!response.ok) {
         throw new Error(`Rules release lookup failed with HTTP ${response.status}`);
@@ -48,40 +59,43 @@ const fetchLatestRulesRelease = async (options: FetchOptsWithDispatcher): Promis
  * @param homeDir - The user's home directory path
  * @returns Promise that resolves when rules are downloaded and extracted
  */
-const downloadRules = async (homeDir: string): Promise<void> => {
-    printMsg(MSG.Header, "[i] Rules not found. Downloading from GitHub...");
+const downloadRules = async (homeDir: string, pack: Pack): Promise<void> => {
+    printMsg(MSG.Header, `[i] ${pack.label} not found. Downloading from GitHub...`);
     const buffer = await withActiveProxyDispatcher(async (options) => {
-        const release = await fetchLatestRulesRelease(options);
+        const release = await fetchLatestRulesRelease(pack, options);
         const downloadResponse = await fetch(release.tarballUrl, options);
 
         if (!downloadResponse.ok) {
-            throw new Error(`Failed to download rules: ${downloadResponse.statusText}`);
+            throw new Error(`Failed to download ${pack.label}: ${downloadResponse.statusText}`);
         }
         return Buffer.from(await downloadResponse.arrayBuffer());
     });
 
-    const tarPath = path.join(homeDir, "/.js-recon/rules.tar.gz");
+    const tarPath = path.join(homeDir, `/.js-recon/${pack.dir}.tar.gz`);
     fs.writeFileSync(tarPath, buffer);
 
-    printMsg(MSG.Header, "[i] Extracting rules...");
+    printMsg(MSG.Header, `[i] Extracting ${pack.label}...`);
     const extractPath = path.join(homeDir, "/.js-recon");
     await tar.x({ file: tarPath, cwd: extractPath });
 
     // Find the extracted directory
     const files = fs.readdirSync(extractPath);
     const extractedDir = files.find(
-        (file) => fs.statSync(path.join(extractPath, file)).isDirectory() && file.startsWith("js-recon-js-recon-rules-")
+        (file) => fs.statSync(path.join(extractPath, file)).isDirectory() && file.startsWith(`js-recon-${pack.repo}-`)
     );
 
     if (extractedDir) {
-        fs.renameSync(path.join(extractPath, extractedDir), path.join(extractPath, "rules"));
+        fs.renameSync(path.join(extractPath, extractedDir), path.join(extractPath, pack.dir));
     } else {
-        throw new Error("Could not find extracted rules directory.");
+        throw new Error(`Could not find extracted ${pack.label} directory.`);
     }
 
     fs.unlinkSync(tarPath); // Clean up the downloaded tarball
-    // remove the directory .js-recon/rules/.github
-    fs.rmSync(path.join(homeDir, "/.js-recon/rules/.github"), { recursive: true });
+    fs.rmSync(path.join(extractPath, pack.dir, ".github"), { recursive: true, force: true });
+    if (pack !== RULES) {
+        printMsg(MSG.Run, `[✓] ${pack.label} initialized successfully.`);
+        return;
+    }
 
     // If the release ships a skills/ directory, stage it at ~/.js-recon/skills/.
     const rulesSkillsDir = path.join(homeDir, "/.js-recon/rules/skills");
@@ -127,8 +141,8 @@ export const shouldSkipRulesVersionCheck = (
  * @param disableVersionCheck - Skip the GitHub version check and use cached rules as-is
  * @returns Promise that resolves when rules initialization is complete
  */
-const initRules = async (disableVersionCheck: boolean = false): Promise<void> => {
-    printMsg(MSG.Header, "[i] Initializing rules...");
+const initPack = async (pack: Pack, disableVersionCheck: boolean): Promise<void> => {
+    printMsg(MSG.Header, `[i] Initializing ${pack.label}...`);
 
     // get the user's home dir
     const homeDir = process.env.HOME;
@@ -138,7 +152,7 @@ const initRules = async (disableVersionCheck: boolean = false): Promise<void> =>
         fs.mkdirSync(path.join(homeDir, "/.js-recon"));
     }
 
-    const rulesDir = path.join(homeDir, "/.js-recon/rules");
+    const rulesDir = path.join(homeDir, "/.js-recon", pack.dir);
     if (
         shouldSkipRulesVersionCheck(
             disableVersionCheck,
@@ -146,37 +160,43 @@ const initRules = async (disableVersionCheck: boolean = false): Promise<void> =>
             fs.existsSync(rulesDir)
         )
     ) {
-        printMsg(MSG.Header, "[i] Rules version check disabled — using cached rules as-is.");
+        printMsg(MSG.Header, `[i] ${pack.label} version check disabled — using cached ${pack.label} as-is.`);
         return;
     }
 
     // now, check if the rules directory exists
-    if (!fs.existsSync(path.join(homeDir, "/.js-recon/rules"))) {
-        await downloadRules(homeDir);
+    if (!fs.existsSync(path.join(homeDir, "/.js-recon", pack.dir))) {
+        await downloadRules(homeDir, pack);
     }
 
     // now that this rule exists, check if the version.txt exists
-    const versionPath = path.join(homeDir, "/.js-recon/rules/version.txt");
+    const versionPath = path.join(homeDir, "/.js-recon", pack.dir, "version.txt");
     if (!fs.existsSync(versionPath)) {
-        printMsg(MSG.Warn, "[!] Rules directory is corrupted. Downloading again...");
+        printMsg(MSG.Warn, `[!] ${pack.label} directory is corrupted. Downloading again...`);
         // remove the rules directory
-        fs.rmSync(path.join(homeDir, "/.js-recon/rules"), { recursive: true });
-        await downloadRules(homeDir);
+        fs.rmSync(path.join(homeDir, "/.js-recon", pack.dir), { recursive: true });
+        await downloadRules(homeDir, pack);
     }
 
     // also, if the version.txt exist, check if the version.txt is latest as per the latest release on github
     const version = fs.readFileSync(versionPath, "utf8").trim();
     try {
-        const release = await withActiveProxyDispatcher(fetchLatestRulesRelease);
+        const release = await withActiveProxyDispatcher((options) => fetchLatestRulesRelease(pack, options));
         if (`v${version}` !== release.tagName) {
-            printMsg(MSG.Warn, "[!] Rules are not up to date. Downloading latest version...");
+            printMsg(MSG.Warn, `[!] ${pack.label} are not up to date. Downloading latest version...`);
             // remove the rules directory
-            fs.rmSync(path.join(homeDir, "/.js-recon/rules"), { recursive: true });
-            await downloadRules(homeDir);
+            fs.rmSync(path.join(homeDir, "/.js-recon", pack.dir), { recursive: true });
+            await downloadRules(homeDir, pack);
         }
     } catch {
-        printMsg(MSG.Err, "[!] An error occurred when fetching rules from GitHub");
+        printMsg(MSG.Err, `[!] An error occurred when fetching ${pack.label} from GitHub`);
     }
 };
+
+const initRules = (disableVersionCheck: boolean = false): Promise<void> => initPack(RULES, disableVersionCheck);
+
+/** Like initRules, for the taintwire-queries pack at `~/.js-recon/taintwire-queries`. */
+export const initTaintwireQueries = (disableVersionCheck: boolean = false): Promise<void> =>
+    initPack(TAINTWIRE_QUERIES, disableVersionCheck);
 
 export default initRules;

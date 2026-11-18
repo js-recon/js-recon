@@ -1229,10 +1229,17 @@ export function buildProgram(): Command {
             .command("analyze")
             .description("Run .pgq query files against a .tw or a PookieGraph (.pg)")
             .requiredOption("-g, --graph <file>", "A .tw or PookieGraph (.pg) file built by `taintwire build`")
-            .requiredOption("-q, --queries <file/dir>", "A .pgq file, or a directory searched recursively for them")
+            .option(
+                "-q, --queries <file/dir>",
+                "A .pgq file, or a directory searched recursively for them (default: the taintwire-queries pack, downloaded to ~/.js-recon/taintwire-queries)"
+            )
             .option("-o, --output <file>", "Findings JSON file", "taintwire.json")
+            .option(
+                "--disable-rules-version-check",
+                "Skip the GitHub version check of the downloaded taintwire-queries pack and use the cached one as-is"
+            )
     ).action(async (cmd) => {
-        await taintwire.analyze(cmd.graph, cmd.queries, cmd.output, limits(cmd));
+        await taintwire.analyze(cmd.graph, cmd.queries, cmd.output, limits(cmd), cmd.disableRulesVersionCheck);
     });
     taintwireCmd
         .command("validate")

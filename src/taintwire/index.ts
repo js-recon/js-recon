@@ -4,6 +4,7 @@ import path from "path";
 import * as tar from "tar";
 import { printMsg, MSG } from "../utility/printMsg.js";
 import { listFilesRecursive, listJsFiles } from "../utility/listFiles.js";
+import { initTaintwireQueries } from "../analyze/helpers/initRules.js";
 import { generateEngineOutput, EngineOutput } from "../analyze/helpers/outputHelper.js";
 
 // Same per-file cap as map's taintwire resolvers: bigger files are vendor bundles that cost more than they find.
@@ -128,13 +129,23 @@ export const build = async (directory: string, output: string, limits: Limits = 
 };
 
 /**
- * Run the .pgq rules at `queries` against `graphPath`, a PookieGraph (.pg) or a .tw of them; writes findings to
+ * Run the .pgq rules at `queries` (default: the taintwire-queries pack, downloaded to ~/.js-recon) against `graphPath`, a PookieGraph (.pg) or a .tw of them; writes findings to
  * `output` as JSON. A .tw's graphs are opened one at a time; a finding at the same place from a later graph is dropped.
  */
-export const analyze = async (graphPath: string, queries: string, output: string, limits: Limits = {}) => {
+export const analyze = async (
+    graphPath: string,
+    queries: string | undefined,
+    output: string,
+    limits: Limits = {},
+    disableQueriesVersionCheck = false
+) => {
     if (!fs.existsSync(graphPath) || !fs.statSync(graphPath).isFile()) {
         printMsg(MSG.Err, `[!] PookieGraph ${graphPath} does not exist`);
         process.exit(39);
+    }
+    if (!queries) {
+        await initTaintwireQueries(disableQueriesVersionCheck);
+        queries = path.join(process.env.HOME, ".js-recon/taintwire-queries/rules");
     }
     const { tw, files, rules } = await loadQueries(queries);
     let dir: string | undefined;
