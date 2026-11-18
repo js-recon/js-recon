@@ -2,7 +2,10 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import * as tar from "tar";
+import chalk from "chalk";
+import cliProgress from "cli-progress";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import { activateBarLogger, computeBarSize, watchBarResize, withProgressResources } from "../utility/progressLog.js";
 import { listFilesRecursive, listJsFiles } from "../utility/listFiles.js";
 import { initTaintwireQueries } from "../analyze/helpers/initRules.js";
 import { generateEngineOutput, EngineOutput } from "../analyze/helpers/outputHelper.js";
@@ -37,19 +40,65 @@ const loadQueries = async (queries: string) => {
     return { tw, files, rules };
 };
 
+// Visible characters of the bar's format around [{bar}], with a short label and detail.
+const BAR_OVERHEAD = 60;
+
+/** A progress bar while `work` runs; `work` gets `update(label, done, total, detail)`. Prints nothing off a TTY. */
+const withBar = async <T>(
+    work: (update: (label: string, done: number, total: number, detail?: string) => void) => Promise<T>
+): Promise<T> => {
+    const bar = new cliProgress.SingleBar(
+        {
+            format: chalk.cyan("[i] {label} ") + "[{bar}] {value}/{total} {detail}",
+            barCompleteChar: "█",
+            barIncompleteChar: "░",
+            barsize: computeBarSize(BAR_OVERHEAD),
+            hideCursor: false,
+            clearOnComplete: false,
+            stopOnComplete: false,
+        },
+        cliProgress.Presets.shades_classic
+    );
+    let label: string | undefined;
+    const update = (l: string, done: number, total: number, detail = "") => {
+        if (l !== label) {
+            if (label !== undefined) bar.stop(); // keep the finished stage on its own line
+            bar.start(total, done, { label: (label = l), detail });
+        } else {
+            bar.setTotal(total);
+            bar.update(done, { detail });
+        }
+    };
+    const stopWatcher = watchBarResize(bar, BAR_OVERHEAD);
+    const releaseLogger = activateBarLogger(
+        { log: (s: string) => process.stdout.write("\r\x1b[K" + s) },
+        process.stdout.isTTY === true
+    );
+    return withProgressResources(
+        () => work(update),
+        () => label !== undefined && bar.stop(),
+        stopWatcher,
+        releaseLogger
+    );
+};
+
 /** Ladybug's buffer pool (MB) and query threads; unset means taintwire's defaults. */
 export type Limits = { bufferPoolMB?: number; threads?: number };
 
 /** Write one linked PookieGraph of `names` (relative to `directory`) to `pgPath`; removes it again on failure. */
-const writeGraph = async (pgPath: string, directory: string, names: string[], limits: Limits) => {
+const writeGraph = async (pgPath: string, directory: string, names: string[], limits: Limits, unit = "") => {
     const { PookieGraph } = await import("@js-recon/taintwire");
     // On disk, not in memory: a whole app in memory takes about 10 KB of RAM per byte of minified source.
     const graph = await PookieGraph.open(pgPath, { parser: "babel", ...limits });
     try {
         await graph.query("CALL auto_checkpoint=false");
         // one call, so chunks are linked through the bundler's module registry
-        await graph.addFiles(
-            names.map((f) => ({ filename: f, code: fs.readFileSync(path.join(directory, f), "utf-8") }))
+        const STAGES = { parse: "Parsing files", link: "Linking", load: "Loading graph rows" };
+        await withBar((update) =>
+            graph.addFiles(
+                names.map((f) => ({ filename: f, code: fs.readFileSync(path.join(directory, f), "utf-8") })),
+                (stage, done, total) => update(unit + STAGES[stage], done, total)
+            )
         );
         await graph.query("CHECKPOINT");
         await graph.close();
@@ -112,7 +161,7 @@ export const build = async (directory: string, output: string, limits: Limits = 
             const manifest = { format: 1, units: [] as { pg: string; files: string[] }[] };
             for (const [i, files] of units.entries()) {
                 const pg = `unit-${i}.pg`;
-                await writeGraph(path.join(tmp, pg), directory, files, limits);
+                await writeGraph(path.join(tmp, pg), directory, files, limits, `Unit ${i + 1}/${units.length}: `);
                 manifest.units.push({ pg, files });
             }
             fs.writeFileSync(path.join(tmp, "manifest.json"), JSON.stringify(manifest));
@@ -185,7 +234,6 @@ export const analyze = async (
         }
         printMsg(MSG.Header, `[i] Running ${rules.length} rule(s) from ${files.length} .pgq file(s) on ${graphPath}`);
         for (const [i, pg] of graphs.entries()) {
-            if (graphs.length > 1) printMsg(MSG.Info, `[i] Graph ${i + 1}/${graphs.length}`);
             const graph = await tw.PookieGraph.open(pg, { readOnly: true, parser: "babel", ...limits });
             const here = new Set<string>();
             try {
@@ -193,7 +241,11 @@ export const analyze = async (
                     cypherErrors = await tw.checkPgqCypher(graph, rules);
                     if (cypherErrors.length) break;
                 }
-                const { findings, errors } = await tw.runPgq(graph, rules);
+                const label = graphs.length > 1 ? `Graph ${i + 1}/${graphs.length}: running rules` : "Running rules";
+                const { findings, errors } = await withBar((update) => {
+                    update(label, 0, rules.length);
+                    return tw.runPgq(graph, rules, (done, r) => update(label, done, rules.length, r.id));
+                });
                 for (const e of errors) {
                     const msg = `[!] Rule ${e.ruleId} failed: ${e.message}`;
                     if (!failed.has(msg)) printMsg(MSG.Err, msg);
