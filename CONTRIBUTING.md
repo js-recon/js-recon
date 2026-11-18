@@ -30,3 +30,11 @@ before pushing.
 Do not open a public issue for a security vulnerability — see [`SECURITY.md`](SECURITY.md) for the
 reporting process and response SLAs. Bug reports and feature/tech-support requests use the GitHub
 Issues templates linked from the [contributing page](https://js-recon.io/contributing).
+
+## Research
+
+JS Recon is backed by research on frameworks. While the raw research data is not released publicly, most of the relevant action items are implemented in the tool itself.
+
+If you would like to hear more about JS Recon's research, please Shriyans at [&lt;shriyanss@ss0x00.com&gt;](mailto:shriyanss@ss0x00.com)
+
+> I'm open to academic research activities :)
