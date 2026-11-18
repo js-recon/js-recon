@@ -937,7 +937,7 @@ export function buildProgram(): Command {
             "Minimum CS-MAST-S signature matches required to detect bundler for the refactor step (0 = skip refactor)",
             "50"
         )
-        .option("--disable-refactor", "Skip the automatic refactor step after report", false)
+        .option("--enable-refactor", "Run the bundler-detection and refactor step after report (off by default)", false)
         .option(
             "--web-stats-dashboard",
             "Start a live web dashboard (with a REST API) to follow this run's progress instead of relying on console output",

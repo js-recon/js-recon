@@ -316,7 +316,7 @@ const processUrl = async (
         printMsg(MSG.Run, "[+] Report complete.");
         if (shouldSkipTarget()) return;
 
-        if (!cmd.disableRefactor) {
+        if (cmd.enableRefactor) {
             printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
             const detectedBundlerTechReact = await detectBundler(
                 mappedJsonFileReact,
@@ -356,8 +356,6 @@ const processUrl = async (
             } else {
                 printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
             }
-        } else {
-            printMsg(MSG.Warn, "[!] Refactor step disabled via --disable-refactor, skipping.");
         }
 
         printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
@@ -443,7 +441,7 @@ const processUrl = async (
         printMsg(MSG.Run, "[+] Report complete.");
         if (shouldSkipTarget()) return;
 
-        if (!cmd.disableRefactor) {
+        if (cmd.enableRefactor) {
             printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
             const detectedBundlerTechVue = await detectBundler(
                 mappedJsonFileVue,
@@ -464,8 +462,6 @@ const processUrl = async (
             } else {
                 printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
             }
-        } else {
-            printMsg(MSG.Warn, "[!] Refactor step disabled via --disable-refactor, skipping.");
         }
 
         printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
@@ -544,7 +540,7 @@ const processUrl = async (
         printMsg(MSG.Run, "[+] Report complete.");
         if (shouldSkipTarget()) return;
 
-        if (!cmd.disableRefactor) {
+        if (cmd.enableRefactor) {
             printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
             const detectedBundlerTechNuxt = await detectBundler(
                 mappedJsonFileNuxt,
@@ -565,8 +561,6 @@ const processUrl = async (
             } else {
                 printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
             }
-        } else {
-            printMsg(MSG.Warn, "[!] Refactor step disabled via --disable-refactor, skipping.");
         }
 
         printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
@@ -963,7 +957,7 @@ const processUrl = async (
     printMsg(MSG.Run, "[+] Report complete.");
     if (shouldSkipTarget()) return;
 
-    if (!cmd.disableRefactor) {
+    if (cmd.enableRefactor) {
         printMsg(MSG.Header, "[*] Detecting bundler via CS-MAST-S for refactor...");
         const detectedBundlerTechNext = await detectBundler(
             mappedJsonFile,
@@ -984,8 +978,6 @@ const processUrl = async (
         } else {
             printMsg(MSG.Warn, "[!] Bundler not detected via CS-MAST-S, skipping refactor.");
         }
-    } else {
-        printMsg(MSG.Warn, "[!] Refactor step disabled via --disable-refactor, skipping.");
     }
 
     printMsg(MSG.Run, `[+] Analysis complete for ${url}.`);
