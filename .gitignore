@@ -167,6 +167,9 @@ extracted/
 research.json
 results.*
 out.*
+graph.pg
+taintwire.json
+taintwire.sarif
 
 collisions.*
 # Claude documentation files: tracked in the private js-recon-agentic-files repo
