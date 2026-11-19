@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import * as taintwire from "@js-recon/taintwire";
 import { printMsg, MSG } from "../../utility/printMsg.js";
@@ -6,6 +7,7 @@ import { listJsFiles } from "../../utility/listFiles.js";
 import * as globals from "../../utility/globals.js";
 import { looksLikeUrl, looksLikeStrictUrl } from "../../utility/urlUtils.js";
 import { makeResolver } from "./valueResolver.js";
+import { writeGraph } from "../../taintwire/index.js";
 
 // Same per-file cap as the legacy fetch resolver: one unit's graph is never bigger than this much source.
 const MAX_MAP_FILE_SIZE_BYTES = 8 * 1024 * 1024;
@@ -22,11 +24,6 @@ export const tooBigForGraph = (name: string, size: number): boolean => {
 // Source bytes loaded into one in-memory graph. One graph per file would open Ladybug hundreds of
 // times on large targets, and each open reserves address space that is only released on GC.
 const MAX_GRAPH_BYTES = 2 * 1024 * 1024;
-// Units that can't contain any of the sinks below are never loaded. The last alternative is the
-// key Nuxt appends to compiled useFetch calls, which by then are an anonymous import.
-export const PREFILTER =
-    /\bfetch\b|XMLHttpRequest|\.(?:get|post|put|delete|patch|head|options)\s*\(|\burl\b|["'`]\$[\w-]{8,12}["'`]/;
-
 // `fetch(...)` / `$fetch(...)` (ofetch, Nuxt) and their aliases (`const f = fetch; f(...)`): the
 // unresolved global reaching a callee position through value flow. Local wrappers resolve later
 // through ARGUMENT_TO.
@@ -106,6 +103,8 @@ RETURN DISTINCT c.id AS id, c.file AS file, c.line AS line, o.id AS config, p.id
 
 export interface ApiCall {
     kind: "fetch" | "XHR" | "client" | "config";
+    /** The call's node id in the graph. */
+    id: string;
     /** The graph file (a file path relative to the scanned directory, or a module id). */
     file: string;
     line: number;
@@ -144,6 +143,7 @@ export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<Api
         const o = asObject(args[optionsIdx] ? await render(args[optionsIdx]) : {});
         calls.push({
             kind: "fetch",
+            id,
             file,
             line,
             urls: await values(args[0]),
@@ -170,7 +170,16 @@ export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<Api
         const args = await kids(id, "arguments");
         if (op === "open" && args.length >= 2) {
             const method = asMethod((await values(args[0]))[0]);
-            inst.opens.push({ kind: "XHR", file, line, urls: await values(args[1]), method, headers: {}, body: "" });
+            inst.opens.push({
+                kind: "XHR",
+                id,
+                file,
+                line,
+                urls: await values(args[1]),
+                method,
+                headers: {},
+                body: "",
+            });
         } else if (op === "setRequestHeader" && args.length >= 2) {
             inst.headers[(await values(args[0]))[0] ?? ""] = (await values(args[1]))[0] ?? "";
         } else if (op === "send" && args.length > 0) {
@@ -211,6 +220,7 @@ export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<Api
         const config = args[hasBody ? 2 : 1];
         calls.push({
             kind: "client",
+            id,
             file,
             line,
             urls,
@@ -226,6 +236,7 @@ export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<Api
         const o = asObject(await render(config));
         calls.push({
             kind: "config",
+            id,
             file,
             line,
             urls: urlValue ? await values(urlValue) : [],
@@ -325,10 +336,38 @@ export const emitApiCalls = (
 };
 
 /**
+ * Loads every file in `names` (relative to `directory`) into ONE linked taintwire graph with a single
+ * addFiles() call, so values flow across chunks (bundler module registries, ES imports), and calls
+ * `use` on it. The graph is on disk in a temp dir: a whole app in memory is too big. Files over
+ * MAX_MAP_FILE_SIZE_BYTES are left out.
+ */
+export const withLinkedGraph = async (
+    directory: string,
+    names: string[],
+    use: (graph: taintwire.PookieGraph) => Promise<void>
+): Promise<void> => {
+    const files = names.filter((f) => !tooBigForGraph(f, fs.statSync(path.join(directory, f)).size));
+    if (files.length === 0) return;
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "jsr-map-tw-"));
+    try {
+        const pgPath = path.join(tmp, "map.pg");
+        await writeGraph(pgPath, directory, files, {});
+        const graph = await taintwire.PookieGraph.open(pgPath, { parser: "babel" });
+        try {
+            await use(graph);
+        } finally {
+            await graph.close();
+        }
+    } finally {
+        fs.rmSync(tmp, { recursive: true, force: true });
+    }
+};
+
+/**
  * taintwire counterpart of the legacy directory-scan resolvers (vue_resolveFetch, vue_resolveXhr,
- * vue_resolveHttpClient), used for React, Vue/Nuxt, Svelte/Astro and Angular: loads the JS files
- * under `directory` into taintwire graphs, finds the calls with Cypher and registers each URL
- * variant with the OpenAPI output collector.
+ * vue_resolveHttpClient), used for React, Vue/Nuxt, Svelte/Astro and Angular: loads every JS file
+ * under `directory` into one linked taintwire graph, finds the calls with Cypher and registers each
+ * URL variant with the OpenAPI output collector.
  */
 const taintwire_resolveApiCalls = async (directory: string, frameworkName: string): Promise<void> => {
     printMsg(MSG.Header, `[i] Resolving ${frameworkName} API calls with taintwire`);
@@ -341,17 +380,8 @@ const taintwire_resolveApiCalls = async (directory: string, frameworkName: strin
         return;
     }
 
-    const units: GraphUnit[] = [];
-    for (const file of files) {
-        const filePath = path.join(directory, file);
-        const size = fs.statSync(filePath).size;
-        if (tooBigForGraph(file, size)) continue; // before reading it for the prefilter
-        if (!PREFILTER.test(fs.readFileSync(filePath, "utf-8"))) continue;
-        units.push({ name: file, size, code: () => fs.readFileSync(filePath, "utf-8") });
-    }
-
     const calls: ApiCall[] = [];
-    await forEachGraph(units, async (graph) => {
+    await withLinkedGraph(directory, files, async (graph) => {
         calls.push(...(await resolveApiCalls(graph)));
     });
 

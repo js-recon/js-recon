@@ -32,8 +32,7 @@ const cross = (parts: string[][]): string[] =>
  *
  * ponytail: flow-insensitive (taintwire's FLOWS_TO summarises every write to a binding), so a
  * compound `u += "/x"` loses its ordering and cycles are cut on revisit; property reads
- * (`cfg.url`) and destructuring stay placeholders because taintwire has no property/heap pass,
- * and nothing flows across files: map loads files one graph batch at a time, not with addFiles().
+ * (`cfg.url`) and destructuring stay placeholders because taintwire has no property/heap pass.
  */
 export const makeResolver = (graph: PookieGraph) => {
     /** graph.query, treating a node table that doesn't exist (no node of that AST type) as no rows. */

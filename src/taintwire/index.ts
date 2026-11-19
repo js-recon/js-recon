@@ -87,7 +87,7 @@ const withBar = async <T>(
 export type Limits = { bufferPoolMB?: number; threads?: number };
 
 /** Write one linked PookieGraph of `names` (relative to `directory`) to `pgPath`; removes it again on failure. */
-const writeGraph = async (pgPath: string, directory: string, names: string[], limits: Limits, unit = "") => {
+export const writeGraph = async (pgPath: string, directory: string, names: string[], limits: Limits, unit = "") => {
     const { PookieGraph } = await import("@js-recon/taintwire");
     // On disk, not in memory: a whole app in memory takes about 10 KB of RAM per byte of minified source.
     const graph = await PookieGraph.open(pgPath, { parser: "babel", ...limits });

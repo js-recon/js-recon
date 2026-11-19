@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import * as taintwire from "@js-recon/taintwire";
-import { resolveApiCalls, ApiCall, PREFILTER } from "../../map/taintwire/apiCalls.js";
-import { resolveServerActions } from "../../map/taintwire/next_js/index.js";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { resolveApiCalls, ApiCall, withLinkedGraph } from "../../map/taintwire/apiCalls.js";
+import { moduleSpans, resolveServerActions } from "../../map/taintwire/next_js/index.js";
+import { Chunks } from "../../utility/interfaces.js";
 
 const withGraph = async <T>(code: string, fn: (graph: taintwire.PookieGraph) => Promise<T>): Promise<T> => {
     const graph = await taintwire.import(code, { filename: "app.js", parser: "babel" });
@@ -163,9 +167,46 @@ describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
         expect(urlsOf(calls, "fetch")).toEqual(["/api/posts/1", "/api/users/[var id]"]);
     });
 
-    it("prefilter keeps files whose only sink is a compiled Nuxt useFetch", () => {
-        expect(PREFILTER.test('D(`/api/users/${u}`,{key:`user-${u}`},"$Mf6Ry1Dc5J")')).toBe(true);
-        expect(PREFILTER.test("const a = 1;")).toBe(false);
+    it("links every file of a directory into one graph, so a URL reaches fetch from another chunk", async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tw-linked-"));
+        try {
+            // b.js has no sink token at all: it's still loaded, and its URL flows into a.js's fetch.
+            fs.writeFileSync(
+                path.join(dir, "a.js"),
+                `(self.webpackChunk=self.webpackChunk||[]).push([[1],{10:(e,t,n)=>{n.d(t,{go:()=>g});function g(u){return fetch(u)}}}]);`
+            );
+            fs.writeFileSync(
+                path.join(dir, "b.js"),
+                `(self.webpackChunk=self.webpackChunk||[]).push([[2],{20:(e,t,n)=>{var r=n(10);r.go("/api/linked")}}]);`
+            );
+            let calls: ApiCall[] = [];
+            await withLinkedGraph(dir, ["a.js", "b.js"], async (g) => {
+                calls = await resolveApiCalls(g);
+            });
+            expect(urlsOf(calls, "fetch")).toEqual(["/api/linked"]);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it("finds each Next.js module's span in its chunk file behind the rewritten prefix", () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tw-spans-"));
+        try {
+            const text = `push([[1],{10:function(e){a()},20:(e,t)=>{b()}}])`;
+            fs.writeFileSync(path.join(dir, "c.js"), text);
+            const mk = (id: string, code: string) => ({ id, code, file: "c.js" }) as unknown as Chunks[string];
+            const chunks: Chunks = {
+                "10": mk("10", "function webpack_10 (e){a()}"),
+                "20": mk("20", "func_20 = (e,t)=>{b()}"),
+            };
+            const spans = moduleSpans(chunks, dir).get("c.js")!;
+            expect(spans.map((s) => [s.chunk.id, text.slice(s.start, s.end)])).toEqual([
+                ["10", "(e){a()}"],
+                ["20", "(e,t)=>{b()}"],
+            ]);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 
     it("prefixes HTTP-client URLs with the baseURL of the create() call the client comes from", async () => {
