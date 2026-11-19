@@ -37,21 +37,40 @@ describe("taintwire build / analyze / validate", { timeout: 120000 }, () => {
         fs.writeFileSync(path.join(q, "lib.pgq"), LIB);
         fs.writeFileSync(path.join(q, "rule.pgq"), RULE);
         const pg = path.join(dir, "app.pg");
-        const out = path.join(dir, "out.json");
+        const out = path.join(dir, "out.sarif");
         try {
             await build(js, pg);
             expect(fs.existsSync(pg)).toBe(true);
             await analyze(pg, q, out);
-            const findings = JSON.parse(fs.readFileSync(out, "utf-8"));
+            const sarif = JSON.parse(fs.readFileSync(out, "utf-8"));
+            expect(sarif.version).toBe("2.1.0");
+            expect(sarif.runs[0].tool.driver.rules.map((r: { id: string }) => r.id)).toContain("hash_html");
+            const findings = sarif.runs[0].results;
             expect(findings).toHaveLength(1);
-            expect(findings[0]).toMatchObject({ ruleId: "hash_html", ruleType: "pgq", severity: "high" });
-            expect(findings[0].findingLocation).toMatch(/^\/\/ a\.js:1:\d+ <- a\.js:1:\d+ \(\d+ hops\)/);
+            expect(findings[0]).toMatchObject({
+                ruleId: "hash_html",
+                level: "error",
+                properties: { severity: "high" },
+            });
+            const at = (l: { physicalLocation: { artifactLocation: { uri: string }; region: object } }) => [
+                l.physicalLocation.artifactLocation.uri,
+                l.physicalLocation.region,
+            ];
+            // sink is the `h` assigned to innerHTML (1-based col 52), source is `location.hash` (col 11)
+            expect(at(findings[0].locations[0])).toEqual([
+                "a.js",
+                expect.objectContaining({ startLine: 1, startColumn: 52 }),
+            ]);
+            expect(findings[0].locations[0].physicalLocation.region.snippet.text).toBe("h");
+            expect(at(findings[0].relatedLocations[0])).toEqual(["a.js", { startLine: 1, startColumn: 11 }]);
+            expect(findings[0].codeFlows[0].threadFlows[0].locations).toHaveLength(2);
+            expect(findings[0].properties.hops).toBeGreaterThan(0);
 
             // one graph per unit, packed into a .tw, finds the same
             const tw = path.join(dir, "app.tw");
             await build(js, tw);
             await analyze(tw, q, out);
-            expect(JSON.parse(fs.readFileSync(out, "utf-8"))).toEqual(findings);
+            expect(JSON.parse(fs.readFileSync(out, "utf-8")).runs[0].results).toEqual(findings);
 
             // a manifest that names a graph outside the archive is rejected, and that graph is left alone
             const evil = path.join(dir, "evil");

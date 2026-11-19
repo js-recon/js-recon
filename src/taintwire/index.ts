@@ -2,13 +2,14 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import * as tar from "tar";
+import type { PgqFinding, PgqLocation } from "@js-recon/taintwire";
 import chalk from "chalk";
 import cliProgress from "cli-progress";
 import { printMsg, MSG } from "../utility/printMsg.js";
 import { activateBarLogger, computeBarSize, watchBarResize, withProgressResources } from "../utility/progressLog.js";
 import { listFilesRecursive, listJsFiles } from "../utility/listFiles.js";
 import { initTaintwireQueries } from "../analyze/helpers/initRules.js";
-import { generateEngineOutput, EngineOutput } from "../analyze/helpers/outputHelper.js";
+import CONFIG from "../globalConfig.js";
 
 // Same per-file cap as map's taintwire resolvers: bigger files are vendor bundles that cost more than they find.
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
@@ -179,7 +180,7 @@ export const build = async (directory: string, output: string, limits: Limits = 
 
 /**
  * Run the .pgq rules at `queries` (default: the taintwire-queries pack, downloaded to ~/.js-recon) against `graphPath`, a PookieGraph (.pg) or a .tw of them; writes findings to
- * `output` as JSON. A .tw's graphs are opened one at a time; a finding at the same place from a later graph is dropped.
+ * `output` as SARIF 2.1.0. A .tw's graphs are opened one at a time; a finding at the same place from a later graph is dropped.
  */
 export const analyze = async (
     graphPath: string,
@@ -201,7 +202,7 @@ export const analyze = async (
     let graphs = [graphPath];
     const { toEngineOutput } = await import("../analyze/engine/taintwireEngine.js");
     const byId = new Map(rules.map((r) => [r.id, r]));
-    const out: EngineOutput[] = [];
+    const out: object[] = []; // SARIF results
     const seen = new Set<string>(); // findings of earlier graphs, by place
     const failed = new Set<string>();
     let cypherErrors: string[] = [];
@@ -264,15 +265,15 @@ export const analyze = async (
                     if (seen.has(key)) continue;
                     here.add(key);
                     const r = byId.get(f.ruleId)!;
-                    out.push(
-                        await toEngineOutput(graph, f, {
-                            ruleName: r.name,
-                            ruleType: "pgq",
-                            ruleDescription: r.description ?? r.message,
-                            ruleAuthor: r.author ?? "",
-                            ruleTech: ["all"],
-                        })
-                    );
+                    // prints the finding; its findingLocation is the sink position, flow and code
+                    const e = await toEngineOutput(graph, f, {
+                        ruleName: r.name,
+                        ruleType: "pgq",
+                        ruleDescription: r.description ?? r.message,
+                        ruleAuthor: r.author ?? "",
+                        ruleTech: ["all"],
+                    });
+                    out.push(sarifResult(f, e.findingLocation.split("\n\n").slice(1).join("\n\n")));
                 }
             } finally {
                 await graph.close();
@@ -286,10 +287,75 @@ export const analyze = async (
     for (const e of cypherErrors) printMsg(MSG.Err, `[!] ${e}`);
     if (cypherErrors.length) process.exit(40);
     printMsg(MSG.Run, `[✓] ${out.length} finding(s)`);
-    generateEngineOutput(output, out);
+    const sarif = {
+        $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+        version: "2.1.0",
+        runs: [
+            {
+                tool: {
+                    driver: {
+                        name: "js-recon taintwire",
+                        version: CONFIG.version,
+                        informationUri: CONFIG.github,
+                        rules: rules.map((r) => ({
+                            id: r.id,
+                            name: r.name,
+                            shortDescription: { text: r.name },
+                            fullDescription: { text: r.description ?? r.message },
+                            defaultConfiguration: { level: SARIF_LEVEL[r.severity] ?? "warning" },
+                            properties: { severity: r.severity, ...(r.author && { author: r.author }) },
+                        })),
+                    },
+                },
+                results: out,
+            },
+        ],
+    };
+    fs.writeFileSync(output, JSON.stringify(sarif, null, 2));
+    printMsg(MSG.Run, `[✓] Written to ${output}`);
     // the findings of the other rules are written; 41 tells a caller they are incomplete
     if (failed.size) process.exitCode = 41;
 };
+
+const SARIF_LEVEL: Record<string, string> = {
+    info: "note",
+    low: "note",
+    medium: "warning",
+    high: "error",
+    critical: "error",
+};
+
+// taintwire columns are 0-based (Babel); SARIF's are 1-based.
+const sarifLocation = (l: PgqLocation, snippet?: string) => ({
+    physicalLocation: {
+        artifactLocation: { uri: l.file },
+        region: { startLine: l.line, startColumn: l.col + 1, ...(snippet && { snippet: { text: snippet } }) },
+    },
+});
+
+/** A runPgq finding as a SARIF result: the sink is the location; a source becomes a related location and a code flow. */
+const sarifResult = (f: PgqFinding, code: string) => ({
+    ruleId: f.ruleId,
+    level: SARIF_LEVEL[f.severity] ?? "warning",
+    message: { text: f.message },
+    locations: [sarifLocation(f, code)],
+    ...(f.source && {
+        relatedLocations: [{ id: 1, message: { text: "source" }, ...sarifLocation(f.source) }],
+        codeFlows: [
+            {
+                threadFlows: [
+                    {
+                        locations: [
+                            { location: { message: { text: "source" }, ...sarifLocation(f.source) } },
+                            { location: { message: { text: "sink" }, ...sarifLocation(f, code) } },
+                        ],
+                    },
+                ],
+            },
+        ],
+    }),
+    properties: { severity: f.severity, ...(f.hops !== undefined && { hops: f.hops }) },
+});
 
 /** Evaluate, validate and compile the .pgq files at `queries`; exits 40 on any problem. */
 export const validate = async (queries: string) => {

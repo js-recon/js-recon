@@ -1233,7 +1233,7 @@ export function buildProgram(): Command {
                 "-q, --queries <file/dir>",
                 "A .pgq file, or a directory searched recursively for them (default: the taintwire-queries pack, downloaded to ~/.js-recon/taintwire-queries)"
             )
-            .option("-o, --output <file>", "Findings JSON file", "taintwire.json")
+            .option("-o, --output <file>", "Findings SARIF 2.1.0 file", "taintwire.sarif")
             .option(
                 "--disable-rules-version-check",
                 "Skip the GitHub version check of the downloaded taintwire-queries pack and use the cached one as-is"
