@@ -101,8 +101,12 @@ WHERE c.type IN ['CallExpression', 'NewExpression'] AND a.key = 'arguments' AND 
   AND ps.key = 'properties' AND pk.key = 'key' AND (k.name = 'url' OR k.value = 'url')
 RETURN DISTINCT c.id AS id, c.file AS file, c.line AS line, o.id AS config, p.id AS urlProp`;
 
-// Keys besides `url` that mark an object as an HTTP request config.
-const REQUEST_KEYS = ["method", "type", "headers", "data", "body"];
+// An object with a `url` is an HTTP request config if it also has headers/data/body, or a `method` / `type` (jQuery)
+// that is an HTTP verb or not a literal. SvelteKit's navigation objects carry `type: "link" | "popstate" | ...`.
+const HTTP_VERB = /^(?:get|post|put|patch|delete|head|options)$/i;
+const isRequestConfig = (o: Record<string, unknown>): boolean =>
+    ["headers", "data", "body"].some((k) => k in o) ||
+    [o.method, o.type].some((m) => typeof m === "string" && (HTTP_VERB.test(m) || m.startsWith("[")));
 
 export interface ApiCall {
     kind: "fetch" | "XHR" | "client" | "config";
@@ -215,7 +219,12 @@ export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<Api
         const args = await kids(id, "arguments");
         // Drops Map.get / Headers.delete / EventBus.post lookalikes before they're logged, and keys
         // made only of placeholders around a `/` (`${a}/${b}`), which looksLikeUrl alone accepts.
-        let urls = (await values(args[0])).filter((u) => looksLikeUrl(u) && /\w/.test(u.replace(/\[[^\]]*\]/g, "")));
+        // Text that only has a `/` (`"<b>Hi</b> there"`) reaches Map/WeakMap .get() in framework code through linked
+        // chunks: a URL has no raw whitespace, `<`, `>` or `"` outside placeholders.
+        let urls = (await values(args[0])).filter((u) => {
+            const literal = u.replace(/\[[^\]]*\]/g, "");
+            return looksLikeUrl(u) && /\w/.test(literal) && !/[\s<>"]/.test(literal);
+        });
         if (urls.length === 0) continue;
         const [factory] = await query(CLIENT_FACTORY(client.slice(0, client.lastIndexOf("_"))), { id: client });
         if (factory) {
@@ -243,7 +252,7 @@ export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<Api
         const o = asObject(await render(config));
         // A request config carries more than a url (`{url, method}`, `$.ajax({url, type})`). Framework runtimes pass
         // navigation state as `{url, params, route, ...}`, and with cross-chunk flow the app's route paths reach it.
-        if (!REQUEST_KEYS.some((k) => k in o) && !/\.(?:request|ajax)$/.test(await calleeCode(id))) continue;
+        if (!isRequestConfig(o) && !/\.(?:request|ajax)$/.test(await calleeCode(id))) continue;
         calls.push({
             kind: "config",
             id,

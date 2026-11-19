@@ -209,6 +209,11 @@ describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
         }
     });
 
+    it("drops HTTP-client 'URLs' that are text (whitespace or markup) rather than paths", async () => {
+        const calls = await resolve('const t = "<b>Hi</b> @a, see this"; cache.get(t); api.get("/api/items/" + id);');
+        expect(urlsOf(calls, "client")).toEqual(["/api/items/[var id]"]);
+    });
+
     it("prefixes HTTP-client URLs with the baseURL of the create() call the client comes from", async () => {
         const calls = await resolve('const api = axios.create({ baseURL: "/api" }); api.get("/reports/" + id);');
         expect(urlsOf(calls, "client")).toEqual(["/api/reports/[var id]"]);
@@ -220,6 +225,7 @@ describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
             new Req({ url: "/api/b/" + id, method: "DELETE" });
             $.ajax({ url: "/api/c", type: "POST" });
             st({ url: "/settings/profile", params: p, route: { id: r } });
+            nav({ url: "/settings/profile", type: "popstate" });
             api.request({ url: "/api/d" });
         `);
         expect(
