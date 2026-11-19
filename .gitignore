@@ -143,8 +143,7 @@ extracted_urls*
 .resp_cache.json
 .resp_cache.json.entries/
 .resp_cache.db*
-.vscode/*
-!.vscode/tasks.json
+.vscode/
 output*/
 refactored*/
 mapped.json
@@ -181,5 +180,7 @@ CLAUDE.md
 .claude/agents/
 **/.claude/agents/
 
-# IDE stuff
-.idea/
+# IDE stuff (WebStorm: share only run configs + startup tasks)
+.idea/*
+!.idea/runConfigurations/
+!.idea/startup.xml
