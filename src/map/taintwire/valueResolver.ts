@@ -77,12 +77,21 @@ export const makeResolver = (graph: PookieGraph) => {
             .map((r) => r.id);
     };
 
-    const inflow = async (id: string, rels = "FLOWS_TO|ARGUMENT_TO|RETURNS_TO"): Promise<string[]> =>
-        (
-            await query(`MATCH (src)-[:${rels}]->(n:\`${label(id)}\`) WHERE n.id = $id RETURN DISTINCT src.id AS id`, {
-                id,
-            })
-        ).map((r) => r.id);
+    const inflows = new Map<string, string[]>();
+    const inflow = async (id: string, rels = "FLOWS_TO|ARGUMENT_TO|RETURNS_TO"): Promise<string[]> => {
+        const key = `${rels}|${id}`;
+        if (!inflows.has(key))
+            inflows.set(
+                key,
+                (
+                    await query(
+                        `MATCH (src)-[:${rels}]->(n:\`${label(id)}\`) WHERE n.id = $id RETURN DISTINCT src.id AS id`,
+                        { id }
+                    )
+                ).map((r) => r.id)
+            );
+        return inflows.get(key)!;
+    };
 
     // Placeholders use the legacy formats, so replaceUrlPlaceholders turns them into OpenAPI params.
     const placeholder = async (id: string): Promise<string> => {
@@ -96,7 +105,12 @@ export const makeResolver = (graph: PookieGraph) => {
         return `[call:${await graph.code(id)}]`;
     };
 
-    const parentOf = async (id: string): Promise<Row | undefined> =>
+    const parents = new Map<string, Row | undefined>();
+    const parentOf = async (id: string): Promise<Row | undefined> => {
+        if (!parents.has(id)) parents.set(id, await parentQuery(id));
+        return parents.get(id);
+    };
+    const parentQuery = async (id: string): Promise<Row | undefined> =>
         (
             await query(
                 `MATCH (p)-[s:SON]->(n:\`${label(id)}\`) WHERE n.id = $id RETURN p.id AS id, p.type AS type, s.key AS key, s.idx AS idx`,
@@ -133,7 +147,12 @@ export const makeResolver = (graph: PookieGraph) => {
         return out;
     };
 
+    const keySteps = new Map<string, string | number | undefined>();
     const keyStep = async (member: string): Promise<string | number | undefined> => {
+        if (!keySteps.has(member)) keySteps.set(member, await keyStepQuery(member));
+        return keySteps.get(member);
+    };
+    const keyStepQuery = async (member: string): Promise<string | number | undefined> => {
         const [prop] = await kids(member, "property");
         if (!prop) return undefined;
         const computed = (
@@ -257,13 +276,25 @@ export const makeResolver = (graph: PookieGraph) => {
     };
 
     const projecting = new Set<string>();
+    const projected = new Map<string, string[]>();
     /** Every string the `path` (object keys / array indexes) of `id`'s value may be, through patterns, literals and hooks. */
     const project = async (id: string, path: (string | number)[], depth = 0): Promise<string[]> => {
         if (path.length === 0) return values(id);
         const key = `${id}|${path.join("\0")}`;
+        if (projected.has(key)) return projected.get(key)!;
         if (depth > 16 || projecting.has(key)) return [];
         projecting.add(key);
         try {
+            // Like values(), a result cut short by a cycle or the depth cap is memoised as is.
+            const out = await projectOnce(id, path, depth);
+            projected.set(key, out);
+            return out;
+        } finally {
+            projecting.delete(key);
+        }
+    };
+    const projectOnce = async (id: string, path: (string | number)[], depth: number): Promise<string[]> => {
+        {
             const [step, ...rest] = path;
             const type = label(id);
             const each = async (ids: string[], p = path) => {
@@ -313,8 +344,6 @@ export const makeResolver = (graph: PookieGraph) => {
                 if (pat) return each([pat.init], [...pat.steps, ...path]);
             }
             return [];
-        } finally {
-            projecting.delete(key);
         }
     };
 

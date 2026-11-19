@@ -219,13 +219,15 @@ describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
             axios({ url: "/api/a", method: "put", headers: { "X-A": "1" }, data: { n: 1 } });
             new Req({ url: "/api/b/" + id, method: "DELETE" });
             $.ajax({ url: "/api/c", type: "POST" });
+            st({ url: "/settings/profile", params: p, route: { id: r } });
+            api.request({ url: "/api/d" });
         `);
         expect(
             calls
                 .filter((c) => c.kind === "config")
                 .map((c) => `${c.method} ${c.urls.join(",")}`)
                 .sort()
-        ).toEqual(["DELETE /api/b/[var id]", "POST /api/c", "PUT /api/a"]);
+        ).toEqual(["DELETE /api/b/[var id]", "GET /api/d", "POST /api/c", "PUT /api/a"]);
         expect(calls.find((c) => c.method === "PUT")).toMatchObject({ headers: { "X-A": "1" }, body: '{"n":"1"}' });
     });
 

@@ -101,6 +101,9 @@ WHERE c.type IN ['CallExpression', 'NewExpression'] AND a.key = 'arguments' AND 
   AND ps.key = 'properties' AND pk.key = 'key' AND (k.name = 'url' OR k.value = 'url')
 RETURN DISTINCT c.id AS id, c.file AS file, c.line AS line, o.id AS config, p.id AS urlProp`;
 
+// Keys besides `url` that mark an object as an HTTP request config.
+const REQUEST_KEYS = ["method", "type", "headers", "data", "body"];
+
 export interface ApiCall {
     kind: "fetch" | "XHR" | "client" | "config";
     /** The call's node id in the graph. */
@@ -135,6 +138,10 @@ const withBase = (base: string, url: string): string =>
 export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<ApiCall[]> => {
     const { query, kids, values, render } = makeResolver(graph);
     const calls: ApiCall[] = [];
+    const calleeCode = async (id: string): Promise<string> => {
+        const [c] = await kids(id, "callee");
+        return c ? graph.code(c) : "";
+    };
 
     // fetch-shaped calls: (url, { method, headers, body })
     const fetchLike = async (id: string, file: string, line: number, optionsIdx = 1): Promise<void> => {
@@ -234,6 +241,9 @@ export const resolveApiCalls = async (graph: taintwire.PookieGraph): Promise<Api
         if (seen.has(id)) continue;
         const [urlValue] = await kids(urlProp, "value");
         const o = asObject(await render(config));
+        // A request config carries more than a url (`{url, method}`, `$.ajax({url, type})`). Framework runtimes pass
+        // navigation state as `{url, params, route, ...}`, and with cross-chunk flow the app's route paths reach it.
+        if (!REQUEST_KEYS.some((k) => k in o) && !/\.(?:request|ajax)$/.test(await calleeCode(id))) continue;
         calls.push({
             kind: "config",
             id,
