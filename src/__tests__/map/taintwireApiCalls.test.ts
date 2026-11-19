@@ -244,6 +244,75 @@ describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
         expect(JSON.parse(save.body)).toEqual(["<string:title>", "3"]);
     });
 
+    it("resolves URLs held in React hooks (Vite output: array/object destructuring)", async () => {
+        const calls = await resolve(`
+            const u = (0, l.createContext)("/api/ctx-default");
+            function C({ id: e }) {
+                let [t] = (0, l.useState)("/api/state"),
+                    [n] = (0, l.useState)(() => "/api/lazy"),
+                    r = (0, l.useRef)("/api/ref"),
+                    i = (0, l.useMemo)(() => "/api/memo/" + e, [e]),
+                    [o] = (0, l.useReducer)(m, { url: "/api/reducer" }),
+                    c = (0, l.useContext)(u),
+                    [d, f] = (0, l.useState)("");
+                fetch(t); fetch(n); fetch(r.current); fetch(i); fetch(o.url); fetch(c);
+                f("/api/next"); d && fetch(d);
+            }
+            function v() { return { base: "/api/obj" } }
+            function _() { let [e, t] = (0, l.useState)("/api/arr"); return [e, t] }
+            function B() { let { base: n } = v(), [t] = _(); fetch(n + "/list"); fetch(t); }
+            const App = () => (0, p.jsx)(u.Provider, { value: "/api/ctx", children: null });
+        `);
+        expect(urlsOf(calls, "fetch").filter(Boolean)).toEqual(
+            [
+                "/api/arr",
+                "/api/ctx",
+                "/api/lazy",
+                "/api/memo/[var e]",
+                "/api/next",
+                "/api/obj/list",
+                "/api/reducer",
+                "/api/ref",
+                "/api/state",
+            ].sort()
+        );
+    });
+
+    it("resolves useState through Babel's slicedToArray (webpack output), setter writes included", async () => {
+        const calls = await resolve(`
+            function l(e, t) { return e }
+            function b() {
+                var r = l((0, o.useState)("/api/state"), 1)[0],
+                    n = l((0, o.useState)(function () { return "/api/lazy" }), 1)[0],
+                    d = l((0, o.useState)(""), 2), h = d[0], m = d[1];
+                fetch(r); fetch(n); m("/api/next"); h && fetch(h);
+            }
+        `);
+        expect(urlsOf(calls, "fetch").filter(Boolean)).toEqual(["/api/lazy", "/api/next", "/api/state"]);
+    });
+
+    it("follows a URL into a wrapper imported from another ES-module chunk", async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tw-esm-"));
+        try {
+            fs.mkdirSync(path.join(dir, "_nuxt"));
+            fs.writeFileSync(
+                path.join(dir, "_nuxt/wrap.js"),
+                'function a(e,t){return s(e,{...t},"$Ab12Cd34Ef")}export{a as u};'
+            );
+            fs.writeFileSync(
+                path.join(dir, "_nuxt/page.js"),
+                'import{u as oe}from"./wrap.js";oe("/api/items",{key:"k"});'
+            );
+            let calls: ApiCall[] = [];
+            await withLinkedGraph(dir, ["_nuxt/wrap.js", "_nuxt/page.js"], async (g) => {
+                calls = await resolveApiCalls(g);
+            });
+            expect(urlsOf(calls, "fetch")).toEqual(["/api/items"]);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
     it("returns [] for code with none of the sinks", async () => {
         expect(await resolve("const a = 1 + 2;")).toEqual([]);
     });
