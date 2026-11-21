@@ -24,6 +24,7 @@ const VENDOR_BANNER =
  * on sites without a bundler, and hold no app code, so taintwire skips them unless --taintwire-include-vendor.
  */
 export const isVendorChunk = (code: string): boolean => {
+    // TODO in addition to simple regex, have CS-MAST signatures for the vendor libraries
     const head = code.slice(0, 2048);
     const src = /^\/\/ File Source: (\S+)/.exec(head)?.[1];
     let file = src ?? "";
