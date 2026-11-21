@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import taintwireEngine from "../../analyze/engine/taintwireEngine.js";
+import taintwireEngine, { isVendorChunk } from "../../analyze/engine/taintwireEngine.js";
+import { setTaintwireIncludeVendor } from "../../utility/globals.js";
 import { Rule, TaintwireStep } from "../../analyze/types/index.js";
 import { Chunks } from "../../utility/interfaces.js";
 import { ruleSchema } from "../../analyze/helpers/schemas.js";
@@ -132,5 +133,47 @@ describe("taintwire analyze engine", { timeout: 60000 }, () => {
         expect(ruleSchema.safeParse(rule()).success).toBe(true);
         expect(ruleSchema.safeParse(bad).success).toBe(false);
         expect(ruleSchema.safeParse({ ...rule(), prefilter: "(" }).success).toBe(false);
+    });
+
+    it("skips known vendor chunks unless --taintwire-include-vendor, and reports progress after each rule", async () => {
+        const vendor = `/** @license React v17.0.2 */\n${TWO_OPAQUE_STEPS}`;
+        const progress: number[] = [];
+        const run = () => taintwireEngine([rule()], chunks(vendor), (f) => progress.push(f.length));
+        expect((await run()).findings).toHaveLength(0);
+        expect(progress).toEqual([]); // nothing was loaded
+        setTaintwireIncludeVendor(true);
+        try {
+            expect((await run()).findings).toHaveLength(1);
+            expect(progress).toEqual([1]);
+        } finally {
+            setTaintwireIncludeVendor(false);
+        }
+    });
+});
+
+describe("isVendorChunk", () => {
+    const src = (url: string, body = "x();") => `// File Source: ${url}\n${body}`;
+    it("matches vendor builds by file name", () => {
+        for (const f of [
+            "react-dom.development.js",
+            "react.production.min.js",
+            "angular_1-7-7.js",
+            "angular.min.js",
+            "jquery-3.6.0.min.js",
+            "vue.global.prod.js",
+            "lodash.min.js",
+        ])
+            expect(isVendorChunk(src(`https://x.test/resources/js/${f}?v=1`)), f).toBe(true);
+    });
+    it("matches vendor builds by banner", () => {
+        expect(isVendorChunk(src("https://x.test/a.js", "/** @license React\n * react-dom.development.js"))).toBe(true);
+        expect(isVendorChunk(src("https://x.test/a.js", "/*\n AngularJS v1.7.7\n (c) 2010"))).toBe(true);
+        expect(isVendorChunk(src("https://x.test/a.js", "/*! jQuery v3.6.0 | (c) OpenJS */"))).toBe(true);
+    });
+    it("leaves app files alone", () => {
+        expect(isVendorChunk(src("https://x.test/resources/js/subscribeNow.js"))).toBe(false);
+        expect(isVendorChunk(src("https://x.test/js/react-app.js"))).toBe(false);
+        expect(isVendorChunk(src("https://x.test/js/my-angular-thing.js"))).toBe(false);
+        expect(isVendorChunk("const React = require('react');")).toBe(false);
     });
 });

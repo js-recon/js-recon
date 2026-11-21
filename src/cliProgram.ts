@@ -662,8 +662,14 @@ export function buildProgram(): Command {
             "Run taintwire rules (Cypher taint queries over the AST graph); they are skipped otherwise",
             false
         )
+        .option(
+            "--taintwire-include-vendor",
+            "Also run taintwire rules on known vendor library files (React/ReactDOM/AngularJS/jQuery/Vue/lodash builds); slow, skipped by default",
+            false
+        )
         .action(async (cmd) => {
             globalsUtil.setAnalyzeTaintwire(cmd.analyzeTaintwire);
+            globalsUtil.setTaintwireIncludeVendor(cmd.taintwireIncludeVendor);
             await analyze(
                 cmd.rules,
                 cmd.mappedJson,
@@ -864,6 +870,11 @@ export function buildProgram(): Command {
             "Run taintwire rules in the analyze step (Cypher taint queries over the AST graph); they are skipped otherwise",
             false
         )
+        .option(
+            "--taintwire-include-vendor",
+            "Also run taintwire rules on known vendor library files in the analyze step; slow, skipped by default",
+            false
+        )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
         .option("-k, --insecure", "Disable SSL certificate verification", false)
         .option("--no-sandbox", "Disable browser sandbox")
@@ -1020,6 +1031,7 @@ export function buildProgram(): Command {
             globalsUtil.setGraphqlEnabled(cmd.graphql !== false && !cmd.ngql);
             globalsUtil.setMapTaintwire(cmd.mapTaintwire);
             globalsUtil.setAnalyzeTaintwire(cmd.analyzeTaintwire);
+            globalsUtil.setTaintwireIncludeVendor(cmd.taintwireIncludeVendor);
             globalsUtil.setDisableCache(cmd.disableCache);
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             globalsUtil.setCacheOnly(cmd.cacheOnly);

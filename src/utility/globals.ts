@@ -657,3 +657,14 @@ export const setAnalyzeTaintwire = (value: boolean): void => {
 export const getAnalyzeTaintwire = (): boolean => {
     return analyzeTaintwire;
 };
+
+/** Whether taintwire rules also run on known vendor library files (skipped by default: they are large and hold no app code) */
+export let taintwireIncludeVendor = false;
+
+export const setTaintwireIncludeVendor = (value: boolean): void => {
+    taintwireIncludeVendor = value;
+};
+
+export const getTaintwireIncludeVendor = (): boolean => {
+    return taintwireIncludeVendor;
+};

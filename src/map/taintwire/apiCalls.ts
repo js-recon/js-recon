@@ -296,7 +296,14 @@ export const forEachGraph = async (
         batches[batches.length - 1].push(unit);
         batchBytes += unit.size;
     }
-    for (const batch of batches.filter((b) => b.length > 0)) {
+    const nonEmpty = batches.filter((b) => b.length > 0);
+    for (const [i, batch] of nonEmpty.entries()) {
+        const kb = Math.ceil(batch.reduce((n, u) => n + u.size, 0) / 1024);
+        printMsg(
+            MSG.Info,
+            `[i] taintwire graph ${i + 1}/${nonEmpty.length}: loading ${batch.map((u) => u.name).join(", ")} (${kb} KB)`
+        );
+        const start = Date.now();
         // The babel parser builds the same tree as cs-mast, recovers from syntax errors like
         // js-recon's own parser, and skips the per-node hash nothing here uses.
         const graph = await taintwire.PookieGraph.open(":memory:", { parser: "babel" });
@@ -308,6 +315,7 @@ export const forEachGraph = async (
                     printMsg(MSG.Warn, `[!] taintwire could not load ${unit.name}: ${(e as Error).message}`);
                 }
             }
+            printMsg(MSG.Plain, `[i]   loaded in ${((Date.now() - start) / 1000).toFixed(1)}s`);
             await use(graph);
         } finally {
             await graph.close();
