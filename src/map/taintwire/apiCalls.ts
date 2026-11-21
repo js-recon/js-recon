@@ -21,9 +21,6 @@ export const tooBigForGraph = (name: string, size: number): boolean => {
     );
     return true;
 };
-// Source bytes loaded into one in-memory graph. One graph per file would open Ladybug hundreds of
-// times on large targets, and each open reserves address space that is only released on GC.
-const MAX_GRAPH_BYTES = 2 * 1024 * 1024;
 // `fetch(...)` / `$fetch(...)` (ofetch, Nuxt) and their aliases (`const f = fetch; f(...)`): the
 // unresolved global reaching a callee position through value flow. Local wrappers resolve later
 // through ARGUMENT_TO.
@@ -277,53 +274,6 @@ export interface GraphUnit {
 }
 
 /**
- * Loads `units` into in-memory taintwire graphs of about MAX_GRAPH_BYTES each and calls `use` on
- * each graph before closing it. A unit over MAX_MAP_FILE_SIZE_BYTES is skipped: a graph's memory grows
- * with its source, and a lone oversized unit would still get a graph of its own.
- */
-export const forEachGraph = async (
-    units: GraphUnit[],
-    use: (graph: taintwire.PookieGraph) => Promise<void>
-): Promise<void> => {
-    const batches: GraphUnit[][] = [[]];
-    let batchBytes = 0;
-    for (const unit of units) {
-        if (tooBigForGraph(unit.name, unit.size)) continue;
-        if (batchBytes + unit.size > MAX_GRAPH_BYTES && batches[batches.length - 1].length > 0) {
-            batches.push([]);
-            batchBytes = 0;
-        }
-        batches[batches.length - 1].push(unit);
-        batchBytes += unit.size;
-    }
-    const nonEmpty = batches.filter((b) => b.length > 0);
-    for (const [i, batch] of nonEmpty.entries()) {
-        const kb = Math.ceil(batch.reduce((n, u) => n + u.size, 0) / 1024);
-        printMsg(
-            MSG.Info,
-            `[i] taintwire graph ${i + 1}/${nonEmpty.length}: loading ${batch.map((u) => u.name).join(", ")} (${kb} KB)`
-        );
-        const start = Date.now();
-        // The babel parser builds the same tree as cs-mast, recovers from syntax errors like
-        // js-recon's own parser, and skips the per-node hash nothing here uses.
-        const graph = await taintwire.PookieGraph.open(":memory:", { parser: "babel" });
-        try {
-            for (const unit of batch) {
-                try {
-                    await graph.add(unit.code(), unit.name);
-                } catch (e) {
-                    printMsg(MSG.Warn, `[!] taintwire could not load ${unit.name}: ${(e as Error).message}`);
-                }
-            }
-            printMsg(MSG.Plain, `[i]   loaded in ${((Date.now() - start) / 1000).toFixed(1)}s`);
-            await use(graph);
-        } finally {
-            await graph.close();
-        }
-    }
-};
-
-/**
  * Prints each call and registers every URL variant that passes the legacy filters (strict for
  * fetch/XHR/config objects, placeholder-tolerant for HTTP clients) with the OpenAPI collector.
  * Returns how many URLs were registered.
@@ -363,22 +313,22 @@ export const emitApiCalls = (
 };
 
 /**
- * Loads every file in `names` (relative to `directory`) into ONE linked taintwire graph with a single
- * addFiles() call, so values flow across chunks (bundler module registries, ES imports), and calls
- * `use` on it. The graph is on disk in a temp dir: a whole app in memory is too big. Files over
- * MAX_MAP_FILE_SIZE_BYTES are left out.
+ * Loads every unit into ONE linked taintwire graph with a single addFiles() call, so values flow across
+ * chunks (bundler module registries, ES imports, classic-script globals), and calls `use` on it. The graph
+ * is on disk in a temp dir: a whole app in memory is too big. Units over MAX_MAP_FILE_SIZE_BYTES are left out.
  */
-export const withLinkedGraph = async (
-    directory: string,
-    names: string[],
+export const withLinkedUnits = async (
+    units: GraphUnit[],
     use: (graph: taintwire.PookieGraph) => Promise<void>
 ): Promise<void> => {
-    const files = names.filter((f) => !tooBigForGraph(f, fs.statSync(path.join(directory, f)).size));
+    const files = units
+        .filter((u) => !tooBigForGraph(u.name, u.size))
+        .map((u) => ({ filename: u.name, code: u.code() }));
     if (files.length === 0) return;
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "jsr-map-tw-"));
     try {
         const pgPath = path.join(tmp, "map.pg");
-        await writeGraph(pgPath, directory, files, {});
+        await writeGraph(pgPath, files, {});
         const graph = await taintwire.PookieGraph.open(pgPath, { parser: "babel" });
         try {
             await use(graph);
@@ -389,6 +339,20 @@ export const withLinkedGraph = async (
         fs.rmSync(tmp, { recursive: true, force: true });
     }
 };
+
+/** withLinkedUnits() over the files `names`, relative to `directory`. */
+export const withLinkedGraph = (
+    directory: string,
+    names: string[],
+    use: (graph: taintwire.PookieGraph) => Promise<void>
+): Promise<void> =>
+    withLinkedUnits(
+        names.map((f) => {
+            const file = path.join(directory, f);
+            return { name: f, size: fs.statSync(file).size, code: () => fs.readFileSync(file, "utf-8") };
+        }),
+        use
+    );
 
 /**
  * taintwire counterpart of the legacy directory-scan resolvers (vue_resolveFetch, vue_resolveXhr,

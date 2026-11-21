@@ -86,8 +86,17 @@ const withBar = async <T>(
 /** Ladybug's buffer pool (MB) and query threads; unset means taintwire's defaults. */
 export type Limits = { bufferPoolMB?: number; threads?: number };
 
-/** Write one linked PookieGraph of `names` (relative to `directory`) to `pgPath`; removes it again on failure. */
-export const writeGraph = async (pgPath: string, directory: string, names: string[], limits: Limits, unit = "") => {
+/** The JS files `names` (relative to `directory`) as addFiles() input. */
+const readFiles = (directory: string, names: string[]) =>
+    names.map((f) => ({ filename: f, code: fs.readFileSync(path.join(directory, f), "utf-8") }));
+
+/** Write one linked PookieGraph of `files` to `pgPath`; removes it again on failure. */
+export const writeGraph = async (
+    pgPath: string,
+    files: { filename: string; code: string }[],
+    limits: Limits,
+    unit = ""
+) => {
     const { PookieGraph } = await import("@js-recon/taintwire");
     // On disk, not in memory: a whole app in memory takes about 10 KB of RAM per byte of minified source.
     const graph = await PookieGraph.open(pgPath, { parser: "babel", ...limits });
@@ -96,10 +105,7 @@ export const writeGraph = async (pgPath: string, directory: string, names: strin
         // one call, so chunks are linked through the bundler's module registry
         const STAGES = { parse: "Parsing files", link: "Linking", load: "Loading graph rows" };
         await withBar((update) =>
-            graph.addFiles(
-                names.map((f) => ({ filename: f, code: fs.readFileSync(path.join(directory, f), "utf-8") })),
-                (stage, done, total) => update(unit + STAGES[stage], done, total)
-            )
+            graph.addFiles(files, (stage, done, total) => update(unit + STAGES[stage], done, total))
         );
         await graph.query("CHECKPOINT");
         await graph.close();
@@ -143,7 +149,7 @@ export const build = async (directory: string, output: string, limits: Limits = 
     const started = Date.now();
     if (!output.endsWith(".tw")) {
         printMsg(MSG.Header, `[i] Building a PookieGraph from ${names.length} file(s) into ${output}`);
-        await writeGraph(output, directory, names, limits);
+        await writeGraph(output, readFiles(directory, names), limits);
     } else {
         const tw = await import("@js-recon/taintwire");
         // A fresh directory next to the output (same disk), so cleanup never touches anything else.
@@ -162,7 +168,12 @@ export const build = async (directory: string, output: string, limits: Limits = 
             const manifest = { format: 1, units: [] as { pg: string; files: string[] }[] };
             for (const [i, files] of units.entries()) {
                 const pg = `unit-${i}.pg`;
-                await writeGraph(path.join(tmp, pg), directory, files, limits, `Unit ${i + 1}/${units.length}: `);
+                await writeGraph(
+                    path.join(tmp, pg),
+                    readFiles(directory, files),
+                    limits,
+                    `Unit ${i + 1}/${units.length}: `
+                );
                 manifest.units.push({ pg, files });
             }
             fs.writeFileSync(path.join(tmp, "manifest.json"), JSON.stringify(manifest));

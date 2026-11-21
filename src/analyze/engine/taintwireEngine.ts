@@ -2,7 +2,7 @@ import type { PGRule, PGSelector, PgqFinding, PgqLocation, PookieGraph } from "@
 import { Rule } from "../types/index.js";
 import { Chunks } from "../../utility/interfaces.js";
 import { EngineOutput } from "../helpers/outputHelper.js";
-import { GraphUnit, forEachGraph } from "../../map/taintwire/apiCalls.js";
+import { GraphUnit, withLinkedUnits } from "../../map/taintwire/apiCalls.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 import { getTaintwireIncludeVendor } from "../../utility/globals.js";
 
@@ -141,38 +141,41 @@ export const runTaintwireRules = async (
 };
 
 /**
- * Loads the chunks of `mapped.json` into taintwire graphs (one graph file per chunk, about 2 MB of
- * source per graph) and runs every rule on each. A chunk is loaded only if some rule's prefilter
- * matches it, or some rule has none: taintwire builds no cross-chunk edges, so a chunk without a
- * source can't produce a finding. Known vendor library chunks are skipped unless
- * --taintwire-include-vendor. A rule that fails on any graph is listed in `failedRules`.
- * `onProgress` gets the findings so far after each rule, so a caller can save partial results.
+ * Loads the chunks of `mapped.json` into ONE linked taintwire graph (on disk) and runs the rules on it, so a flow
+ * can cross chunks: bundler module registries, ES imports, and the global scope classic scripts share. The prefilter
+ * applies to that linked unit: a rule runs if its prefilter matches any chunk (or it has none), and every chunk is
+ * loaded, since the sink can sit in a chunk with no source. Known vendor library chunks are skipped unless
+ * --taintwire-include-vendor. A rule that fails is listed in `failedRules`. `onProgress` gets the findings so far
+ * after each rule, so a caller can save partial results.
  */
 const taintwireEngine = async (
     rules: Rule[],
     chunks: Chunks,
     onProgress?: (findings: EngineOutput[]) => void
 ): Promise<TaintwireRunResult> => {
-    const filters = rules.map((r) => (r.prefilter ? new RegExp(r.prefilter) : null));
     const vendor: string[] = [];
-    const units: GraphUnit[] = Object.values(chunks)
-        .filter((c) => c.code && filters.some((f) => !f || f.test(c.code)))
-        .filter((c) => getTaintwireIncludeVendor() || !isVendorChunk(c.code) || (vendor.push(c.id), false))
-        .map((c) => ({ name: c.id, size: c.code.length, code: () => c.code }));
+    const loaded = Object.values(chunks)
+        .filter((c) => c.code)
+        .filter((c) => getTaintwireIncludeVendor() || !isVendorChunk(c.code) || (vendor.push(c.id), false));
     if (vendor.length > 0)
         printMsg(
             MSG.Info,
             `[i] Skipped ${vendor.length} vendor chunk(s) for taintwire (${vendor.join(", ")}); pass --taintwire-include-vendor to scan them`
         );
+    const active = rules.filter((r) => !r.prefilter || loaded.some((c) => new RegExp(r.prefilter!).test(c.code)));
     printMsg(
         MSG.Header,
-        `[i] Running ${rules.length} taintwire rule(s) on ${units.length} of ${Object.keys(chunks).length} chunk(s)`
+        `[i] Running ${active.length} of ${rules.length} taintwire rule(s) on one linked graph of ${loaded.length} of ${Object.keys(chunks).length} chunk(s)`
     );
 
     const findings: EngineOutput[] = [];
     const failed = new Set<string>();
-    await forEachGraph(units, async (graph) => {
-        await runTaintwireRules(graph, rules, (run) => {
+    if (active.length === 0) return { findings, failedRules: [] };
+    const units: GraphUnit[] = loaded.map((c) => ({ name: c.id, size: c.code.length, code: () => c.code }));
+    const start = Date.now();
+    await withLinkedUnits(units, async (graph) => {
+        printMsg(MSG.Plain, `[i]   loaded in ${((Date.now() - start) / 1000).toFixed(1)}s`);
+        await runTaintwireRules(graph, active, (run) => {
             for (const f of run.findings) findings.push(f);
             for (const id of run.failedRules) failed.add(id);
             onProgress?.(findings);
