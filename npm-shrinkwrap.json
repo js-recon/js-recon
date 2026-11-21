@@ -16,7 +16,7 @@
                 "@babel/parser": "8.0.7",
                 "@babel/traverse": "8.0.7",
                 "@babel/types": "8.0.6",
-                "@js-recon/taintwire": "0.2.0-alpha.3",
+                "@js-recon/taintwire": "0.2.0-alpha.4",
                 "@modelcontextprotocol/sdk": "1.32.1",
                 "@shriyanss/cli-print-img": "1.1.1",
                 "@shriyanss/cs-mast": "0.1.8",
@@ -1653,9 +1653,9 @@
             }
         },
         "node_modules/@js-recon/taintwire": {
-            "version": "0.2.0-alpha.3",
-            "resolved": "https://registry.npmjs.org/@js-recon/taintwire/-/taintwire-0.2.0-alpha.3.tgz",
-            "integrity": "sha512-YOGFlgK/wpV5B0ihvM5863H6KiN+FbAbjZw5Z03MdOn/p1FDHe9iFu1hbT3apBEr01gxLZiIex8fe/UUygWUPg==",
+            "version": "0.2.0-alpha.4",
+            "resolved": "https://registry.npmjs.org/@js-recon/taintwire/-/taintwire-0.2.0-alpha.4.tgz",
+            "integrity": "sha512-43zkAIQ9okOdQNXoB1KuVx1PHW+xpmG6BSXMOG6Le/++Ix1CDp8pzK5KzsWS7mBA3IV+1wXOY64VM6ojk05gYA==",
             "license": "MIT",
             "dependencies": {
                 "@babel/parser": "8.0.4",
