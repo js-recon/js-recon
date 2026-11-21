@@ -42,25 +42,6 @@ const findingsOf = async (rules: Rule[], c: Chunks) => (await taintwireEngine(ru
 
 const chunks = (code: string): Chunks => ({ m1: { id: "m1", code } as Chunks[string] });
 
-// shortcut: classic-script global linking is in taintwire after 0.2.0-alpha.3, which js-recon still pins; drop the
-// skip once the pinned taintwire links globals (the probe then always passes).
-const globalsLinked = async (): Promise<boolean> => {
-    const { PookieGraph } = await import("@js-recon/taintwire");
-    const g = await PookieGraph.open(":memory:", { parser: "babel" });
-    try {
-        await g.addFiles([
-            { filename: "a.js", code: "function f() {}" },
-            { filename: "b.js", code: "f();" },
-        ]);
-        return (await g.query("MATCH ()-[e:REFERS_TO]->() RETURN count(e) AS n"))[0].n > 0;
-    } catch {
-        return false;
-    } finally {
-        await g.close();
-    }
-};
-const GLOBALS_LINKED = await globalsLinked();
-
 const TWO_OPAQUE_STEPS = `const p = new URLSearchParams(location.search), t = p.get("q"); document.body.innerHTML = t;`;
 
 describe("taintwire analyze engine", { timeout: 60000 }, () => {
@@ -107,21 +88,18 @@ describe("taintwire analyze engine", { timeout: 60000 }, () => {
     });
 
     // Classic scripts share the global scope: the sink chunk has no source, so a per-chunk prefilter dropped it.
-    it.skipIf(!GLOBALS_LINKED)(
-        "links a call into another classic script's global function, past the prefilter",
-        async () => {
-            const c: Chunks = {
-                lib: {
-                    id: "lib",
-                    code: `var render = function (p) { document.body.innerHTML = p; };`,
-                } as Chunks[string],
-                page: { id: "page", code: `render(location.hash);` } as Chunks[string],
-            };
-            const findings = await findingsOf([rule({}, "location")], c);
-            expect(findings).toHaveLength(1);
-            expect(findings[0].findingLocation).toMatch(/^\/\/ lib:1:\d+ <- page:1:\d+/);
-        }
-    );
+    it("links a call into another classic script's global function, past the prefilter", async () => {
+        const c: Chunks = {
+            lib: {
+                id: "lib",
+                code: `var render = function (p) { document.body.innerHTML = p; };`,
+            } as Chunks[string],
+            page: { id: "page", code: `render(location.hash);` } as Chunks[string],
+        };
+        const findings = await findingsOf([rule({}, "location")], c);
+        expect(findings).toHaveLength(1);
+        expect(findings[0].findingLocation).toMatch(/^\/\/ lib:1:\d+ <- page:1:\d+/);
+    });
 
     it("a requires naming no earlier step leaves the rule without findings", async () => {
         const withRequires = (requires: string[]): Rule => {
