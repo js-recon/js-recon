@@ -2,7 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import * as tar from "tar";
-import type { PgqFinding, PgqLocation } from "@js-recon/taintwire";
+import type { PgqFinding, PgqInterceptor, PgqLocation } from "@js-recon/taintwire";
 import chalk from "chalk";
 import cliProgress from "cli-progress";
 import { printMsg, MSG } from "../utility/printMsg.js";
@@ -10,6 +10,7 @@ import { activateBarLogger, computeBarSize, watchBarResize, withProgressResource
 import { listFilesRecursive, listJsFiles } from "../utility/listFiles.js";
 import { initTaintwireQueries } from "../analyze/helpers/initRules.js";
 import CONFIG from "../globalConfig.js";
+import type { EngineOutput } from "../analyze/helpers/outputHelper.js";
 
 // Same per-file cap as map's taintwire resolvers: bigger files are vendor bundles that cost more than they find.
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
@@ -191,12 +192,12 @@ export const build = async (directory: string, output: string, limits: Limits = 
 
 /**
  * Run the .pgq rules at `queries` (default: the taintwire-queries pack, downloaded to ~/.js-recon) against `graphPath`, a PookieGraph (.pg) or a .tw of them; writes findings to
- * `output` as SARIF 2.1.0. A .tw's graphs are opened one at a time; a finding at the same place from a later graph is dropped.
+ * `output.json` (the analyze.json shape) and, when given, `output.sarif` (SARIF 2.1.0). A .tw's graphs are opened one at a time; a finding at the same place from a later graph is dropped.
  */
 export const analyze = async (
     graphPath: string,
     queries: string | undefined,
-    output: string,
+    output: { json: string; sarif?: string },
     limits: Limits = {},
     disableQueriesVersionCheck = false
 ) => {
@@ -214,6 +215,7 @@ export const analyze = async (
     const { toEngineOutput } = await import("../analyze/engine/taintwireEngine.js");
     const byId = new Map(rules.map((r) => [r.id, r]));
     const out: object[] = []; // SARIF results
+    const engineOut: EngineOutput[] = []; // the JSON findings, in the analyze.json shape
     const seen = new Set<string>(); // findings of earlier graphs, by place
     const failed = new Set<string>();
     let cypherErrors: string[] = [];
@@ -284,7 +286,14 @@ export const analyze = async (
                         ruleAuthor: r.author ?? "",
                         ruleTech: ["all"],
                     });
-                    out.push(sarifResult(f, e.findingLocation.split("\n\n").slice(1).join("\n\n")));
+                    engineOut.push(e);
+                    out.push(
+                        sarifResult(
+                            f,
+                            e.findingLocation.split("\n\n").slice(1).join("\n\n"),
+                            e.interceptors?.map((i) => i.code)
+                        )
+                    );
                 }
             } finally {
                 await graph.close();
@@ -322,8 +331,12 @@ export const analyze = async (
             },
         ],
     };
-    fs.writeFileSync(output, JSON.stringify(sarif, null, 2));
-    printMsg(MSG.Run, `[✓] Written to ${output}`);
+    fs.writeFileSync(output.json, JSON.stringify(engineOut, null, 2));
+    printMsg(MSG.Run, `[✓] Written to ${output.json}`);
+    if (output.sarif) {
+        fs.writeFileSync(output.sarif, JSON.stringify(sarif, null, 2));
+        printMsg(MSG.Run, `[✓] Written to ${output.sarif}`);
+    }
     // the findings of the other rules are written; 41 tells a caller they are incomplete
     if (failed.size) process.exitCode = 41;
 };
@@ -344,29 +357,59 @@ const sarifLocation = (l: PgqLocation, snippet?: string) => ({
     },
 });
 
-/** A runPgq finding as a SARIF result: the sink is the location; a source becomes a related location and a code flow. */
-const sarifResult = (f: PgqFinding, code: string) => ({
-    ruleId: f.ruleId,
-    level: SARIF_LEVEL[f.severity] ?? "warning",
-    message: { text: f.message },
-    locations: [sarifLocation(f, code)],
-    ...(f.source && {
-        relatedLocations: [{ id: 1, message: { text: "source" }, ...sarifLocation(f.source) }],
-        codeFlows: [
-            {
-                threadFlows: [
-                    {
-                        locations: [
-                            { location: { message: { text: "source" }, ...sarifLocation(f.source) } },
-                            { location: { message: { text: "sink" }, ...sarifLocation(f, code) } },
-                        ],
-                    },
-                ],
-            },
-        ],
-    }),
-    properties: { severity: f.severity, ...(f.hops !== undefined && { hops: f.hops }) },
-});
+/**
+ * A runPgq finding as a SARIF result: the sink is the location; a source becomes a related location and a code flow.
+ * Interceptors (`codes`: their code, in the same order) become related locations too, guards also a `branch` step of
+ * the code flow, and the rows go in the result's property bag as `interceptors`.
+ */
+export const sarifResult = (f: PgqFinding, code: string, codes: string[] = []) => {
+    const its = (f.interceptors ?? []).map((i, n) => ({ i, code: codes[n] }));
+    const label = (i: PgqInterceptor) => (i.kind === "check" ? `check: ${i.text}` : `${i.kind}, ${i.text}`);
+    return {
+        ruleId: f.ruleId,
+        level: SARIF_LEVEL[f.severity] ?? "warning",
+        message: { text: f.message },
+        locations: [sarifLocation(f, code)],
+        ...(f.source && {
+            relatedLocations: [
+                { id: 1, message: { text: "source" }, ...sarifLocation(f.source) },
+                ...its.map(({ i, code }, n) => ({ id: n + 2, message: { text: label(i) }, ...sarifLocation(i, code) })),
+            ],
+            codeFlows: [
+                {
+                    threadFlows: [
+                        {
+                            locations: [
+                                { location: { message: { text: "source" }, ...sarifLocation(f.source) } },
+                                ...its
+                                    .filter(({ i }) => i.kind !== "check")
+                                    .map(({ i, code }) => ({
+                                        kinds: ["branch"],
+                                        location: { message: { text: label(i) }, ...sarifLocation(i, code) },
+                                    })),
+                                { location: { message: { text: "sink" }, ...sarifLocation(f, code) } },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }),
+        properties: {
+            severity: f.severity,
+            ...(f.hops !== undefined && { hops: f.hops }),
+            ...(its.length > 0 && {
+                interceptors: its.map(({ i, code }) => ({
+                    kind: i.kind,
+                    text: i.text,
+                    file: i.file,
+                    line: i.line,
+                    column: i.col + 1,
+                    ...(code !== undefined && { code }),
+                })),
+            }),
+        },
+    };
+};
 
 /** Evaluate, validate and compile the .pgq files at `queries`; exits 40 on any problem. */
 export const validate = async (queries: string) => {

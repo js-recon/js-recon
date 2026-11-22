@@ -1,7 +1,7 @@
 import type { PGRule, PGSelector, PgqFinding, PgqLocation, PookieGraph } from "@js-recon/taintwire";
 import { Rule } from "../types/index.js";
 import { Chunks } from "../../utility/interfaces.js";
-import { EngineOutput } from "../helpers/outputHelper.js";
+import { EngineInterceptor, EngineOutput } from "../helpers/outputHelper.js";
 import { GraphUnit, withLinkedUnits } from "../../map/taintwire/apiCalls.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
 import { getTaintwireIncludeVendor } from "../../utility/globals.js";
@@ -50,12 +50,27 @@ export const toEngineOutput = async (graph: PookieGraph, f: PgqFinding, meta: Fi
     const via = f.source ? ` <- ${at(f.source)} (${f.hops} hops)` : "";
     printMsg(SEVERITY_MSG[f.severity], message);
     printMsg(MSG.Plain, `${at(f)}${via}\n${code}`);
+    const interceptors: EngineInterceptor[] = [];
+    for (const i of f.interceptors ?? []) {
+        const src = (await graph.code(i.id)).replace(/\s+/g, " ").slice(0, MAX_CODE);
+        interceptors.push({ kind: i.kind, text: i.text, location: at(i), code: src });
+    }
+    if (interceptors.length) {
+        // guards (if/ternary/and-or/early-exit) carry the polarity; the checks below them describe their parts
+        const lines = interceptors.map((i) =>
+            i.kind === "check"
+                ? `      ${i.location} ${i.text}: ${i.code}`
+                : `    ${i.location} ${i.kind}, ${i.text}: ${i.code}`
+        );
+        printMsg(MSG.Info, `[i] Conditions before the sink:\n${lines.join("\n")}`);
+    }
     return {
         ruleId: f.ruleId,
         ...meta,
         severity: f.severity,
         message: f.message,
         findingLocation: `// ${at(f)}${via}\n\n${code}`,
+        ...(interceptors.length ? { interceptors } : {}),
     };
 };
 

@@ -38,10 +38,11 @@ describe("taintwire build / analyze / validate", { timeout: 120000 }, () => {
         fs.writeFileSync(path.join(q, "rule.pgq"), RULE);
         const pg = path.join(dir, "app.pg");
         const out = path.join(dir, "out.sarif");
+        const outs = { json: path.join(dir, "out.json"), sarif: out };
         try {
             await build(js, pg);
             expect(fs.existsSync(pg)).toBe(true);
-            await analyze(pg, q, out);
+            await analyze(pg, q, outs);
             const sarif = JSON.parse(fs.readFileSync(out, "utf-8"));
             expect(sarif.version).toBe("2.1.0");
             expect(sarif.runs[0].tool.driver.rules.map((r: { id: string }) => r.id)).toContain("hash_html");
@@ -69,7 +70,7 @@ describe("taintwire build / analyze / validate", { timeout: 120000 }, () => {
             // one graph per unit, packed into a .tw, finds the same
             const tw = path.join(dir, "app.tw");
             await build(js, tw);
-            await analyze(tw, q, out);
+            await analyze(tw, q, outs);
             expect(JSON.parse(fs.readFileSync(out, "utf-8")).runs[0].results).toEqual(findings);
 
             // a manifest that names a graph outside the archive is rejected, and that graph is left alone
@@ -84,10 +85,67 @@ describe("taintwire build / analyze / validate", { timeout: 120000 }, () => {
             const exit = exits();
             await expect(build(js, pg)).rejects.toThrow("exit 38"); // output exists
             await expect(build(path.join(dir, "nope"), path.join(dir, "x.pg"))).rejects.toThrow("exit 37");
-            await expect(analyze(path.join(dir, "nope.pg"), q, out)).rejects.toThrow("exit 39");
-            await expect(analyze(path.join(dir, "evil.tw"), q, out)).rejects.toThrow("exit 39");
+            await expect(analyze(path.join(dir, "nope.pg"), q, outs)).rejects.toThrow("exit 39");
+            await expect(analyze(path.join(dir, "evil.tw"), q, outs)).rejects.toThrow("exit 39");
             expect(fs.existsSync(pg)).toBe(true);
             expect(exit).toHaveBeenCalledTimes(4);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it("writes a sink's interceptors to the JSON, and to the SARIF only when asked", async () => {
+        const dir = tmp();
+        const js = path.join(dir, "js");
+        const q = path.join(dir, "q");
+        fs.mkdirSync(js);
+        fs.mkdirSync(q);
+        fs.writeFileSync(
+            path.join(js, "a.js"),
+            "const h = location.hash;\nif (h.length > 2) document.body.innerHTML = h;"
+        );
+        fs.writeFileSync(path.join(q, "lib.pgq"), LIB);
+        // the guard query of the pack, cut down: an if whose test holds a node of the flow
+        const guard = `MATCH (g:IfStatement)-[:SON {key: 'consequent'}]->(br)-[:SON*0..10]->(k), (g)-[:SON {key: 'test'}]->(n)
+WHERE k.id = $sink AND EXISTS { MATCH (n)-[:SON*0..10]->(x) WHERE x.id IN $flow }
+RETURN n.id AS id, 'if' AS kind, 'must be true' AS text, ${AT}`;
+        fs.writeFileSync(
+            path.join(q, "rule.pgq"),
+            RULE.replace(
+                "return: [{ from: hashRead,",
+                `return: [{ from: hashRead, interceptors: [{ query: \`${guard}\` }],`
+            )
+        );
+        const pg = path.join(dir, "app.pg");
+        const json = path.join(dir, "taintwire.json");
+        const sarif = path.join(dir, "taintwire.sarif");
+        try {
+            await build(js, pg);
+            await analyze(pg, q, { json });
+            expect(fs.existsSync(sarif)).toBe(false);
+            const [f] = JSON.parse(fs.readFileSync(json, "utf-8"));
+            expect(f.interceptors).toEqual([
+                { kind: "if", text: "must be true", location: "a.js:2:4", code: "h.length > 2" },
+            ]);
+
+            await analyze(pg, q, { json, sarif });
+            const [r] = JSON.parse(fs.readFileSync(sarif, "utf-8")).runs[0].results;
+            expect(r.relatedLocations[1]).toMatchObject({
+                id: 2,
+                message: { text: "if, must be true" },
+                physicalLocation: { region: { startLine: 2, startColumn: 5, snippet: { text: "h.length > 2" } } },
+            });
+            // source, the guard as a branch step, sink
+            const steps = r.codeFlows[0].threadFlows[0].locations;
+            expect(steps.map((s: { location: { message: { text: string } } }) => s.location.message.text)).toEqual([
+                "source",
+                "if, must be true",
+                "sink",
+            ]);
+            expect(steps[1].kinds).toEqual(["branch"]);
+            expect(r.properties.interceptors).toEqual([
+                { kind: "if", text: "must be true", file: "a.js", line: 2, column: 5, code: "h.length > 2" },
+            ]);
         } finally {
             fs.rmSync(dir, { recursive: true, force: true });
         }

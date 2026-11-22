@@ -1245,13 +1245,20 @@ export function buildProgram(): Command {
                 "-q, --queries <file/dir>",
                 "A .pgq file, or a directory searched recursively for them (default: the taintwire-queries pack, downloaded to ~/.js-recon/taintwire-queries)"
             )
-            .option("-o, --output <file>", "Findings SARIF 2.1.0 file", "taintwire.sarif")
+            .option("--output-json <file>", "Findings file, in the analyze.json format", "taintwire.json")
+            .option("--output-sarif <file>", "Also write the findings to this SARIF 2.1.0 file")
             .option(
                 "--disable-rules-version-check",
                 "Skip the GitHub version check of the downloaded taintwire-queries pack and use the cached one as-is"
             )
     ).action(async (cmd) => {
-        await taintwire.analyze(cmd.graph, cmd.queries, cmd.output, limits(cmd), cmd.disableRulesVersionCheck);
+        await taintwire.analyze(
+            cmd.graph,
+            cmd.queries,
+            { json: cmd.outputJson, sarif: cmd.outputSarif },
+            limits(cmd),
+            cmd.disableRulesVersionCheck
+        );
     });
     taintwireCmd
         .command("validate")
