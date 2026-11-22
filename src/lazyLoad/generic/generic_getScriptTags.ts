@@ -147,6 +147,49 @@ const generic_getScriptTags = async (
         }
     });
 
+    if (outputDir) {
+        const attrCounters: Record<string, number> = {};
+        const seenBodies = new Set<string>();
+        $("*").each((_, elem) => {
+            const attribs = (elem as any).attribs as Record<string, string> | undefined;
+            if (!attribs) return;
+            for (const [rawName, value] of Object.entries(attribs)) {
+                const name = rawName.toLowerCase();
+                let kind: string;
+                let content: string;
+                // Every spec event-handler attribute starts with "on" (WHATWG GlobalEventHandlers /
+                // WindowEventHandlers, plus vendor and SVG ones); a prefix match also covers events added later.
+                const url = value.replace(/[\t\n\r]/g, "").replace(/^[\x00-\x20]+/, "");
+                if (name.startsWith("on")) {
+                    kind = name;
+                    content = value.trim();
+                } else if (/^javascript:/i.test(url)) {
+                    kind = "javascript";
+                    const body = url.slice("javascript:".length);
+                    try {
+                        content = decodeURIComponent(body).trim();
+                    } catch {
+                        content = body.trim();
+                    }
+                } else continue;
+                if (!content || seenBodies.has(content)) continue;
+                seenBodies.add(content);
+
+                const n = (attrCounters[kind] = (attrCounters[kind] ?? 0) + 1);
+                const hostDir = path.join(outputDir, host, pageDir);
+                fs.mkdirSync(hostDir, { recursive: true });
+                const filePath = path.join(hostDir, `${kind}-${n}.js`);
+                const tag = (elem as any).name ?? "element";
+                fs.writeFileSync(
+                    filePath,
+                    `// File Source: ${pageUrl} (${name} attribute #${n} on <${tag}>)\n${content}`
+                );
+                lazyLoadGlobals.recordJsFileHash(crypto.createHash("sha256").update(content).digest("hex"));
+                printMsg(MSG.Run, `[✓] Saved ${name} attribute script to ${filePath}`);
+            }
+        });
+    }
+
     $("link[rel='modulepreload']").each((_, elem) => {
         const href = $(elem).attr("href");
         if (href) {
