@@ -87,6 +87,20 @@ describe("generic_getScriptTags", () => {
         expect(read("javascript-1.js").split("\n")[1]).toBe('foo("bar")');
     });
 
+    it("doesn't overwrite scripts from pages that differ only by query string", async () => {
+        harness.makeRequest.mockResolvedValueOnce(new Response(`<script>a()</script><a onclick="x()">`));
+        harness.makeRequest.mockResolvedValueOnce(new Response(`<script>b()</script><a onclick="x()">`));
+
+        await generic_getScriptTags("https://example.test/post?id=1", 2, outputDir);
+        await generic_getScriptTags("https://example.test/post?id=2", 2, outputDir);
+
+        const dir = path.join(outputDir, "example.test", "post");
+        expect(fs.readdirSync(dir).sort()).toEqual(["inline-0.js", "inline-1.js", "onclick-1.js"]);
+        expect(fs.readFileSync(path.join(dir, "inline-1.js"), "utf-8")).toBe(
+            "// File Source: https://example.test/post?id=2 (inline script #1)\nb()"
+        );
+    });
+
     it("keeps the requested URL as the base when the response has no final URL", async () => {
         harness.makeRequest.mockResolvedValue(new Response('<script src="js/app.js"></script>'));
 

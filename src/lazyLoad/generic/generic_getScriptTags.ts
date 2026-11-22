@@ -27,6 +27,33 @@ const NON_JS_SCRIPT_TYPES = [
 ];
 
 /**
+ * Writes `<prefix>-<n>.js` under `dir` from `n = start` up, skipping names already taken.
+ * Pages that differ only by query string (`/post?id=1`, `/post?id=2`) share one directory, so
+ * an existing file holding the same body means it's already saved (returns null) and a different
+ * body moves on to the next free number instead of overwriting it.
+ */
+const savePageScript = (
+    dir: string,
+    prefix: string,
+    start: number,
+    header: (n: number) => string,
+    content: string
+): { filePath: string; n: number } | null => {
+    fs.mkdirSync(dir, { recursive: true });
+    for (let n = start; ; n++) {
+        const filePath = path.join(dir, `${prefix}-${n}.js`);
+        if (fs.existsSync(filePath)) {
+            const existing = fs.readFileSync(filePath, "utf-8");
+            if (existing.slice(existing.indexOf("\n") + 1) === content) return null;
+            continue;
+        }
+        fs.writeFileSync(filePath, `${header(n)}\n${content}`);
+        lazyLoadGlobals.recordJsFileHash(crypto.createHash("sha256").update(content).digest("hex"));
+        return { filePath, n };
+    }
+};
+
+/**
  * Whether a <script type="..."> value indicates the tag's content should be
  * treated as JS. Missing/empty type defaults to JS per the HTML spec. Deliberately
  * permissive for unrecognized types (e.g. Cloudflare Rocket Loader rewrites
@@ -114,16 +141,17 @@ const generic_getScriptTags = async (
                 const content = decodeDataUriScript(resolved.href);
                 if (!content) return;
 
-                const hostDir = path.join(outputDir, host, pageDir);
-                fs.mkdirSync(hostDir, { recursive: true });
-                const filename = `inline-${inlineIndex++}.js`;
-                const filePath = path.join(hostDir, filename);
-                fs.writeFileSync(
-                    filePath,
-                    `// File Source: ${pageUrl} (data URI script #${inlineIndex - 1})\n${content}`
+                const saved = savePageScript(
+                    path.join(outputDir, host, pageDir),
+                    "inline",
+                    inlineIndex,
+                    (n) => `// File Source: ${pageUrl} (data URI script #${n})`,
+                    content
                 );
-                lazyLoadGlobals.recordJsFileHash(crypto.createHash("sha256").update(content).digest("hex"));
-                printMsg(MSG.Run, `[✓] Saved data URI script to ${filePath}`);
+                if (saved) {
+                    inlineIndex = saved.n + 1;
+                    printMsg(MSG.Run, `[✓] Saved data URI script to ${saved.filePath}`);
+                }
                 return;
             }
 
@@ -137,13 +165,17 @@ const generic_getScriptTags = async (
             const content = $(elem).text().trim();
             if (!content) return;
 
-            const hostDir = path.join(outputDir, host, pageDir);
-            fs.mkdirSync(hostDir, { recursive: true });
-            const filename = `inline-${inlineIndex++}.js`;
-            const filePath = path.join(hostDir, filename);
-            fs.writeFileSync(filePath, `// File Source: ${pageUrl} (inline script #${inlineIndex - 1})\n${content}`);
-            lazyLoadGlobals.recordJsFileHash(crypto.createHash("sha256").update(content).digest("hex"));
-            printMsg(MSG.Run, `[✓] Saved inline script to ${filePath}`);
+            const saved = savePageScript(
+                path.join(outputDir, host, pageDir),
+                "inline",
+                inlineIndex,
+                (n) => `// File Source: ${pageUrl} (inline script #${n})`,
+                content
+            );
+            if (saved) {
+                inlineIndex = saved.n + 1;
+                printMsg(MSG.Run, `[✓] Saved inline script to ${saved.filePath}`);
+            }
         }
     });
 
@@ -175,17 +207,17 @@ const generic_getScriptTags = async (
                 if (!content || seenBodies.has(content)) continue;
                 seenBodies.add(content);
 
-                const n = (attrCounters[kind] = (attrCounters[kind] ?? 0) + 1);
-                const hostDir = path.join(outputDir, host, pageDir);
-                fs.mkdirSync(hostDir, { recursive: true });
-                const filePath = path.join(hostDir, `${kind}-${n}.js`);
                 const tag = (elem as any).name ?? "element";
-                fs.writeFileSync(
-                    filePath,
-                    `// File Source: ${pageUrl} (${name} attribute #${n} on <${tag}>)\n${content}`
+                const saved = savePageScript(
+                    path.join(outputDir, host, pageDir),
+                    kind,
+                    (attrCounters[kind] ?? 0) + 1,
+                    (n) => `// File Source: ${pageUrl} (${name} attribute #${n} on <${tag}>)`,
+                    content
                 );
-                lazyLoadGlobals.recordJsFileHash(crypto.createHash("sha256").update(content).digest("hex"));
-                printMsg(MSG.Run, `[✓] Saved ${name} attribute script to ${filePath}`);
+                if (!saved) continue;
+                attrCounters[kind] = saved.n;
+                printMsg(MSG.Run, `[✓] Saved ${name} attribute script to ${saved.filePath}`);
             }
         });
     }
