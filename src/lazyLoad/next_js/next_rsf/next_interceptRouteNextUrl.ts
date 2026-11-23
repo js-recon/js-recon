@@ -1,10 +1,10 @@
 import vm from "vm";
 import * as parser from "@babel/parser";
 import traverse from "@babel/traverse";
-import rawRequest, { type RawResponse } from "../../exploit/utility/rawRequest.js";
-import { runWithConcurrency } from "../../utility/concurrency.js";
-import { printMsg, MSG } from "../../utility/printMsg.js";
-import { extractChunkPathsFromFlightBody } from "./next_routerStateForge.js";
+import rawRequest, { type RawResponse } from "../../../exploit/utility/rawRequest.js";
+import { runWithConcurrency } from "../../../utility/concurrency.js";
+import { printMsg, MSG } from "../../../utility/printMsg.js";
+import { extractChunkPathsFromFlightBody } from "./rsfShared.js";
 
 const REQUEST_TIMEOUT_MS = 15000;
 

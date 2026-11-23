@@ -166,7 +166,11 @@ const analyze = async (
         if (getAnalyzeTaintwire()) {
             // dynamic import: the native graph database loads only when taintwire rules run
             const { default: taintwireEngine } = await import("./engine/taintwireEngine.js");
-            const { findings, failedRules } = await taintwireEngine(taintwireRules, mappedJsonData);
+            // rewrite the output after each rule, so a run that is killed or times out keeps what it found
+            const others = [...ruleFindings];
+            const { findings, failedRules } = await taintwireEngine(taintwireRules, mappedJsonData, (sofar) =>
+                fs.writeFileSync(outputFile, JSON.stringify(others.concat(sofar), null, 2))
+            );
             for (const finding of findings) ruleFindings.push(finding);
             failedTaintwireRules = failedRules;
         } else {

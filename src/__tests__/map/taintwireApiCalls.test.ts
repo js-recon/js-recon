@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import * as taintwire from "@js-recon/taintwire";
-import { resolveApiCalls, ApiCall, PREFILTER } from "../../map/taintwire/apiCalls.js";
-import { resolveServerActions } from "../../map/taintwire/next_js/index.js";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { resolveApiCalls, ApiCall, withLinkedGraph } from "../../map/taintwire/apiCalls.js";
+import { moduleSpans, resolveServerActions } from "../../map/taintwire/next_js/index.js";
+import { Chunks } from "../../utility/interfaces.js";
 
 const withGraph = async <T>(code: string, fn: (graph: taintwire.PookieGraph) => Promise<T>): Promise<T> => {
     const graph = await taintwire.import(code, { filename: "app.js", parser: "babel" });
@@ -163,9 +167,51 @@ describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
         expect(urlsOf(calls, "fetch")).toEqual(["/api/posts/1", "/api/users/[var id]"]);
     });
 
-    it("prefilter keeps files whose only sink is a compiled Nuxt useFetch", () => {
-        expect(PREFILTER.test('D(`/api/users/${u}`,{key:`user-${u}`},"$Mf6Ry1Dc5J")')).toBe(true);
-        expect(PREFILTER.test("const a = 1;")).toBe(false);
+    it("links every file of a directory into one graph, so a URL reaches fetch from another chunk", async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tw-linked-"));
+        try {
+            // b.js has no sink token at all: it's still loaded, and its URL flows into a.js's fetch.
+            fs.writeFileSync(
+                path.join(dir, "a.js"),
+                `(self.webpackChunk=self.webpackChunk||[]).push([[1],{10:(e,t,n)=>{n.d(t,{go:()=>g});function g(u){return fetch(u)}}}]);`
+            );
+            fs.writeFileSync(
+                path.join(dir, "b.js"),
+                `(self.webpackChunk=self.webpackChunk||[]).push([[2],{20:(e,t,n)=>{var r=n(10);r.go("/api/linked")}}]);`
+            );
+            let calls: ApiCall[] = [];
+            await withLinkedGraph(dir, ["a.js", "b.js"], async (g) => {
+                calls = await resolveApiCalls(g);
+            });
+            expect(urlsOf(calls, "fetch")).toEqual(["/api/linked"]);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it("finds each Next.js module's span in its chunk file behind the rewritten prefix", () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tw-spans-"));
+        try {
+            const text = `push([[1],{10:function(e){a()},20:(e,t)=>{b()}}])`;
+            fs.writeFileSync(path.join(dir, "c.js"), text);
+            const mk = (id: string, code: string) => ({ id, code, file: "c.js" }) as unknown as Chunks[string];
+            const chunks: Chunks = {
+                "10": mk("10", "function webpack_10 (e){a()}"),
+                "20": mk("20", "func_20 = (e,t)=>{b()}"),
+            };
+            const spans = moduleSpans(chunks, dir).get("c.js")!;
+            expect(spans.map((s) => [s.chunk.id, text.slice(s.start, s.end)])).toEqual([
+                ["10", "(e){a()}"],
+                ["20", "(e,t)=>{b()}"],
+            ]);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it("drops HTTP-client 'URLs' that are text (whitespace or markup) rather than paths", async () => {
+        const calls = await resolve('const t = "<b>Hi</b> @a, see this"; cache.get(t); api.get("/api/items/" + id);');
+        expect(urlsOf(calls, "client")).toEqual(["/api/items/[var id]"]);
     });
 
     it("prefixes HTTP-client URLs with the baseURL of the create() call the client comes from", async () => {
@@ -178,13 +224,16 @@ describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
             axios({ url: "/api/a", method: "put", headers: { "X-A": "1" }, data: { n: 1 } });
             new Req({ url: "/api/b/" + id, method: "DELETE" });
             $.ajax({ url: "/api/c", type: "POST" });
+            st({ url: "/settings/profile", params: p, route: { id: r } });
+            nav({ url: "/settings/profile", type: "popstate" });
+            api.request({ url: "/api/d" });
         `);
         expect(
             calls
                 .filter((c) => c.kind === "config")
                 .map((c) => `${c.method} ${c.urls.join(",")}`)
                 .sort()
-        ).toEqual(["DELETE /api/b/[var id]", "POST /api/c", "PUT /api/a"]);
+        ).toEqual(["DELETE /api/b/[var id]", "GET /api/d", "POST /api/c", "PUT /api/a"]);
         expect(calls.find((c) => c.method === "PUT")).toMatchObject({ headers: { "X-A": "1" }, body: '{"n":"1"}' });
     });
 
@@ -201,6 +250,75 @@ describe("taintwire resolveApiCalls", { timeout: 30000 }, () => {
         const save = actions.find((a) => a.actionId === id)!;
         expect(save.actionName).toBe("saveNote");
         expect(JSON.parse(save.body)).toEqual(["<string:title>", "3"]);
+    });
+
+    it("resolves URLs held in React hooks (Vite output: array/object destructuring)", async () => {
+        const calls = await resolve(`
+            const u = (0, l.createContext)("/api/ctx-default");
+            function C({ id: e }) {
+                let [t] = (0, l.useState)("/api/state"),
+                    [n] = (0, l.useState)(() => "/api/lazy"),
+                    r = (0, l.useRef)("/api/ref"),
+                    i = (0, l.useMemo)(() => "/api/memo/" + e, [e]),
+                    [o] = (0, l.useReducer)(m, { url: "/api/reducer" }),
+                    c = (0, l.useContext)(u),
+                    [d, f] = (0, l.useState)("");
+                fetch(t); fetch(n); fetch(r.current); fetch(i); fetch(o.url); fetch(c);
+                f("/api/next"); d && fetch(d);
+            }
+            function v() { return { base: "/api/obj" } }
+            function _() { let [e, t] = (0, l.useState)("/api/arr"); return [e, t] }
+            function B() { let { base: n } = v(), [t] = _(); fetch(n + "/list"); fetch(t); }
+            const App = () => (0, p.jsx)(u.Provider, { value: "/api/ctx", children: null });
+        `);
+        expect(urlsOf(calls, "fetch").filter(Boolean)).toEqual(
+            [
+                "/api/arr",
+                "/api/ctx",
+                "/api/lazy",
+                "/api/memo/[var e]",
+                "/api/next",
+                "/api/obj/list",
+                "/api/reducer",
+                "/api/ref",
+                "/api/state",
+            ].sort()
+        );
+    });
+
+    it("resolves useState through Babel's slicedToArray (webpack output), setter writes included", async () => {
+        const calls = await resolve(`
+            function l(e, t) { return e }
+            function b() {
+                var r = l((0, o.useState)("/api/state"), 1)[0],
+                    n = l((0, o.useState)(function () { return "/api/lazy" }), 1)[0],
+                    d = l((0, o.useState)(""), 2), h = d[0], m = d[1];
+                fetch(r); fetch(n); m("/api/next"); h && fetch(h);
+            }
+        `);
+        expect(urlsOf(calls, "fetch").filter(Boolean)).toEqual(["/api/lazy", "/api/next", "/api/state"]);
+    });
+
+    it("follows a URL into a wrapper imported from another ES-module chunk", async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tw-esm-"));
+        try {
+            fs.mkdirSync(path.join(dir, "_nuxt"));
+            fs.writeFileSync(
+                path.join(dir, "_nuxt/wrap.js"),
+                'function a(e,t){return s(e,{...t},"$Ab12Cd34Ef")}export{a as u};'
+            );
+            fs.writeFileSync(
+                path.join(dir, "_nuxt/page.js"),
+                'import{u as oe}from"./wrap.js";oe("/api/items",{key:"k"});'
+            );
+            let calls: ApiCall[] = [];
+            await withLinkedGraph(dir, ["_nuxt/wrap.js", "_nuxt/page.js"], async (g) => {
+                calls = await resolveApiCalls(g);
+            });
+            expect(urlsOf(calls, "fetch")).toEqual(["/api/items"]);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 
     it("returns [] for code with none of the sinks", async () => {

@@ -12,6 +12,16 @@ export interface EngineOutput {
     severity: string;
     message: string;
     findingLocation: string;
+    /** taintwire: what stands between source and sink (guard conditions and the checks inside them). */
+    interceptors?: EngineInterceptor[];
+}
+
+/** One row of a taintwire sink's interceptors, with the code at its location. */
+export interface EngineInterceptor {
+    kind: string;
+    text: string;
+    location: string; // file:line:col
+    code: string;
 }
 
 /**

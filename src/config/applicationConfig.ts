@@ -139,6 +139,8 @@ const camelToUpperSnake = (value: string): string =>
 export const getOptionEnvironmentVariable = (commandName: string, optionName: string): string =>
     `JS_RECON_${camelToUpperSnake(commandName)}_${camelToUpperSnake(optionName)}`;
 
+const removedOptionKeys: ReadonlySet<string> = new Set(["run.disableRefactor"]);
+
 const legacyEnvironmentAliases: Readonly<Record<string, readonly string[]>> = Object.freeze({
     "run.outputOverwrite": ["JS_RECON_OUTPUT_OVERWRITE"],
     "run.disableRulesVersionCheck": ["JS_RECON_DISABLE_RULES_VERSION_CHECK"],
@@ -360,6 +362,10 @@ const parseApplicationConfig = (configPath: string, program: Command): Applicati
         }
         const command = declaredCommands.get(commandName)!;
         const declaredOptions = optionMap(command);
+        // Keys of removed flags still present in existing config files; drop them instead of failing.
+        for (const key of Object.keys(rawOptions)) {
+            if (removedOptionKeys.has(`${commandName}.${key}`)) delete rawOptions[key];
+        }
         assertKnownKeys(rawOptions, new Set(declaredOptions.keys()), `commands.${commandName}`);
 
         commands[commandName] = Object.fromEntries(

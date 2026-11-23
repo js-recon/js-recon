@@ -3,7 +3,8 @@ FROM ${BASE_IMAGE}
 
 USER root
 COPY js-recon-rules/ /home/pptruser/.js-recon/rules/
-RUN rm -rf /home/pptruser/.js-recon/rules/.github && \
+COPY taintwire-queries/ /home/pptruser/.js-recon/taintwire-queries/
+RUN rm -rf /home/pptruser/.js-recon/rules/.github /home/pptruser/.js-recon/taintwire-queries/.github && \
     if [ -d /home/pptruser/.js-recon/rules/skills ]; then \
         mv /home/pptruser/.js-recon/rules/skills /home/pptruser/.js-recon/skills; \
     fi && \

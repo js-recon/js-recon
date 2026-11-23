@@ -576,6 +576,33 @@ describe("application YAML configuration", () => {
         ).toThrow(/chmod 600/);
     });
 
+    it("ignores keys of removed options left in older config files", () => {
+        const root = makeTemporaryDirectory();
+        const explicitPath = path.join(root, "old.yaml");
+        fs.writeFileSync(
+            explicitPath,
+            "version: 1\ncommands:\n  run:\n    disableRefactor: false\n    enableRefactor: true\n"
+        );
+        let captured: Record<string, unknown> | undefined;
+        const program = new Command().exitOverride().option("--config <file>", "Application YAML config");
+        program
+            .command("run")
+            .option("--enable-refactor", "Enable refactor", false)
+            .action((options) => {
+                captured = options;
+            });
+
+        prepareProgramConfiguration(program, {
+            argv: ["node", "js-recon", "--config", explicitPath, "run"],
+            env: {},
+            defaultConfigPath: path.join(root, "default.yaml"),
+        });
+        program.parse(["node", "js-recon", "--config", explicitPath, "run"]);
+
+        expect(captured?.enableRefactor).toBe(true);
+        expect(captured).not.toHaveProperty("disableRefactor");
+    });
+
     it("rejects malformed YAML, unknown commands, options, and unsupported versions", () => {
         const root = makeTemporaryDirectory();
         const defaultConfigPath = path.join(root, "default.yaml");

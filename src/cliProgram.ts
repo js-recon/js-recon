@@ -185,12 +185,12 @@ export function buildProgram(): Command {
         .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
         .option(
             "--rsc-param-bruteforce-limit <n>",
-            "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
+            "Max harvested dynamic-route param-name candidates to try per URL in next_rsfParamBruteforce's RSC-body keyword fallback (0 = disable the fallback)",
             "20"
         )
         .option(
             "--wordlist <file>",
-            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of next_routerStateForge and next_interceptRouteNextUrl"
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of the next_rsf* methods and next_interceptRouteNextUrl"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
@@ -662,8 +662,14 @@ export function buildProgram(): Command {
             "Run taintwire rules (Cypher taint queries over the AST graph); they are skipped otherwise",
             false
         )
+        .option(
+            "--taintwire-include-vendor",
+            "Also run taintwire rules on known vendor library files (React/ReactDOM/AngularJS/jQuery/Vue/lodash builds); slow, skipped by default",
+            false
+        )
         .action(async (cmd) => {
             globalsUtil.setAnalyzeTaintwire(cmd.analyzeTaintwire);
+            globalsUtil.setTaintwireIncludeVendor(cmd.taintwireIncludeVendor);
             await analyze(
                 cmd.rules,
                 cmd.mappedJson,
@@ -864,6 +870,11 @@ export function buildProgram(): Command {
             "Run taintwire rules in the analyze step (Cypher taint queries over the AST graph); they are skipped otherwise",
             false
         )
+        .option(
+            "--taintwire-include-vendor",
+            "Also run taintwire rules on known vendor library files in the analyze step; slow, skipped by default",
+            false
+        )
         .option("--timeout <timeout>", "Request timeout in ms", "30000")
         .option("-k, --insecure", "Disable SSL certificate verification", false)
         .option("--no-sandbox", "Disable browser sandbox")
@@ -882,12 +893,12 @@ export function buildProgram(): Command {
         .option("--max-pages <pages>", "Maximum HTML pages to visit during Next.js crawl (0 = unlimited)", "200")
         .option(
             "--rsc-param-bruteforce-limit <n>",
-            "Max harvested dynamic-route param-name candidates to try per URL in next_routerStateForge's RSC-body keyword fallback (0 = disable the fallback)",
+            "Max harvested dynamic-route param-name candidates to try per URL in next_rsfParamBruteforce's RSC-body keyword fallback (0 = disable the fallback)",
             "20"
         )
         .option(
             "--wordlist <file>",
-            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of next_routerStateForge and next_interceptRouteNextUrl"
+            "Newline-separated file of path segments/prefixes (e.g. 'admin'); each entry is added as <origin>/<entry> to the candidate URLs of the next_rsf* methods and next_interceptRouteNextUrl"
         )
         .option("--verbose", "Show detailed file write error messages", false)
         .option(
@@ -937,7 +948,7 @@ export function buildProgram(): Command {
             "Minimum CS-MAST-S signature matches required to detect bundler for the refactor step (0 = skip refactor)",
             "50"
         )
-        .option("--disable-refactor", "Skip the automatic refactor step after report", false)
+        .option("--enable-refactor", "Run the bundler-detection and refactor step after report (off by default)", false)
         .option(
             "--web-stats-dashboard",
             "Start a live web dashboard (with a REST API) to follow this run's progress instead of relying on console output",
@@ -1020,6 +1031,7 @@ export function buildProgram(): Command {
             globalsUtil.setGraphqlEnabled(cmd.graphql !== false && !cmd.ngql);
             globalsUtil.setMapTaintwire(cmd.mapTaintwire);
             globalsUtil.setAnalyzeTaintwire(cmd.analyzeTaintwire);
+            globalsUtil.setTaintwireIncludeVendor(cmd.taintwireIncludeVendor);
             globalsUtil.setDisableCache(cmd.disableCache);
             globalsUtil.setRespCacheFile(cmd.cacheFile);
             globalsUtil.setCacheOnly(cmd.cacheOnly);
@@ -1229,10 +1241,24 @@ export function buildProgram(): Command {
             .command("analyze")
             .description("Run .pgq query files against a .tw or a PookieGraph (.pg)")
             .requiredOption("-g, --graph <file>", "A .tw or PookieGraph (.pg) file built by `taintwire build`")
-            .requiredOption("-q, --queries <file/dir>", "A .pgq file, or a directory searched recursively for them")
-            .option("-o, --output <file>", "Findings JSON file", "taintwire.json")
+            .option(
+                "-q, --queries <file/dir>",
+                "A .pgq file, or a directory searched recursively for them (default: the taintwire-queries pack, downloaded to ~/.js-recon/taintwire-queries)"
+            )
+            .option("--output-json <file>", "Findings file, in the analyze.json format", "taintwire.json")
+            .option("--output-sarif <file>", "Also write the findings to this SARIF 2.1.0 file")
+            .option(
+                "--disable-rules-version-check",
+                "Skip the GitHub version check of the downloaded taintwire-queries pack and use the cached one as-is"
+            )
     ).action(async (cmd) => {
-        await taintwire.analyze(cmd.graph, cmd.queries, cmd.output, limits(cmd));
+        await taintwire.analyze(
+            cmd.graph,
+            cmd.queries,
+            { json: cmd.outputJson, sarif: cmd.outputSarif },
+            limits(cmd),
+            cmd.disableRulesVersionCheck
+        );
     });
     taintwireCmd
         .command("validate")

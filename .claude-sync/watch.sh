@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Background watcher intended to be run as a VS Code task (runOn: folderOpen,
-# isBackground: true). Polls for new real CLAUDE.md files every few seconds and
+# Background watcher intended to be run as a WebStorm startup task (.idea/startup.xml).
+# Polls for new real CLAUDE.md files every few seconds and
 # captures them immediately via capture-scan.sh, so a file created interactively
 # (e.g. by an editor or an agent session) gets redirected without waiting for the
 # next branch switch or commit.

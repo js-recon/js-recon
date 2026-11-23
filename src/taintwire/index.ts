@@ -2,9 +2,15 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import * as tar from "tar";
+import type { PgqFinding, PgqInterceptor, PgqLocation } from "@js-recon/taintwire";
+import chalk from "chalk";
+import cliProgress from "cli-progress";
 import { printMsg, MSG } from "../utility/printMsg.js";
+import { activateBarLogger, computeBarSize, watchBarResize, withProgressResources } from "../utility/progressLog.js";
 import { listFilesRecursive, listJsFiles } from "../utility/listFiles.js";
-import { generateEngineOutput, EngineOutput } from "../analyze/helpers/outputHelper.js";
+import { initTaintwireQueries } from "../analyze/helpers/initRules.js";
+import CONFIG from "../globalConfig.js";
+import type { EngineOutput } from "../analyze/helpers/outputHelper.js";
 
 // Same per-file cap as map's taintwire resolvers: bigger files are vendor bundles that cost more than they find.
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
@@ -36,19 +42,71 @@ const loadQueries = async (queries: string) => {
     return { tw, files, rules };
 };
 
+// Visible characters of the bar's format around [{bar}], with a short label and detail.
+const BAR_OVERHEAD = 60;
+
+/** A progress bar while `work` runs; `work` gets `update(label, done, total, detail)`. Prints nothing off a TTY. */
+const withBar = async <T>(
+    work: (update: (label: string, done: number, total: number, detail?: string) => void) => Promise<T>
+): Promise<T> => {
+    const bar = new cliProgress.SingleBar(
+        {
+            format: chalk.cyan("[i] {label} ") + "[{bar}] {value}/{total} {detail}",
+            barCompleteChar: "█",
+            barIncompleteChar: "░",
+            barsize: computeBarSize(BAR_OVERHEAD),
+            hideCursor: false,
+            clearOnComplete: false,
+            stopOnComplete: false,
+        },
+        cliProgress.Presets.shades_classic
+    );
+    let label: string | undefined;
+    const update = (l: string, done: number, total: number, detail = "") => {
+        if (l !== label) {
+            if (label !== undefined) bar.stop(); // keep the finished stage on its own line
+            bar.start(total, done, { label: (label = l), detail });
+        } else {
+            bar.setTotal(total);
+            bar.update(done, { detail });
+        }
+    };
+    const stopWatcher = watchBarResize(bar, BAR_OVERHEAD);
+    const releaseLogger = activateBarLogger(
+        { log: (s: string) => process.stdout.write("\r\x1b[K" + s) },
+        process.stdout.isTTY === true
+    );
+    return withProgressResources(
+        () => work(update),
+        () => label !== undefined && bar.stop(),
+        stopWatcher,
+        releaseLogger
+    );
+};
+
 /** Ladybug's buffer pool (MB) and query threads; unset means taintwire's defaults. */
 export type Limits = { bufferPoolMB?: number; threads?: number };
 
-/** Write one linked PookieGraph of `names` (relative to `directory`) to `pgPath`; removes it again on failure. */
-const writeGraph = async (pgPath: string, directory: string, names: string[], limits: Limits) => {
+/** The JS files `names` (relative to `directory`) as addFiles() input. */
+const readFiles = (directory: string, names: string[]) =>
+    names.map((f) => ({ filename: f, code: fs.readFileSync(path.join(directory, f), "utf-8") }));
+
+/** Write one linked PookieGraph of `files` to `pgPath`; removes it again on failure. */
+export const writeGraph = async (
+    pgPath: string,
+    files: { filename: string; code: string }[],
+    limits: Limits,
+    unit = ""
+) => {
     const { PookieGraph } = await import("@js-recon/taintwire");
     // On disk, not in memory: a whole app in memory takes about 10 KB of RAM per byte of minified source.
     const graph = await PookieGraph.open(pgPath, { parser: "babel", ...limits });
     try {
         await graph.query("CALL auto_checkpoint=false");
         // one call, so chunks are linked through the bundler's module registry
-        await graph.addFiles(
-            names.map((f) => ({ filename: f, code: fs.readFileSync(path.join(directory, f), "utf-8") }))
+        const STAGES = { parse: "Parsing files", link: "Linking", load: "Loading graph rows" };
+        await withBar((update) =>
+            graph.addFiles(files, (stage, done, total) => update(unit + STAGES[stage], done, total))
         );
         await graph.query("CHECKPOINT");
         await graph.close();
@@ -92,7 +150,7 @@ export const build = async (directory: string, output: string, limits: Limits = 
     const started = Date.now();
     if (!output.endsWith(".tw")) {
         printMsg(MSG.Header, `[i] Building a PookieGraph from ${names.length} file(s) into ${output}`);
-        await writeGraph(output, directory, names, limits);
+        await writeGraph(output, readFiles(directory, names), limits);
     } else {
         const tw = await import("@js-recon/taintwire");
         // A fresh directory next to the output (same disk), so cleanup never touches anything else.
@@ -111,7 +169,12 @@ export const build = async (directory: string, output: string, limits: Limits = 
             const manifest = { format: 1, units: [] as { pg: string; files: string[] }[] };
             for (const [i, files] of units.entries()) {
                 const pg = `unit-${i}.pg`;
-                await writeGraph(path.join(tmp, pg), directory, files, limits);
+                await writeGraph(
+                    path.join(tmp, pg),
+                    readFiles(directory, files),
+                    limits,
+                    `Unit ${i + 1}/${units.length}: `
+                );
                 manifest.units.push({ pg, files });
             }
             fs.writeFileSync(path.join(tmp, "manifest.json"), JSON.stringify(manifest));
@@ -128,20 +191,31 @@ export const build = async (directory: string, output: string, limits: Limits = 
 };
 
 /**
- * Run the .pgq rules at `queries` against `graphPath`, a PookieGraph (.pg) or a .tw of them; writes findings to
- * `output` as JSON. A .tw's graphs are opened one at a time; a finding at the same place from a later graph is dropped.
+ * Run the .pgq rules at `queries` (default: the taintwire-queries pack, downloaded to ~/.js-recon) against `graphPath`, a PookieGraph (.pg) or a .tw of them; writes findings to
+ * `output.json` (the analyze.json shape) and, when given, `output.sarif` (SARIF 2.1.0). A .tw's graphs are opened one at a time; a finding at the same place from a later graph is dropped.
  */
-export const analyze = async (graphPath: string, queries: string, output: string, limits: Limits = {}) => {
+export const analyze = async (
+    graphPath: string,
+    queries: string | undefined,
+    output: { json: string; sarif?: string },
+    limits: Limits = {},
+    disableQueriesVersionCheck = false
+) => {
     if (!fs.existsSync(graphPath) || !fs.statSync(graphPath).isFile()) {
         printMsg(MSG.Err, `[!] PookieGraph ${graphPath} does not exist`);
         process.exit(39);
+    }
+    if (!queries) {
+        await initTaintwireQueries(disableQueriesVersionCheck);
+        queries = path.join(process.env.HOME, ".js-recon/taintwire-queries/rules");
     }
     const { tw, files, rules } = await loadQueries(queries);
     let dir: string | undefined;
     let graphs = [graphPath];
     const { toEngineOutput } = await import("../analyze/engine/taintwireEngine.js");
     const byId = new Map(rules.map((r) => [r.id, r]));
-    const out: EngineOutput[] = [];
+    const out: object[] = []; // SARIF results
+    const engineOut: EngineOutput[] = []; // the JSON findings, in the analyze.json shape
     const seen = new Set<string>(); // findings of earlier graphs, by place
     const failed = new Set<string>();
     let cypherErrors: string[] = [];
@@ -174,7 +248,6 @@ export const analyze = async (graphPath: string, queries: string, output: string
         }
         printMsg(MSG.Header, `[i] Running ${rules.length} rule(s) from ${files.length} .pgq file(s) on ${graphPath}`);
         for (const [i, pg] of graphs.entries()) {
-            if (graphs.length > 1) printMsg(MSG.Info, `[i] Graph ${i + 1}/${graphs.length}`);
             const graph = await tw.PookieGraph.open(pg, { readOnly: true, parser: "babel", ...limits });
             const here = new Set<string>();
             try {
@@ -182,7 +255,11 @@ export const analyze = async (graphPath: string, queries: string, output: string
                     cypherErrors = await tw.checkPgqCypher(graph, rules);
                     if (cypherErrors.length) break;
                 }
-                const { findings, errors } = await tw.runPgq(graph, rules);
+                const label = graphs.length > 1 ? `Graph ${i + 1}/${graphs.length}: running rules` : "Running rules";
+                const { findings, errors } = await withBar((update) => {
+                    update(label, 0, rules.length);
+                    return tw.runPgq(graph, rules, (done, r) => update(label, done, rules.length, r.id));
+                });
                 for (const e of errors) {
                     const msg = `[!] Rule ${e.ruleId} failed: ${e.message}`;
                     if (!failed.has(msg)) printMsg(MSG.Err, msg);
@@ -201,14 +278,21 @@ export const analyze = async (graphPath: string, queries: string, output: string
                     if (seen.has(key)) continue;
                     here.add(key);
                     const r = byId.get(f.ruleId)!;
+                    // prints the finding; its findingLocation is the sink position, flow and code
+                    const e = await toEngineOutput(graph, f, {
+                        ruleName: r.name,
+                        ruleType: "pgq",
+                        ruleDescription: r.description ?? r.message,
+                        ruleAuthor: r.author ?? "",
+                        ruleTech: ["all"],
+                    });
+                    engineOut.push(e);
                     out.push(
-                        await toEngineOutput(graph, f, {
-                            ruleName: r.name,
-                            ruleType: "pgq",
-                            ruleDescription: r.description ?? r.message,
-                            ruleAuthor: r.author ?? "",
-                            ruleTech: ["all"],
-                        })
+                        sarifResult(
+                            f,
+                            e.findingLocation.split("\n\n").slice(1).join("\n\n"),
+                            e.interceptors?.map((i) => i.code)
+                        )
                     );
                 }
             } finally {
@@ -223,9 +307,108 @@ export const analyze = async (graphPath: string, queries: string, output: string
     for (const e of cypherErrors) printMsg(MSG.Err, `[!] ${e}`);
     if (cypherErrors.length) process.exit(40);
     printMsg(MSG.Run, `[✓] ${out.length} finding(s)`);
-    generateEngineOutput(output, out);
+    const sarif = {
+        $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+        version: "2.1.0",
+        runs: [
+            {
+                tool: {
+                    driver: {
+                        name: "js-recon taintwire",
+                        version: CONFIG.version,
+                        informationUri: CONFIG.github,
+                        rules: rules.map((r) => ({
+                            id: r.id,
+                            name: r.name,
+                            shortDescription: { text: r.name },
+                            fullDescription: { text: r.description ?? r.message },
+                            defaultConfiguration: { level: SARIF_LEVEL[r.severity] ?? "warning" },
+                            properties: { severity: r.severity, ...(r.author && { author: r.author }) },
+                        })),
+                    },
+                },
+                results: out,
+            },
+        ],
+    };
+    fs.writeFileSync(output.json, JSON.stringify(engineOut, null, 2));
+    printMsg(MSG.Run, `[✓] Written to ${output.json}`);
+    if (output.sarif) {
+        fs.writeFileSync(output.sarif, JSON.stringify(sarif, null, 2));
+        printMsg(MSG.Run, `[✓] Written to ${output.sarif}`);
+    }
     // the findings of the other rules are written; 41 tells a caller they are incomplete
     if (failed.size) process.exitCode = 41;
+};
+
+const SARIF_LEVEL: Record<string, string> = {
+    info: "note",
+    low: "note",
+    medium: "warning",
+    high: "error",
+    critical: "error",
+};
+
+// taintwire columns are 0-based (Babel); SARIF's are 1-based.
+const sarifLocation = (l: PgqLocation, snippet?: string) => ({
+    physicalLocation: {
+        artifactLocation: { uri: l.file },
+        region: { startLine: l.line, startColumn: l.col + 1, ...(snippet && { snippet: { text: snippet } }) },
+    },
+});
+
+/**
+ * A runPgq finding as a SARIF result: the sink is the location; a source becomes a related location and a code flow.
+ * Interceptors (`codes`: their code, in the same order) become related locations too, guards also a `branch` step of
+ * the code flow, and the rows go in the result's property bag as `interceptors`.
+ */
+export const sarifResult = (f: PgqFinding, code: string, codes: string[] = []) => {
+    const its = (f.interceptors ?? []).map((i, n) => ({ i, code: codes[n] }));
+    const label = (i: PgqInterceptor) => (i.kind === "check" ? `check: ${i.text}` : `${i.kind}, ${i.text}`);
+    return {
+        ruleId: f.ruleId,
+        level: SARIF_LEVEL[f.severity] ?? "warning",
+        message: { text: f.message },
+        locations: [sarifLocation(f, code)],
+        ...(f.source && {
+            relatedLocations: [
+                { id: 1, message: { text: "source" }, ...sarifLocation(f.source) },
+                ...its.map(({ i, code }, n) => ({ id: n + 2, message: { text: label(i) }, ...sarifLocation(i, code) })),
+            ],
+            codeFlows: [
+                {
+                    threadFlows: [
+                        {
+                            locations: [
+                                { location: { message: { text: "source" }, ...sarifLocation(f.source) } },
+                                ...its
+                                    .filter(({ i }) => i.kind !== "check")
+                                    .map(({ i, code }) => ({
+                                        kinds: ["branch"],
+                                        location: { message: { text: label(i) }, ...sarifLocation(i, code) },
+                                    })),
+                                { location: { message: { text: "sink" }, ...sarifLocation(f, code) } },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }),
+        properties: {
+            severity: f.severity,
+            ...(f.hops !== undefined && { hops: f.hops }),
+            ...(its.length > 0 && {
+                interceptors: its.map(({ i, code }) => ({
+                    kind: i.kind,
+                    text: i.text,
+                    file: i.file,
+                    line: i.line,
+                    column: i.col + 1,
+                    ...(code !== undefined && { code }),
+                })),
+            }),
+        },
+    };
 };
 
 /** Evaluate, validate and compile the .pgq files at `queries`; exits 40 on any problem. */

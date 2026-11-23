@@ -10,8 +10,7 @@ import next_parseLayoutJs from "./next_parseLayoutJs.js";
 import next_scriptTagsSubsequentRequests from "./next_scriptTagsSubsequentRequests.js";
 import next_bruteForceJsFiles from "./next_bruteForceJsFiles.js";
 import next_getClientSidePaths from "./next_getClientSidePaths.js";
-import next_routerStateForge from "./next_routerStateForge.js";
-import next_interceptRouteNextUrl from "./next_interceptRouteNextUrl.js";
+import next_rsf from "./next_rsf/index.js";
 
 import * as lazyLoadGlobals from "../globals.js";
 import { shouldRunMethod } from "../methodFilter.js";
@@ -27,11 +26,11 @@ interface NextJsCrawlerOptions {
     maxIterations: number;
     /** Maximum number of HTML pages to visit across all recursive passes. 0 = unlimited. */
     maxPageVisits?: number;
-    /** Max harvested dynamic-route param-name candidates `next_routerStateForge` tries per
+    /** Max harvested dynamic-route param-name candidates `next_rsfParamBruteforce` tries per
      * URL in its RSC-body keyword fallback (0 = disable the fallback). */
     rscParamBruteforceLimit?: number;
     /** Path to a newline-separated wordlist file of path segments/prefixes (e.g. "admin").
-     * Each entry is resolved to `<origin>/<entry>` and added to next_routerStateForge's
+     * Each entry is resolved to `<origin>/<entry>` and added to next_rsf's
      * candidate URLs. Undefined = no extra candidates from this source. */
     wordlist?: string;
     /** Called with newly discovered downloadable URLs as they are found. */
@@ -80,10 +79,10 @@ class NextJsCrawler {
     /** Maximum HTML pages to visit across all recursive passes (0 = unlimited). */
     private readonly MAX_PAGE_VISITS: number;
 
-    /** Passed through to `next_routerStateForge`'s RSC-body keyword fallback. */
+    /** Passed through to `next_rsfParamBruteforce`'s RSC-body keyword fallback. */
     private readonly rscParamBruteforceLimit: number;
 
-    /** Path to a newline-separated wordlist file feeding extra next_routerStateForge candidates. */
+    /** Path to a newline-separated wordlist file feeding extra next_rsf candidates. */
     private readonly wordlist?: string;
 
     /** Total HTML pages visited across all recursive passes. */
@@ -186,7 +185,7 @@ class NextJsCrawler {
     /**
      * Reads path-like strings previously extracted by the `strings` module (`extracted_urls.json`,
      * `{ urls, paths }` shape) and resolves each `paths` entry against `this.url`. Used as an extra
-     * next_routerStateForge candidate source (internal#165) — silently returns [] if the file
+     * next_rsf candidate source (internal#165) — silently returns [] if the file
      * doesn't exist yet (e.g. the very first lazyload pass, before `strings` has run).
      */
     private readStringsPathCandidates(): string[] {
@@ -210,7 +209,7 @@ class NextJsCrawler {
 
     /**
      * Reads a newline-separated wordlist file of path segments/prefixes and resolves each entry
-     * to `<origin>/<entry>`. Used as an extra next_routerStateForge candidate source for routes
+     * to `<origin>/<entry>`. Used as an extra next_rsf candidate source for routes
      * with zero client-visible trace (internal#165). No `--wordlist` supplied = no candidates.
      */
     private readWordlistCandidates(): string[] {
@@ -520,28 +519,19 @@ class NextJsCrawler {
         const candidateUrls = [
             ...new Set([this.url, ...pageUrls, ...this.readStringsPathCandidates(), ...this.readWordlistCandidates()]),
         ];
-        if (!this.stopped && shouldRunMethod("next_routerStateForge", this.includeMethods, this.excludeMethods)) {
-            const { bypassedUrls, metadataOnlyBypassedUrls, legacyKeyAcceptedUrls, newJsUrls } =
-                await next_routerStateForge(candidateUrls, this.threads, undefined, this.rscParamBruteforceLimit);
-            this.techniqueEfficiencyMapping["next_routerStateForge"] = bypassedUrls;
-            this.techniqueEfficiencyMapping["next_routerStateForge_metadataOnly"] = metadataOnlyBypassedUrls;
-            this.techniqueEfficiencyMapping["next_routerStateForge_legacyKeyAccepted"] = legacyKeyAcceptedUrls;
-            this.emitDownloadable(this.registerUrls(newJsUrls));
-        }
-
-        // Phase 5 – intercepting routes via Next-Url: a route intercepted under a middleware-protected
-        // segment is served through its public source route when `Next-Url` names the segment,
-        // and the middleware matcher only sees the public URL. Rules come from _buildManifest.js.
-        if (!this.stopped && shouldRunMethod("next_interceptRouteNextUrl", this.includeMethods, this.excludeMethods)) {
-            const { revealedUrls, newJsUrls } = await next_interceptRouteNextUrl(
-                new URL(this.url).origin,
-                [...this.discoveredUrls],
-                candidateUrls,
-                this.threads
-            );
-            this.techniqueEfficiencyMapping["next_interceptRouteNextUrl"] = revealedUrls;
-            this.emitDownloadable(this.registerUrls(newJsUrls));
-        }
+        // Phase 5 (inside next_rsf) – intercepting routes via Next-Url: a route intercepted under a
+        // middleware-protected segment is served through its public source route when `Next-Url`
+        // names the segment. Each next_rsf* method is filtered on its own name.
+        const { revealed, newJsUrls } = await next_rsf(
+            new URL(this.url).origin,
+            [...this.discoveredUrls],
+            candidateUrls,
+            this.threads,
+            this.rscParamBruteforceLimit,
+            (method) => !this.stopped && shouldRunMethod(method, this.includeMethods, this.excludeMethods)
+        );
+        Object.assign(this.techniqueEfficiencyMapping, revealed);
+        this.emitDownloadable(this.registerUrls(newJsUrls));
 
         // Only return downloadable assets. Anchor-derived page URLs live in
         // discoveredUrls to drive the crawl, but must not reach downloadFiles.

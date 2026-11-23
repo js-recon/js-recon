@@ -17,6 +17,7 @@ import { isVueDevServer } from "./checkVueDevServer.js";
 import { checkAngularJS } from "./checkAngularJS.js";
 import { checkReact } from "./checkReact.js";
 import { isReactDevServer } from "./checkReactDevServer.js";
+import { isGlobalBuildOnly } from "./isGlobalBuildOnly.js";
 import { isValidInterceptedJsEvidence } from "./checkInterceptedEvidence.js";
 import { isSigintHandlerActive } from "../../run/interruptHandler.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
@@ -80,10 +81,15 @@ export const settleResponseBodies = (
  *   - name: The name of the detected front-end framework.
  *   - evidence: A string with the evidence of the detection, or an empty string if no front-end framework was detected.
  */
+// Marks a React/Vue detection whose page loads the framework as a global script build
+// (no bundler) — lazyload crawls those with the generic crawler (internal#233).
+const globalBuildFlag = ($: cheerio.CheerioAPI, $res?: cheerio.CheerioAPI): { globalBuild?: true } =>
+    isGlobalBuildOnly($) && ($res === undefined || isGlobalBuildOnly($res)) ? { globalBuild: true } : {};
+
 const frameworkDetect = async (
     url: string,
     signal?: AbortSignal
-): Promise<{ name: string; evidence: string } | null> => {
+): Promise<{ name: string; evidence: string; globalBuild?: boolean } | null> => {
     const log = (...args: any[]) => {
         if (!globalsUtil.getQuiet()) printMsg(MSG.Plain, args.join(" "));
     };
@@ -328,7 +334,7 @@ const frameworkDetect = async (
         const isDevServer =
             isVueDevServer($, renderedPageUrl, interceptedUrls) ||
             ($res ? isVueDevServer($res, fetchedPageUrl, interceptedUrls) : false);
-        return { name: isDevServer ? "vue-dev" : "vue", evidence };
+        return { name: isDevServer ? "vue-dev" : "vue", evidence, ...globalBuildFlag($, $res) };
     } else if (result_checkSvelte.detected === true || result_checkSvelte_res.detected === true) {
         const evidence =
             result_checkSvelte.evidence !== "" ? result_checkSvelte.evidence : result_checkSvelte_res.evidence;
@@ -349,7 +355,7 @@ const frameworkDetect = async (
         const isDevServer =
             (await isReactDevServer($, renderedPageUrl, interceptedUrls)) ||
             ($res ? await isReactDevServer($res, fetchedPageUrl, interceptedUrls) : false);
-        return { name: isDevServer ? "react-dev" : "react", evidence };
+        return { name: isDevServer ? "react-dev" : "react", evidence, ...globalBuildFlag($, $res) };
     }
 
     // Fallback: check URLs intercepted by Puppeteer during page load.

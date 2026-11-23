@@ -179,7 +179,7 @@ const lazyLoad = async (
             lazyLoadGlobals.setMaxReqQueue(threads);
             globals.setTech("");
 
-            let tech: { name: string; evidence: string } | null;
+            let tech: { name: string; evidence: string; globalBuild?: boolean } | null;
             const detectionController = new AbortController();
             activeDetectionController = detectionController;
             let detectionTimedOut = false;
@@ -203,6 +203,18 @@ const lazyLoad = async (
                 );
             }
             if (hardTimeoutReached) break;
+            let globalBuildTech: string | null = null;
+            if (tech?.globalBuild) {
+                // A global script build (no bundler) means a server-rendered multi-page site:
+                // the framework crawlers only read the entry page's bundle graph, so crawl
+                // pages generically instead (internal#233).
+                printMsg(
+                    MSG.Warn,
+                    `[i] ${tech.name} is loaded as a global script build with no bundler (${tech.evidence}) — using generic crawl`
+                );
+                globalBuildTech = tech.name;
+                tech = null;
+            }
             globals.setTech(tech ? tech.name : "");
 
             if (tech) {
@@ -929,7 +941,8 @@ const lazyLoad = async (
                 }
             } else {
                 printMsg(MSG.Warn, "[i] Framework not detected — falling back to generic JS extraction");
-                globals.setTech("generic");
+                // keep the framework name so `run` still maps/analyzes a global-build site
+                globals.setTech(globalBuildTech ?? "generic");
 
                 // If the caller didn't customize scope (still the "*" default) and isn't
                 // using --strict-scope, default the generic crawl's scope to the origin

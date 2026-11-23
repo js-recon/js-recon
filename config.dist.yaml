@@ -208,7 +208,7 @@ commands:
         excludeMethods: null
         listMethods: null
         csMastTechDetectThreshold: "50"
-        disableRefactor: false
+        enableRefactor: false
 
     load:
         caido: null
