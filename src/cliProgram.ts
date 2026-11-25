@@ -1260,6 +1260,10 @@ export function buildProgram(): Command {
             .option("--output-json <file>", "Findings file, in the analyze.json format", "taintwire.json")
             .option("--output-sarif <file>", "Also write the findings to this SARIF 2.1.0 file")
             .option(
+                "--suppress-confined",
+                "Leave out findings whose value lands in a position that is safe for their rule (a same-origin path, the query, a selector, a pinned postMessage origin)"
+            )
+            .option(
                 "--disable-rules-version-check",
                 "Skip the GitHub version check of the downloaded taintwire-queries pack and use the cached one as-is"
             )
@@ -1269,7 +1273,8 @@ export function buildProgram(): Command {
             cmd.queries,
             { json: cmd.outputJson, sarif: cmd.outputSarif },
             limits(cmd),
-            cmd.disableRulesVersionCheck
+            cmd.disableRulesVersionCheck,
+            cmd.suppressConfined
         );
     });
     taintwireCmd

@@ -14,6 +14,8 @@ export interface EngineOutput {
     findingLocation: string;
     /** taintwire: what stands between source and sink (guard conditions and the checks inside them). */
     interceptors?: EngineInterceptor[];
+    /** taintwire: how the value ends up in the sink (a same-origin path, a query, a selector prefix, a confining sink API). */
+    confinements?: EngineInterceptor[];
 }
 
 /** One row of a taintwire sink's interceptors, with the code at its location. */
