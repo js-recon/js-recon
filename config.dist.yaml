@@ -28,6 +28,7 @@ commands:
         #     - https://two.example.com
         url: null
         output: output
+        compressJsFiles: null
         strictScope: false
         scope: "*"
         threads: "1"
@@ -167,6 +168,7 @@ commands:
         command: []
         output: output
         outputOverwrite: false
+        compressJsFiles: null
         strictScope: false
         scope: "*"
         threads: "1"

@@ -1,3 +1,4 @@
+import { compressDirectory } from "../utility/compressOutput.js";
 import endpoints from "../endpoints/index.js";
 import strings from "../strings/index.js";
 import map from "../map/index.js";
@@ -1061,6 +1062,7 @@ export default async (cmd: any): Promise<void> => {
         setHeaderListener((msg) => dashboardState.markStep(msg));
     }
 
+    let compressAfterRelease = false;
     try {
         if (!isBatch) {
             if (cmd.webStatsDashboard) {
@@ -1078,6 +1080,7 @@ export default async (cmd: any): Promise<void> => {
                     runCommand._excludeMethods ?? []
                 );
                 if (cmd.webStatsDashboard) dashboardState.markCompleted(resolvedTargets.targets[0]);
+                compressAfterRelease = !shouldSkipTarget();
             } catch (e) {
                 if (cmd.webStatsDashboard)
                     dashboardState.markError(resolvedTargets.targets[0], e instanceof Error ? e.message : String(e));
@@ -1097,6 +1100,7 @@ export default async (cmd: any): Promise<void> => {
                 resetSkipTarget();
 
                 const urlObj = new URL(url);
+                let compressTarget = false;
                 let hostDir = getBatchTargetDirectoryName(url, (hostFrequencies.get(urlObj.host) ?? 0) > 1);
                 const requestedTargetDir = path.join(runCommand.output, hostDir);
                 const targetReservation = reserveRunOutputDirectory(requestedTargetDir, outputOverwrite);
@@ -1156,9 +1160,11 @@ export default async (cmd: any): Promise<void> => {
                             `[i] No js-recon.db found for ${hostDir}, skipping merge into the global database.`
                         );
                     }
+                    compressTarget = !shouldSkipTarget();
                 } finally {
                     targetReservation.release();
                 }
+                if (compressTarget && cmd.compressJsFiles) compressDirectory(thisTargetDir, cmd.compressJsFiles);
             }
             if (failedTargets > 0) {
                 // Every target was attempted: a partial failure gets its own exit code so a caller
@@ -1181,6 +1187,7 @@ export default async (cmd: any): Promise<void> => {
             removeSigintHandler();
             outputReservation.release();
         }
+        if (compressAfterRelease && cmd.compressJsFiles) compressDirectory(runCommand.output, cmd.compressJsFiles);
         process.exit(process.exitCode ?? 0);
     }
 };

@@ -33,6 +33,7 @@ import {
 import { collectTargetInput, resolveTargetInputs, TargetInputError } from "./utility/targetInputs.js";
 import { parseHeaderFlagValue, type CustomHeaderPair } from "./utility/customHeaders.js";
 import { readHeaderFile, buildOriginAllowlist, HeaderFileError } from "./utility/headerFile.js";
+import { compressDirectory, validateCompressionType } from "./utility/compressOutput.js";
 
 /** Valid AI options for analysis modules */
 const validAiOptions = ["description"];
@@ -138,6 +139,10 @@ export function buildProgram(): Command {
             collectTargetInput
         )
         .option("-o, --output <directory>", "Output directory", "output")
+        .option(
+            "--compress-js-files <compression-type>",
+            "Archive the JS output directory when done and delete it: tar, gzip (.tar.gz), brotli (.tar.br), zstd (.tar.zst) or zip"
+        )
         .option("--strict-scope", "Download JS files from only the input URL domain", false)
         .option("-s, --scope <scope>", "Download JS files from specific domains (comma-separated)", "*")
         .option("-t, --threads <threads>", "Number of threads to use", "1")
@@ -303,6 +308,7 @@ export function buildProgram(): Command {
             globalsUtil.setVerbose(cmd.verbose);
             globalsUtil.setCustomHeaders(resolveCustomHeaders(cmd.header));
             validateAndSetTimeout(cmd.timeout);
+            validateCompressionType(cmd.compressJsFiles);
 
             configureSandbox(cmd);
 
@@ -337,6 +343,7 @@ export function buildProgram(): Command {
                 Number(cmd.rscParamBruteforceLimit),
                 cmd.wordlist
             );
+            if (cmd.compressJsFiles) compressDirectory(cmd.output, cmd.compressJsFiles);
         });
 
     program
@@ -800,6 +807,10 @@ export function buildProgram(): Command {
             "Replace an occupied js-recon-owned output instead of selecting output-2, output-3, etc. Can also be set via JS_RECON_OUTPUT_OVERWRITE=true.",
             false
         )
+        .option(
+            "--compress-js-files <compression-type>",
+            "Archive the JS output directory when done and delete it: tar, gzip (.tar.gz), brotli (.tar.br), zstd (.tar.zst) or zip"
+        )
         .option("--strict-scope", "Download JS files from only the input URL domain", false)
         .option("-s, --scope <scope>", "Download JS files from specific domains (comma-separated)", "*")
         .option("-t, --threads <threads>", "Number of threads to use", "1")
@@ -1081,6 +1092,7 @@ export function buildProgram(): Command {
                 globalsUtil.setPrivateHeaders(privateHeaders, buildOriginAllowlist(resolvedTargets));
             }
 
+            validateCompressionType(cmd.compressJsFiles);
             configureSandbox(cmd);
 
             // validate AI options
