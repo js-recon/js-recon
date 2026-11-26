@@ -127,12 +127,19 @@ RETURN n.id AS id, 'if' AS kind, 'must be true' AS text, ${AT}`;
             expect(f.interceptors).toEqual([
                 { kind: "if", text: "must be true", location: "a.js:2:4", code: "h.length > 2" },
             ]);
+            expect(f.explanation).toEqual({
+                interceptors: {
+                    barrier: null,
+                    kinds: ["if"],
+                    reason: expect.stringContaining("no interceptor policy"),
+                },
+            });
 
             await analyze(pg, q, { json, sarif });
             const [r] = JSON.parse(fs.readFileSync(sarif, "utf-8")).runs[0].results;
             expect(r.relatedLocations[1]).toMatchObject({
                 id: 2,
-                message: { text: "if, must be true" },
+                message: { text: "interceptor: if, must be true" },
                 physicalLocation: { region: { startLine: 2, startColumn: 5, snippet: { text: "h.length > 2" } } },
             });
             // source, the guard as a branch step, sink

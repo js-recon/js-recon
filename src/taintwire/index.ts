@@ -11,6 +11,7 @@ import { listFilesRecursive, listJsFiles } from "../utility/listFiles.js";
 import { initTaintwireQueries } from "../analyze/helpers/initRules.js";
 import CONFIG from "../globalConfig.js";
 import type { EngineOutput } from "../analyze/helpers/outputHelper.js";
+import { explain, isConfined } from "./confined.js";
 
 // Same per-file cap as map's taintwire resolvers: bigger files are vendor bundles that cost more than they find.
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
@@ -193,13 +194,15 @@ export const build = async (directory: string, output: string, limits: Limits = 
 /**
  * Run the .pgq rules at `queries` (default: the taintwire-queries pack, downloaded to ~/.js-recon) against `graphPath`, a PookieGraph (.pg) or a .tw of them; writes findings to
  * `output.json` (the analyze.json shape) and, when given, `output.sarif` (SARIF 2.1.0). A .tw's graphs are opened one at a time; a finding at the same place from a later graph is dropped.
+ * With `suppressConfined`, a finding whose confinements make it safe for its rule (see confined.ts) is left out.
  */
 export const analyze = async (
     graphPath: string,
     queries: string | undefined,
     output: { json: string; sarif?: string },
     limits: Limits = {},
-    disableQueriesVersionCheck = false
+    disableQueriesVersionCheck = false,
+    suppressConfined = false
 ) => {
     if (!fs.existsSync(graphPath) || !fs.statSync(graphPath).isFile()) {
         printMsg(MSG.Err, `[!] PookieGraph ${graphPath} does not exist`);
@@ -218,6 +221,7 @@ export const analyze = async (
     const engineOut: EngineOutput[] = []; // the JSON findings, in the analyze.json shape
     const seen = new Set<string>(); // findings of earlier graphs, by place
     const failed = new Set<string>();
+    let suppressed = 0;
     let cypherErrors: string[] = [];
     try {
         if (graphPath.endsWith(".tw")) {
@@ -276,6 +280,11 @@ export const analyze = async (
                         f.source?.col,
                     ]);
                     if (seen.has(key)) continue;
+                    // A suppressed finding records no key: another graph may hold the same location unconfined.
+                    if (suppressConfined && isConfined(f.ruleId, f.confinements)) {
+                        suppressed++;
+                        continue;
+                    }
                     here.add(key);
                     const r = byId.get(f.ruleId)!;
                     // prints the finding; its findingLocation is the sink position, flow and code
@@ -291,7 +300,8 @@ export const analyze = async (
                         sarifResult(
                             f,
                             e.findingLocation.split("\n\n").slice(1).join("\n\n"),
-                            e.interceptors?.map((i) => i.code)
+                            e.interceptors?.map((i) => i.code),
+                            e.confinements?.map((c) => c.code)
                         )
                     );
                 }
@@ -307,6 +317,7 @@ export const analyze = async (
     for (const e of cypherErrors) printMsg(MSG.Err, `[!] ${e}`);
     if (cypherErrors.length) process.exit(40);
     printMsg(MSG.Run, `[✓] ${out.length} finding(s)`);
+    if (suppressed) printMsg(MSG.Info, `[i] Left out ${suppressed} confined finding(s) (--suppress-confined)`);
     const sarif = {
         $schema: "https://json.schemastore.org/sarif-2.1.0.json",
         version: "2.1.0",
@@ -360,10 +371,21 @@ const sarifLocation = (l: PgqLocation, snippet?: string) => ({
 /**
  * A runPgq finding as a SARIF result: the sink is the location; a source becomes a related location and a code flow.
  * Interceptors (`codes`: their code, in the same order) become related locations too, guards also a `branch` step of
- * the code flow, and the rows go in the result's property bag as `interceptors`.
+ * the code flow, and the rows go in the result's property bag as `interceptors`. Confinements (`confineCodes`) are
+ * related locations after them, and go in the property bag as `confinements`. Related-location messages start with
+ * `interceptor:` or `confinement:`, and `properties.explanation` keeps the reasoning of each apart (see confined.ts).
  */
-export const sarifResult = (f: PgqFinding, code: string, codes: string[] = []) => {
+export const sarifResult = (f: PgqFinding, code: string, codes: string[] = [], confineCodes: string[] = []) => {
     const its = (f.interceptors ?? []).map((i, n) => ({ i, code: codes[n] }));
+    const cns = (f.confinements ?? []).map((i, n) => ({ i, code: confineCodes[n] }));
+    const row = ({ i, code }: { i: PgqInterceptor; code?: string }) => ({
+        kind: i.kind,
+        text: i.text,
+        file: i.file,
+        line: i.line,
+        column: i.col + 1,
+        ...(code !== undefined && { code }),
+    });
     const label = (i: PgqInterceptor) => (i.kind === "check" ? `check: ${i.text}` : `${i.kind}, ${i.text}`);
     return {
         ruleId: f.ruleId,
@@ -373,7 +395,16 @@ export const sarifResult = (f: PgqFinding, code: string, codes: string[] = []) =
         ...(f.source && {
             relatedLocations: [
                 { id: 1, message: { text: "source" }, ...sarifLocation(f.source) },
-                ...its.map(({ i, code }, n) => ({ id: n + 2, message: { text: label(i) }, ...sarifLocation(i, code) })),
+                ...its.map(({ i, code }, n) => ({
+                    id: n + 2,
+                    message: { text: `interceptor: ${label(i)}` },
+                    ...sarifLocation(i, code),
+                })),
+                ...cns.map(({ i, code }, n) => ({
+                    id: its.length + n + 2,
+                    message: { text: `confinement: ${i.kind}, ${i.text}` },
+                    ...sarifLocation(i, code),
+                })),
             ],
             codeFlows: [
                 {
@@ -397,16 +428,9 @@ export const sarifResult = (f: PgqFinding, code: string, codes: string[] = []) =
         properties: {
             severity: f.severity,
             ...(f.hops !== undefined && { hops: f.hops }),
-            ...(its.length > 0 && {
-                interceptors: its.map(({ i, code }) => ({
-                    kind: i.kind,
-                    text: i.text,
-                    file: i.file,
-                    line: i.line,
-                    column: i.col + 1,
-                    ...(code !== undefined && { code }),
-                })),
-            }),
+            ...(its.length > 0 && { interceptors: its.map(row) }),
+            ...(cns.length > 0 && { confinements: cns.map(row) }),
+            ...(its.length + cns.length > 0 && { explanation: explain(f) }),
         },
     };
 };

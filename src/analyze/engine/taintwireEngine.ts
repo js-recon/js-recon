@@ -1,9 +1,10 @@
-import type { PGRule, PGSelector, PgqFinding, PgqLocation, PookieGraph } from "@js-recon/taintwire";
+import type { PGRule, PGSelector, PgqFinding, PgqInterceptor, PgqLocation, PookieGraph } from "@js-recon/taintwire";
 import { Rule } from "../types/index.js";
 import { Chunks } from "../../utility/interfaces.js";
 import { EngineInterceptor, EngineOutput } from "../helpers/outputHelper.js";
 import { GraphUnit, withLinkedUnits } from "../../map/taintwire/apiCalls.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { explain } from "../../taintwire/confined.js";
 import { getTaintwireIncludeVendor } from "../../utility/globals.js";
 
 // Characters of the sink expression kept in findingLocation.
@@ -50,11 +51,16 @@ export const toEngineOutput = async (graph: PookieGraph, f: PgqFinding, meta: Fi
     const via = f.source ? ` <- ${at(f.source)} (${f.hops} hops)` : "";
     printMsg(SEVERITY_MSG[f.severity], message);
     printMsg(MSG.Plain, `${at(f)}${via}\n${code}`);
-    const interceptors: EngineInterceptor[] = [];
-    for (const i of f.interceptors ?? []) {
-        const src = (await graph.code(i.id)).replace(/\s+/g, " ").slice(0, MAX_CODE);
-        interceptors.push({ kind: i.kind, text: i.text, location: at(i), code: src });
-    }
+    const withCode = async (rows: PgqInterceptor[] = []): Promise<EngineInterceptor[]> => {
+        const out: EngineInterceptor[] = [];
+        for (const i of rows) {
+            const src = (await graph.code(i.id)).replace(/\s+/g, " ").slice(0, MAX_CODE);
+            out.push({ kind: i.kind, text: i.text, location: at(i), code: src });
+        }
+        return out;
+    };
+    const interceptors = await withCode(f.interceptors);
+    const confinements = await withCode(f.confinements);
     if (interceptors.length) {
         // guards (if/ternary/and-or/early-exit) carry the polarity; the checks below them describe their parts
         const lines = interceptors.map((i) =>
@@ -64,6 +70,10 @@ export const toEngineOutput = async (graph: PookieGraph, f: PgqFinding, meta: Fi
         );
         printMsg(MSG.Info, `[i] Conditions before the sink:\n${lines.join("\n")}`);
     }
+    if (confinements.length) {
+        const lines = confinements.map((c) => `    ${c.location} ${c.kind}, ${c.text}: ${c.code}`);
+        printMsg(MSG.Info, `[i] Where the value lands in the sink:\n${lines.join("\n")}`);
+    }
     return {
         ruleId: f.ruleId,
         ...meta,
@@ -71,6 +81,8 @@ export const toEngineOutput = async (graph: PookieGraph, f: PgqFinding, meta: Fi
         message: f.message,
         findingLocation: `// ${at(f)}${via}\n\n${code}`,
         ...(interceptors.length ? { interceptors } : {}),
+        ...(confinements.length ? { confinements } : {}),
+        ...(interceptors.length + confinements.length > 0 && { explanation: explain(f) }),
     };
 };
 

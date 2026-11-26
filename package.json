@@ -1,6 +1,6 @@
 {
     "name": "@js-recon/js-recon",
-    "version": "2.1.0-alpha.4",
+    "version": "2.1.0-alpha.5",
     "description": "JS Recon Tool",
     "main": "build/index.js",
     "type": "module",
@@ -18,7 +18,7 @@
         "test:build": "node build/index.js -h",
         "lint": "eslint src",
         "postinstall": "node scripts/postinstall-patch.mjs; node scripts/postinstall-completion.mjs",
-        "cleanup": "rm -rf build output output_refactored .resp_cache.json .resp_cache.json.entries .resp_cache.db endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* swagger-jacker-results.json taintwire.{json,sarif} graph.pg && tsc"
+        "cleanup": "rm -rf build output output_refactored .resp_cache.json .resp_cache.json.entries .resp_cache.db endpoints.json extracted_urls{.txt,.json,-openapi.json} strings.json mapped{-openapi.json,.json,-openapi.postman_collection.json} analyze.json test{.yaml,.js} js-recon-js-recon-*.tgz js-recon.db report.{html,md} js_recon_run_output *_test.js extracted/ research.json results* out.* swagger-jacker-results.json taintwire.{json,sarif} graph.pg output.* && tsc"
     },
     "keywords": [],
     "author": "Shriyans Sudhi",
@@ -30,7 +30,7 @@
         "@babel/parser": "8.0.7",
         "@babel/traverse": "8.0.7",
         "@babel/types": "8.0.6",
-        "@js-recon/taintwire": "0.2.0-alpha.6",
+        "@js-recon/taintwire": "0.2.0-alpha.7",
         "@modelcontextprotocol/sdk": "1.32.1",
         "@shriyanss/cli-print-img": "1.1.1",
         "@shriyanss/cs-mast": "0.1.8",

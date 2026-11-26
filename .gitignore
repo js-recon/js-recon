@@ -166,6 +166,7 @@ extracted/
 research.json
 results.*
 out.*
+output.*
 graph.pg
 taintwire.json
 taintwire.sarif

@@ -14,6 +14,18 @@ export interface EngineOutput {
     findingLocation: string;
     /** taintwire: what stands between source and sink (guard conditions and the checks inside them). */
     interceptors?: EngineInterceptor[];
+    /** taintwire: how the value ends up in the sink (a same-origin path, a query, a selector prefix, a confining sink API). */
+    confinements?: EngineInterceptor[];
+    /** taintwire: the reasoning each mechanism gives about whether the finding is safe, kept apart. */
+    explanation?: EngineExplanation;
+}
+
+/** Interceptors and confinements explain a finding separately; a side is present only when the finding has rows of it. */
+export interface EngineExplanation {
+    /** No interceptor policy yet, so `barrier` is always null. */
+    interceptors?: { barrier: null; kinds: string[]; reason: string };
+    /** `barrier`: a confinement makes the finding safe for its rule (what `--suppress-confined` leaves out). */
+    confinements?: { barrier: boolean; kinds: string[]; reason: string };
 }
 
 /** One row of a taintwire sink's interceptors, with the code at its location. */
