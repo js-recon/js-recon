@@ -280,11 +280,12 @@ export const analyze = async (
                         f.source?.col,
                     ]);
                     if (seen.has(key)) continue;
-                    here.add(key);
+                    // A suppressed finding records no key: another graph may hold the same location unconfined.
                     if (suppressConfined && isConfined(f.ruleId, f.confinements)) {
                         suppressed++;
                         continue;
                     }
+                    here.add(key);
                     const r = byId.get(f.ruleId)!;
                     // prints the finding; its findingLocation is the sink position, flow and code
                     const e = await toEngineOutput(graph, f, {

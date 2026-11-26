@@ -93,6 +93,33 @@ describe("compressDirectory", () => {
         expect(process.exitCode).toBe(42);
     });
 
+    it("keeps the finished archive and sets exit code 42 when the directory can't be removed", () => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const rm = fs.rmSync;
+        vi.spyOn(fs, "rmSync").mockImplementation((p, o) => {
+            if (path.resolve(String(p)) === path.resolve(dir)) throw new Error("EBUSY");
+            return rm(p, o);
+        });
+        const archive = compressDirectory(dir, "zip");
+        expect(archive).toBe(path.resolve(dir) + ".zip");
+        expect(fs.existsSync(archive!)).toBe(true);
+        expect(readZip(fs.readFileSync(archive!))).toEqual(
+            Object.fromEntries(Object.entries(FILES).map(([k, v]) => [`output/${k}`, v]))
+        );
+        expect(process.exitCode).toBe(42);
+    });
+
+    it("finishes a buffer that fs.writeSync writes only part of", () => {
+        const write = fs.writeSync;
+        // Every call writes at most half of what is left, like a short write on a full pipe or disk.
+        vi.spyOn(fs, "writeSync").mockImplementation(((fd: number, buf: Buffer, off = 0, len = buf.length - off) =>
+            write(fd, buf, off, Math.max(1, Math.floor(len / 2)))) as any);
+        const archive = compressDirectory(dir, "zip");
+        expect(readZip(fs.readFileSync(archive!))).toEqual(
+            Object.fromEntries(Object.entries(FILES).map(([k, v]) => [`output/${k}`, v]))
+        );
+    });
+
     it("returns null for a missing directory", () => {
         expect(compressDirectory(path.join(tmp, "nope"), "zip")).toBeNull();
         expect(process.exitCode).toBeUndefined();

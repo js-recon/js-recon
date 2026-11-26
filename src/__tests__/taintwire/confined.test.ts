@@ -20,6 +20,17 @@ describe("isConfined", () => {
         expect(isConfined("open_redirect_url", [])).toBe(false);
         expect(isConfined("open_redirect_url")).toBe(false);
     });
+
+    it("ignores Object.prototype names as rule ids instead of throwing", () => {
+        for (const id of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+            expect(isConfined(id, [{ kind: "path" }])).toBe(false);
+            expect(explainConfinements(id, [{ kind: "path" }])).toEqual({
+                barrier: false,
+                kinds: ["path"],
+                reason: `no confinement is a barrier for ${id}`,
+            });
+        }
+    });
 });
 
 describe("sarifResult confinements", () => {

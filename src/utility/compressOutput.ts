@@ -13,7 +13,7 @@ export const COMPRESSION_TYPES: Readonly<Record<string, string>> = Object.freeze
     zip: ".zip",
 });
 
-const COMPRESS_EXIT_CODE = 42;
+export const COMPRESS_EXIT_CODE = 42;
 // Reservation markers from run/outputDirectory.ts: they mean nothing once the directory is gone.
 const SKIPPED_NAMES = new Set([".js-recon.lock", ".js-recon-output"]);
 
@@ -90,9 +90,9 @@ const writeZip = (dir: string, fd: number): void => {
             local.writeUInt32LE(packed.length, 18);
             local.writeUInt32LE(data.length, 22);
             local.writeUInt16LE(name.length, 26);
-            fs.writeSync(fd, local);
-            fs.writeSync(fd, name);
-            fs.writeSync(fd, packed);
+            writeAll(fd, local);
+            writeAll(fd, name);
+            writeAll(fd, packed);
 
             const entry = Buffer.alloc(46);
             entry.writeUInt32LE(0x02014b50, 0);
@@ -110,8 +110,17 @@ const writeZip = (dir: string, fd: number): void => {
         end.writeUInt16LE(files.length, 10);
         end.writeUInt32LE(cd.length, 12);
         end.writeUInt32LE(offset, 16);
-        fs.writeSync(fd, cd);
-        fs.writeSync(fd, end);
+        writeAll(fd, cd);
+        writeAll(fd, end);
+    }
+};
+
+/** fs.writeSync may write less than asked; loop until the whole buffer is on disk. */
+const writeAll = (fd: number, buf: Buffer): void => {
+    for (let off = 0; off < buf.length;) {
+        const n = fs.writeSync(fd, buf, off, buf.length - off);
+        if (n <= 0) throw new Error("archive write made no progress");
+        off += n;
     }
 };
 
@@ -141,7 +150,7 @@ const writeTar = (dir: string, type: string, fd: number): void => {
         } as any,
         [root]
     ) as unknown as NodeJS.EventEmitter;
-    pack.on("data", (chunk: Buffer) => fs.writeSync(fd, chunk));
+    pack.on("data", (chunk: Buffer) => writeAll(fd, chunk));
 };
 
 /**
@@ -172,14 +181,26 @@ export const compressDirectory = (dir: string, type: string): string | null => {
         else writeTar(source, type, fd);
         fs.closeSync(fd);
         fd = undefined;
-        fs.rmSync(source, { recursive: true, force: true });
-        console.log(chalk.green(`[✓] Compressed ${dir} to ${dir}${COMPRESSION_TYPES[type]}`));
-        return archive;
     } catch (err) {
         if (fd !== undefined) fs.closeSync(fd);
         fs.rmSync(archive, { force: true }); // only our own partial file: we created it with "wx"
         return fail(dir, type, err);
     }
+    // The archive is complete from here on: if removing the directory fails part way, the archive may hold the
+    // only copy of the files already removed, so it is kept.
+    try {
+        fs.rmSync(source, { recursive: true, force: true });
+    } catch (err) {
+        console.error(
+            chalk.red(
+                `[!] Compressed ${dir} to ${dir}${COMPRESSION_TYPES[type]} but could not remove ${dir}: ${(err as Error)?.message || err}`
+            )
+        );
+        process.exitCode = COMPRESS_EXIT_CODE;
+        return archive;
+    }
+    console.log(chalk.green(`[✓] Compressed ${dir} to ${dir}${COMPRESSION_TYPES[type]}`));
+    return archive;
 };
 
 const fail = (dir: string, type: string, err: unknown): null => {

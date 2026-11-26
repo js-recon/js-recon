@@ -1,4 +1,4 @@
-import { compressDirectory } from "../utility/compressOutput.js";
+import { COMPRESS_EXIT_CODE, compressDirectory } from "../utility/compressOutput.js";
 import endpoints from "../endpoints/index.js";
 import strings from "../strings/index.js";
 import map from "../map/index.js";
@@ -1170,7 +1170,9 @@ export default async (cmd: any): Promise<void> => {
                 // Every target was attempted: a partial failure gets its own exit code so a caller
                 // can keep the targets that succeeded instead of discarding the whole batch.
                 printMsg(MSG.Err, batchFailureSummary(failedTargets, resolvedTargets.targets.length));
-                process.exitCode = batchExitCode(failedTargets, resolvedTargets.targets.length);
+                // A failed compression (42) is kept: the documented exit code for an archive that couldn't be written.
+                if (process.exitCode !== COMPRESS_EXIT_CODE)
+                    process.exitCode = batchExitCode(failedTargets, resolvedTargets.targets.length);
             }
         }
     } catch (error) {

@@ -34,9 +34,13 @@ const WHY: Record<string, string> = {
     sink: "a sink API that confines it (same-origin pushState/replaceState, or a pinned postMessage target)",
 };
 
+/** The rule's barrier kinds; own keys only, so a rule id like "constructor" gets none. */
+const safeKinds = (ruleId: string): readonly string[] | undefined =>
+    Object.prototype.hasOwnProperty.call(SAFE, ruleId) ? SAFE[ruleId] : undefined;
+
 /** True when one of the finding's confinements is a barrier for its rule. */
 export const isConfined = (ruleId: string, confinements: { kind: string }[] = []): boolean =>
-    confinements.some((c) => SAFE[ruleId]?.includes(c.kind) ?? false);
+    confinements.some((c) => safeKinds(ruleId)?.includes(c.kind) ?? false);
 
 /**
  * The reasoning that the finding's confinements give, kept apart from its interceptors: whether they make it safe for
@@ -45,11 +49,12 @@ export const isConfined = (ruleId: string, confinements: { kind: string }[] = []
 export const explainConfinements = (ruleId: string, confinements: { kind: string }[] = []) => {
     if (!confinements.length) return undefined;
     const kinds = [...new Set(confinements.map((c) => c.kind))];
-    const safe = kinds.filter((k) => SAFE[ruleId]?.includes(k));
+    const policy = safeKinds(ruleId);
+    const safe = kinds.filter((k) => policy?.includes(k));
     const reason = safe.length
         ? `the value lands in ${safe.map((k) => WHY[k] ?? k).join(" and ")}, a barrier for ${ruleId}`
-        : SAFE[ruleId]
-          ? `${kinds.join(", ")} is not a barrier for ${ruleId} (only ${SAFE[ruleId].join(", ")})`
+        : policy
+          ? `${kinds.join(", ")} is not a barrier for ${ruleId} (only ${policy.join(", ")})`
           : `no confinement is a barrier for ${ruleId}`;
     return { barrier: safe.length > 0, kinds, reason };
 };
