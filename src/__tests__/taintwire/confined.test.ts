@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isConfined } from "../../taintwire/confined.js";
+import { explain, explainConfinements, isConfined } from "../../taintwire/confined.js";
 import { sarifResult } from "../../taintwire/index.js";
 
 describe("isConfined", () => {
@@ -43,13 +43,45 @@ describe("sarifResult confinements", () => {
         );
         expect(r.relatedLocations!.map((l) => [l.id, l.message.text])).toEqual([
             [1, "source"],
-            [2, "if, must be true"],
-            [3, 'confined: path, after "/news/"'],
+            [2, "interceptor: if, must be true"],
+            [3, 'confinement: path, after "/news/"'],
         ]);
         expect(r.properties.confinements).toEqual([
             { kind: "path", text: 'after "/news/"', file: "a.js", line: 3, column: 10, code: '"/news/" + u' },
         ]);
+        expect(r.properties.explanation).toEqual({
+            interceptors: { barrier: null, kinds: ["if"], reason: expect.stringContaining("no interceptor policy") },
+            confinements: { barrier: true, kinds: ["path"], reason: expect.stringContaining("same-origin path") },
+        });
         // a confinement isn't a step of the code flow
         expect(r.codeFlows![0].threadFlows[0].locations).toHaveLength(3);
+    });
+});
+
+describe("explanation", () => {
+    it("says which confinement kinds are a barrier for the rule, and why", () => {
+        expect(explainConfinements("cspt_url_request", [{ kind: "path" }, { kind: "query" }])).toEqual({
+            barrier: true,
+            kinds: ["path", "query"],
+            reason: "the value lands in the query, a barrier for cspt_url_request",
+        });
+        expect(explainConfinements("cspt_url_request", [{ kind: "path" }])).toEqual({
+            barrier: false,
+            kinds: ["path"],
+            reason: "path is not a barrier for cspt_url_request (only query, fragment)",
+        });
+        expect(explainConfinements("script_injection_url", [{ kind: "path" }])?.barrier).toBe(false);
+        expect(explainConfinements("open_redirect_url", [])).toBeUndefined();
+    });
+
+    it("keeps interceptors and confinements apart, each side only when present", () => {
+        const g = { id: "g", kind: "if", text: "must be true", file: "a.js", line: 2, col: 4 };
+        expect(explain({ ruleId: "open_redirect_url", interceptors: [g] })).toEqual({
+            interceptors: { barrier: null, kinds: ["if"], reason: expect.any(String) },
+        });
+        expect(explain({ ruleId: "open_redirect_url", confinements: [{ kind: "sink" }] })).toEqual({
+            confinements: { barrier: false, kinds: ["sink"], reason: expect.any(String) },
+        });
+        expect(explain({ ruleId: "open_redirect_url" })).toEqual({});
     });
 });

@@ -24,6 +24,56 @@ const SAFE: Record<string, readonly string[]> = {
     web_message_manipulation: ["sink"],
 };
 
+/** Why each kind is a barrier, for the findings' `explanation.confinements.reason`. */
+const WHY: Record<string, string> = {
+    path: "a same-origin path",
+    query: "the query",
+    fragment: "the fragment",
+    origin: "a fixed origin",
+    selector: 'a jQuery selector that doesn\'t start with "<" (not parsed as HTML in jQuery >= 1.9)',
+    sink: "a sink API that confines it (same-origin pushState/replaceState, or a pinned postMessage target)",
+};
+
 /** True when one of the finding's confinements is a barrier for its rule. */
 export const isConfined = (ruleId: string, confinements: { kind: string }[] = []): boolean =>
     confinements.some((c) => SAFE[ruleId]?.includes(c.kind) ?? false);
+
+/**
+ * The reasoning that the finding's confinements give, kept apart from its interceptors: whether they make it safe for
+ * its rule (the policy `--suppress-confined` applies), the kinds found, and why. Undefined without confinements.
+ */
+export const explainConfinements = (ruleId: string, confinements: { kind: string }[] = []) => {
+    if (!confinements.length) return undefined;
+    const kinds = [...new Set(confinements.map((c) => c.kind))];
+    const safe = kinds.filter((k) => SAFE[ruleId]?.includes(k));
+    const reason = safe.length
+        ? `the value lands in ${safe.map((k) => WHY[k] ?? k).join(" and ")}, a barrier for ${ruleId}`
+        : SAFE[ruleId]
+          ? `${kinds.join(", ")} is not a barrier for ${ruleId} (only ${SAFE[ruleId].join(", ")})`
+          : `no confinement is a barrier for ${ruleId}`;
+    return { barrier: safe.length > 0, kinds, reason };
+};
+
+/**
+ * The reasoning that the finding's interceptors give. There is no interceptor policy yet: they describe the conditions
+ * before the sink but are never judged a barrier, so `barrier` is always null. Undefined without interceptors.
+ */
+export const explainInterceptors = (interceptors: { kind: string }[] = []) =>
+    interceptors.length
+        ? {
+              barrier: null,
+              kinds: [...new Set(interceptors.map((i) => i.kind))],
+              reason: "conditions before the sink; not judged a barrier (no interceptor policy)",
+          }
+        : undefined;
+
+/** A finding's `explanation` (taintwire.json and SARIF `properties`): each side only when the finding has its rows. */
+export const explain = (f: {
+    ruleId: string;
+    interceptors?: { kind: string }[];
+    confinements?: { kind: string }[];
+}) => {
+    const interceptors = explainInterceptors(f.interceptors);
+    const confinements = explainConfinements(f.ruleId, f.confinements);
+    return { ...(interceptors && { interceptors }), ...(confinements && { confinements }) };
+};

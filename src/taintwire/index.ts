@@ -12,7 +12,7 @@ import { initTaintwireQueries } from "../analyze/helpers/initRules.js";
 import CONFIG from "../globalConfig.js";
 import type { EngineOutput } from "../analyze/helpers/outputHelper.js";
 import type { TaintwireFinding } from "../analyze/engine/taintwireEngine.js";
-import { isConfined } from "./confined.js";
+import { explain, isConfined } from "./confined.js";
 
 // Same per-file cap as map's taintwire resolvers: bigger files are vendor bundles that cost more than they find.
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
@@ -372,7 +372,8 @@ const sarifLocation = (l: PgqLocation, snippet?: string) => ({
  * A runPgq finding as a SARIF result: the sink is the location; a source becomes a related location and a code flow.
  * Interceptors (`codes`: their code, in the same order) become related locations too, guards also a `branch` step of
  * the code flow, and the rows go in the result's property bag as `interceptors`. Confinements (`confineCodes`) are
- * related locations after them, and go in the property bag as `confinements`.
+ * related locations after them, and go in the property bag as `confinements`. Related-location messages start with
+ * `interceptor:` or `confinement:`, and `properties.explanation` keeps the reasoning of each apart (see confined.ts).
  */
 export const sarifResult = (f: TaintwireFinding, code: string, codes: string[] = [], confineCodes: string[] = []) => {
     const its = (f.interceptors ?? []).map((i, n) => ({ i, code: codes[n] }));
@@ -394,10 +395,14 @@ export const sarifResult = (f: TaintwireFinding, code: string, codes: string[] =
         ...(f.source && {
             relatedLocations: [
                 { id: 1, message: { text: "source" }, ...sarifLocation(f.source) },
-                ...its.map(({ i, code }, n) => ({ id: n + 2, message: { text: label(i) }, ...sarifLocation(i, code) })),
+                ...its.map(({ i, code }, n) => ({
+                    id: n + 2,
+                    message: { text: `interceptor: ${label(i)}` },
+                    ...sarifLocation(i, code),
+                })),
                 ...cns.map(({ i, code }, n) => ({
                     id: its.length + n + 2,
-                    message: { text: `confined: ${i.kind}, ${i.text}` },
+                    message: { text: `confinement: ${i.kind}, ${i.text}` },
                     ...sarifLocation(i, code),
                 })),
             ],
@@ -425,6 +430,7 @@ export const sarifResult = (f: TaintwireFinding, code: string, codes: string[] =
             ...(f.hops !== undefined && { hops: f.hops }),
             ...(its.length > 0 && { interceptors: its.map(row) }),
             ...(cns.length > 0 && { confinements: cns.map(row) }),
+            ...(its.length + cns.length > 0 && { explanation: explain(f) }),
         },
     };
 };

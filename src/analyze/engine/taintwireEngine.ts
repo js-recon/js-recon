@@ -4,6 +4,7 @@ import { Chunks } from "../../utility/interfaces.js";
 import { EngineInterceptor, EngineOutput } from "../helpers/outputHelper.js";
 import { GraphUnit, withLinkedUnits } from "../../map/taintwire/apiCalls.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { explain } from "../../taintwire/confined.js";
 import { getTaintwireIncludeVendor } from "../../utility/globals.js";
 
 // Characters of the sink expression kept in findingLocation.
@@ -88,6 +89,7 @@ export const toEngineOutput = async (
         findingLocation: `// ${at(f)}${via}\n\n${code}`,
         ...(interceptors.length ? { interceptors } : {}),
         ...(confinements.length ? { confinements } : {}),
+        ...(interceptors.length + confinements.length > 0 && { explanation: explain(f) }),
     };
 };
 
