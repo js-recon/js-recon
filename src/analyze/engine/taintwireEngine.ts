@@ -44,14 +44,7 @@ export type FindingMeta = Pick<EngineOutput, "ruleName" | "ruleType" | "ruleDesc
  * Print a runPgq finding and turn it into an EngineOutput: the rule's own message (its diagnostic), and the location
  * plus up to 300 characters of the sink's code. The console line names the rule and the chunk.
  */
-// shortcut: taintwire's PgqFinding gets `confinements` in the release after 0.2.0-alpha.6; drop this when the dependency is bumped.
-export type TaintwireFinding = PgqFinding & { confinements?: PgqInterceptor[] };
-
-export const toEngineOutput = async (
-    graph: PookieGraph,
-    f: TaintwireFinding,
-    meta: FindingMeta
-): Promise<EngineOutput> => {
+export const toEngineOutput = async (graph: PookieGraph, f: PgqFinding, meta: FindingMeta): Promise<EngineOutput> => {
     const at = (x: PgqLocation) => `${x.file}:${x.line}:${x.col}`;
     const message = `[+] "${meta.ruleName}" found in chunk ${f.file}`;
     const code = (await graph.code(f.id)).slice(0, MAX_CODE);

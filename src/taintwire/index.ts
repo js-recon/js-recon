@@ -2,7 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import * as tar from "tar";
-import type { PgqInterceptor, PgqLocation } from "@js-recon/taintwire";
+import type { PgqFinding, PgqInterceptor, PgqLocation } from "@js-recon/taintwire";
 import chalk from "chalk";
 import cliProgress from "cli-progress";
 import { printMsg, MSG } from "../utility/printMsg.js";
@@ -11,7 +11,6 @@ import { listFilesRecursive, listJsFiles } from "../utility/listFiles.js";
 import { initTaintwireQueries } from "../analyze/helpers/initRules.js";
 import CONFIG from "../globalConfig.js";
 import type { EngineOutput } from "../analyze/helpers/outputHelper.js";
-import type { TaintwireFinding } from "../analyze/engine/taintwireEngine.js";
 import { explain, isConfined } from "./confined.js";
 
 // Same per-file cap as map's taintwire resolvers: bigger files are vendor bundles that cost more than they find.
@@ -270,7 +269,7 @@ export const analyze = async (
                     if (!failed.has(msg)) printMsg(MSG.Err, msg);
                     failed.add(msg);
                 }
-                for (const f of findings as TaintwireFinding[]) {
+                for (const f of findings) {
                     const key = JSON.stringify([
                         f.ruleId,
                         f.file,
@@ -375,7 +374,7 @@ const sarifLocation = (l: PgqLocation, snippet?: string) => ({
  * related locations after them, and go in the property bag as `confinements`. Related-location messages start with
  * `interceptor:` or `confinement:`, and `properties.explanation` keeps the reasoning of each apart (see confined.ts).
  */
-export const sarifResult = (f: TaintwireFinding, code: string, codes: string[] = [], confineCodes: string[] = []) => {
+export const sarifResult = (f: PgqFinding, code: string, codes: string[] = [], confineCodes: string[] = []) => {
     const its = (f.interceptors ?? []).map((i, n) => ({ i, code: codes[n] }));
     const cns = (f.confinements ?? []).map((i, n) => ({ i, code: confineCodes[n] }));
     const row = ({ i, code }: { i: PgqInterceptor; code?: string }) => ({

@@ -1,10 +1,17 @@
 # Change Log
 
-## 2.1.0-alpha.5 - 2026-11-25
+## 2.1.0-alpha.5 - 2026-11-26
 
 ### Added
 
 - `--compress-js-files <compression-type>` archives the JS output directory once everything that reads it has finished, then deletes the directory. Types: `tar` (`.tar`), `gzip` (`.tar.gz`), `brotli` (`.tar.br`), `zstd` (`.tar.zst`, Node.js 22.15 or later) and `zip` (`.zip`, up to 65,535 files and 4 GiB). `run` archives `output` in single-target mode and each target's directory in batch mode after it is merged into the global `js-recon.db`. `lazyload` archives its output directory when it finishes. Only regular files and directories are stored: symlinks are left out, hard links are stored as copies, member names stay under the archived directory, modes are reset to 0644/0755 with no owner, and the archive is created owner-only (0600). An existing file or symlink at the archive path is never overwritten. If the type is invalid or the archive can't be written, the command exits with `42` and the directory is kept. (`lazyload`, `run`)
+- `taintwire analyze` prints a finding's confinements under it: where the tainted value lands in the sink (a same-origin path, the query or fragment, a fixed origin, a jQuery selector that doesn't start with `<`, or a sink API that confines it, such as same-origin `history.pushState` or a `postMessage` with a pinned target origin). They come from the taintwire-queries pack and are kept in `taintwire.json` (`confinements`) and SARIF (related locations and `properties.confinements`). `--analyze-taintwire` writes them to `analyze.json` too. (`analyze`, `run`, `taintwire`)
+- `taintwire analyze --suppress-confined` leaves out findings whose confinement is a barrier for their rule. Navigation and link rules accept a path, query, fragment or origin; client-side path traversal rules accept only the query or fragment, since `../` still traverses after a fixed path; jQuery selector rules accept a selector; `dom_data_manipulation` and `web_message_manipulation` accept a confining sink API. Other rules are never suppressed. (`taintwire`)
+- Each finding with interceptors or confinements gets an `explanation`, in the JSON output and in SARIF `properties.explanation`, that keeps the two apart: the confinements side says whether they are a barrier for the rule (the `--suppress-confined` policy), which kinds were found and why; the interceptors side always has `barrier: null`, since there is no interceptor policy yet. SARIF related locations are labelled `interceptor:` or `confinement:`. (`analyze`, `run`, `taintwire`)
+
+### Changed
+
+- taintwire is updated to 0.2.0-alpha.7, which runs the confinement queries of a sink selector. `taintwire analyze` without `-q` now downloads taintwire-queries v0.2.0, which adds interceptors, confinements and the `dom_clobbering_sanitizer`, `innerhtml_detached_decode` and `jquery_selector_url` rules. (`analyze`, `map`, `run`, `taintwire`)
 
 ## 2.1.0-alpha.4 - 2026-11-23
 
