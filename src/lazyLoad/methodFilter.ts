@@ -13,6 +13,8 @@ export const FRAMEWORK_METHODS: Record<string, string[]> = {
         "next_parseLayoutJs",
         "next_bruteForceJsFiles",
         "next_getClientSidePaths",
+        "next_rsfRedirectBodyLeak",
+        "next_rsfRscHeaderLeak",
         "next_rsfAncestorClaim",
         "next_rsfParamBruteforce",
         "next_interceptRouteNextUrl",

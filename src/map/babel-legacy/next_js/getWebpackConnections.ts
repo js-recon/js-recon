@@ -64,7 +64,7 @@ const getWebpackConnections = async (directory, output, formats) => {
 
     // remove all subsequent requests file from the list
     files = files.filter((file) => {
-        return !file.includes("___subsequent_requests");
+        return !file.includes("___subsequent_requests") && !file.includes("___rsf_revealed");
     });
 
     // remove all directories from the list

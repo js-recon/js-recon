@@ -24,7 +24,8 @@ const client_jsFilesHref = async (directory: string): Promise<string[]> => {
     files = files.filter((file) => !fs.statSync(path.join(directory, file)).isDirectory());
 
     // filter out the subsequent requests files
-    files = files.filter((file) => !file.startsWith("___subsequent_requests"));
+    // and the saved router-state responses (HTML/RSC, not JS)
+    files = files.filter((file) => !file.startsWith("___subsequent_requests") && !file.startsWith("___rsf_revealed"));
 
     for (const file of files) {
         const code = fs.readFileSync(path.join(directory, file), "utf8");

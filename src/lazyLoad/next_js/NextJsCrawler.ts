@@ -15,6 +15,7 @@ import next_rsf from "./next_rsf/index.js";
 import * as lazyLoadGlobals from "../globals.js";
 import { shouldRunMethod } from "../methodFilter.js";
 import { printMsg, MSG } from "../../utility/printMsg.js";
+import { resolveHostOutputDirectory } from "../outputPath.js";
 
 interface NextJsCrawlerOptions {
     url: string;
@@ -528,10 +529,15 @@ class NextJsCrawler {
             candidateUrls,
             this.threads,
             this.rscParamBruteforceLimit,
-            (method) => !this.stopped && shouldRunMethod(method, this.includeMethods, this.excludeMethods)
+            (method) => !this.stopped && shouldRunMethod(method, this.includeMethods, this.excludeMethods),
+            undefined,
+            resolveHostOutputDirectory(this.output, new URL(this.url).host, this.isBatch)
         );
         Object.assign(this.techniqueEfficiencyMapping, revealed);
-        this.emitDownloadable(this.registerUrls(newJsUrls));
+        // Only chunks no other method had already found are reported as RSF finds.
+        const rsfJsUrls = this.registerUrls(newJsUrls);
+        for (const u of rsfJsUrls) printMsg(MSG.Finding, `[+] JS file from router-state request: ${u}`);
+        this.emitDownloadable(rsfJsUrls);
 
         // Only return downloadable assets. Anchor-derived page URLs live in
         // discoveredUrls to drive the crawl, but must not reach downloadFiles.

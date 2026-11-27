@@ -40,7 +40,7 @@ const getTurbopackConnections = async (
     });
 
     files = files.filter((file) => {
-        return !file.includes("___subsequent_requests");
+        return !file.includes("___subsequent_requests") && !file.includes("___rsf_revealed");
     });
 
     files = files.filter((file) => {

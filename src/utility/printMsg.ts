@@ -7,6 +7,8 @@ export enum MSG {
     Run = "Run",
     Header = "Header",
     Plain = "Plain",
+    /** A security finding (router-state forgery hits and what they revealed): red, on stdout. */
+    Finding = "Finding",
 }
 
 const COLOR: Record<MSG, (s: string) => string> = {
@@ -16,6 +18,7 @@ const COLOR: Record<MSG, (s: string) => string> = {
     [MSG.Run]: chalk.green,
     [MSG.Header]: chalk.bold.cyan,
     [MSG.Plain]: (s: string) => s,
+    [MSG.Finding]: chalk.red,
 };
 
 let locked = false;

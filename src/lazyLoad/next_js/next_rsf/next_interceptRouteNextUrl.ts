@@ -4,7 +4,7 @@ import traverse from "@babel/traverse";
 import rawRequest, { type RawResponse } from "../../../exploit/utility/rawRequest.js";
 import { runWithConcurrency } from "../../../utility/concurrency.js";
 import { printMsg, MSG } from "../../../utility/printMsg.js";
-import { extractChunkPathsFromFlightBody } from "./rsfShared.js";
+import { decodeHtmlFlight, extractChunkPathsFromFlightBody } from "./rsfShared.js";
 
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -116,6 +116,17 @@ export const parseInterceptRules = (manifestJs: string): InterceptRule[] | null 
 /** Interception markers Next.js puts on the intercepting segment: `(.)`, `(..)`, `(..)(..)`, `(...)`. */
 const INTERCEPTION_MARKER = /^\((?:\.{1,3}|\.\.\)\(\.\.)\)/;
 
+/**
+ * Intercepting segment names (`(..)pub`, `(.)photo`) in a response's Flight data. An intercepting
+ * route renders under its own segment, so one showing up only with `Next-Url` set is that route's
+ * output, even when it is all Server Components and loads no new chunk.
+ */
+export const extractInterceptionSegments = (body: string): string[] => {
+    const flight = decodeHtmlFlight(body) || body;
+    const found = flight.matchAll(/"(\((?:\.{1,3}|\.\.\)\(\.\.)\)[^"\\]*)"/g);
+    return [...new Set([...found].map((m) => m[1]))];
+};
+
 /** Fills every path-to-regexp param (`:id`, `:slug*`, `:id(\\d+)`) with a literal `1`. */
 const fillParams = (p: string): string => p.replace(/:[A-Za-z0-9_]+(?:\([^)]*\))?[*+?]?/g, "1");
 
@@ -170,10 +181,12 @@ export interface InterceptRouteNextUrlResult {
     middlewareSignals: Record<string, string[]>;
     /** New downloadable chunk URLs from those responses. */
     newJsUrls: string[];
+    /** Each revealing response: the public URL, the `Next-Url` it was sent with, and its body. */
+    hits: { url: string; nextUrl: string; body: string; chunks: string[] }[];
 }
 
-/** Chunk paths in a path's plain 2xx HTML response; `null` when it didn't answer 2xx HTML. */
-type Baseline = Set<string> | null;
+/** Chunk URLs and interception segments in a path's plain 2xx HTML response; `null` when it didn't answer 2xx HTML. */
+type Baseline = { chunks: Set<string>; segments: Set<string> } | null;
 
 /**
  * Pages-style data route for a path: `/_next/data/<buildId>/admin.json`, `/` → `index.json`. With a
@@ -249,6 +262,7 @@ const next_interceptRouteNextUrl = async (
     const middlewareSignals: Record<string, string[]> = {};
     const revealedUrls = new Set<string>();
     const newJsUrls = new Set<string>();
+    const hits: InterceptRouteNextUrlResult["hits"] = [];
 
     const base = assetBase(knownUrls, origin);
     const basePath = basePathOf(base, origin);
@@ -291,7 +305,12 @@ const next_interceptRouteNextUrl = async (
         const ok = plain.status >= 200 && plain.status < 300 && isHtml(plain);
         baselines.set(
             p,
-            ok ? new Set(extractChunkPathsFromFlightBody(plain.body).map((c) => chunkUrl(c, base))) : null
+            ok
+                ? {
+                      chunks: new Set(extractChunkPathsFromFlightBody(plain.body).map((c) => chunkUrl(c, base))),
+                      segments: new Set(extractInterceptionSegments(plain.body)),
+                  }
+                : null
         );
         if (plain.status < 300 || plain.status >= 400) return;
 
@@ -308,7 +327,7 @@ const next_interceptRouteNextUrl = async (
     });
 
     const protectedPaths = Object.keys(middlewareSignals);
-    if (protectedPaths.length === 0) return { revealedUrls: [], middlewareSignals, newJsUrls: [] };
+    if (protectedPaths.length === 0) return { revealedUrls: [], middlewareSignals, newJsUrls: [], hits };
 
     // (public source path, Next-Url) pairs to try.
     const attempts: { sourcePath: string; nextUrl: string }[] = [];
@@ -342,21 +361,27 @@ const next_interceptRouteNextUrl = async (
         const url = origin + sourcePath;
         const res = await rawRequest(url, { timeout: REQUEST_TIMEOUT_MS, headers: { "Next-Url": nextUrl } });
         if (!res || res.status < 200 || res.status >= 300) return;
-        const baseline = baselines.get(sourcePath) ?? new Set<string>();
+        const baseline = baselines.get(sourcePath) ?? { chunks: new Set<string>(), segments: new Set<string>() };
         // compared as URLs: `_next/static/chunks/x.js` and `static/chunks/x.js` are the same chunk
         const fresh = [...new Set(extractChunkPathsFromFlightBody(res.body).map((c) => chunkUrl(c, base)))].filter(
-            (c) => !baseline.has(c)
+            (c) => !baseline.chunks.has(c)
         );
-        if (fresh.length === 0) return;
+        const freshSegments = extractInterceptionSegments(res.body).filter((s) => !baseline.segments.has(s));
+        if (fresh.length === 0 && freshSegments.length === 0) return;
+        const detail = [
+            ...(fresh.length > 0 ? [`${fresh.length} new chunk(s)`] : []),
+            ...(freshSegments.length > 0 ? [`segment ${freshSegments.join(", ")}`] : []),
+        ].join(", ");
         printMsg(
-            MSG.Run,
-            `[✓] Intercept-route request (Next-Url: ${nextUrl}) revealed content: ${url} (${fresh.length} new chunk(s))`
+            MSG.Finding,
+            `[✓] Intercept-route request (Next-Url: ${nextUrl}) revealed content: ${url} (${detail})`
         );
         revealedUrls.add(url);
         for (const c of fresh) newJsUrls.add(c);
+        hits.push({ url, nextUrl, body: res.body, chunks: fresh });
     });
 
-    return { revealedUrls: [...revealedUrls], middlewareSignals, newJsUrls: [...newJsUrls] };
+    return { revealedUrls: [...revealedUrls], middlewareSignals, newJsUrls: [...newJsUrls], hits };
 };
 
 export default next_interceptRouteNextUrl;
